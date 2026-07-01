@@ -1,79 +1,222 @@
+<div align="center">
+
 # bunqueue dashboard
 
-A web dashboard to **completely drive** a [bunqueue](https://bunqueue.dev) server —
-monitor and control queues, jobs, DLQ, cron, webhooks, workers, a live activity
-stream, and the server **process lifecycle** (start / stop / restart).
+**A web dashboard that _fully drives_ a [bunqueue](https://bunqueue.dev) server** — monitor and
+control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and the server
+**process lifecycle** (start / stop / restart) from one place.
 
-Built with **React 19 · React Router 7 · Zustand 5 · Vite 8 · Tailwind CSS v4 ·
-Biome · Bun · TypeScript**. It talks to bunqueue's HTTP API (`:6790`) and a small
-local **control agent** — it never modifies bunqueue itself.
+[![CI](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml)
+[![Deploy to GitHub Pages](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml)
+[![Docker](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-![sections: Overview · Queues · Jobs · DLQ · Cron · Metrics · Workers · Logs · Control (Server, Add Job, Job Inspector, Queue Control, Cron Manager, DLQ, Webhooks, Diagnostics)](docs/README.md)
+![React 19](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
+![Vite 8](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
+![Bun](https://img.shields.io/badge/Bun-1.3-000?logo=bun&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
+![Biome](https://img.shields.io/badge/Biome-lint%20%2B%20format-60A5FA?logo=biome&logoColor=white)
+
+</div>
+
+---
+
+## Table of contents
+
+- [Why](#why)
+- [Features](#features)
+- [Quick start](#quick-start)
+- [Architecture](#architecture)
+- [Configuration](#configuration)
+- [Scripts](#scripts)
+- [Docker](#docker)
+- [Deployment](#deployment)
+- [Testing & quality gate](#testing--quality-gate)
+- [Project structure](#project-structure)
+- [Security](#security)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Why
+
+bunqueue exposes a rich HTTP API, but operating it by hand (curl, ad-hoc scripts) is slow and
+error-prone. This dashboard is a **complete operator console**: everything the API can do — plus the
+one thing it can't, managing the server *process* — behind a fast, keyboard-friendly UI.
+
+It talks **only** to bunqueue's public HTTP API (`:6790`) and a small local **control agent**. It
+never imports or modifies bunqueue itself, so it tracks any bunqueue server you point it at.
+
+## Features
+
+| Area | Where | What you can do |
+| --- | --- | --- |
+| **Home** | Overview | Live health banner, throughput, queue health, recent activity |
+| **Server** | Control ▸ Server | **Start / stop / restart** the server process, edit its config, tail process logs |
+| **Enqueue** | Control ▸ Add Job | Add jobs (single or bulk) with every option |
+| **Inspect** | Control ▸ Job Inspector | Look up any job; promote / retry / discard / cancel / re-prioritize / delay; view data & result |
+| **Queues** | Control ▸ Queue Control | Pause / resume / drain / clean / promote / retry-completed, rate-limit, concurrency, stall & DLQ policy |
+| **Cron** | Control ▸ Cron Manager | Create (cron or interval) and delete schedules |
+| **DLQ** | Control ▸ DLQ | Inspect dead-letter entries, retry one / all, purge |
+| **Webhooks** | Control ▸ Webhooks | Create / enable / delete job-event webhooks |
+| **Ops** | Control ▸ Diagnostics | Health, ping, storage, memory, connections, totals |
+| **Browse** | Queues / Jobs / DLQ / Cron / Metrics / Workers / Logs | Read-only browsing with basic actions |
+
+> Every job action is **gated by the job's real state** (`src/lib/jobActions.ts`), so the UI never
+> offers an action the server would reject.
 
 ## Quick start
 
+**Prerequisites:** [Bun](https://bun.sh) ≥ 1.3 and a reachable bunqueue server (or let the control
+agent start one for you from the **Server** page).
+
 ```bash
-cd dashboard
+git clone https://github.com/egeominotti/bunqueue-dashboard.git
+cd bunqueue-dashboard
 bun install
-
-# 1) A bunqueue server (or start it later from the Server page)
-bun run ../src/main.ts            # HTTP :6790, TCP :6789
-
-# 2) The control agent — enables Start/Stop/Restart from the dashboard
-bun run agent/index.ts            # http://127.0.0.1:6800
-
-# 3) The dashboard
-bun dev                           # http://localhost:5273
+bun start
 ```
 
-In dev, `/api/*` is proxied to `http://localhost:6790` (see `vite.config.ts`), so
-there is no CORS setup for local use. The control agent is called directly at
-`http://localhost:6800` (CORS-enabled, localhost-only).
+`bun start` boots **both** the control agent and the dashboard in one terminal and shuts both down
+on `Ctrl-C`:
 
-## What it can do
-
-| Area | Page | Capability |
+| Service | URL | Role |
 | --- | --- | --- |
-| Home | Overview | Live health banner, throughput, queue health, recent activity |
-| Server | **Control ▸ Server** | **Start / stop / restart** the server, edit its config, tail process logs |
-| Jobs | Control ▸ Add Job | Enqueue jobs (single or bulk) with every option |
-| Jobs | Control ▸ Job Inspector | Look up any job; promote / retry / discard / cancel / re-prioritize / delay / view data & result |
-| Queues | Control ▸ Queue Control | Pause / resume / drain / clean / promote / retry-completed, rate-limit, concurrency, stall & DLQ policy |
-| Cron | Control ▸ Cron Manager | Create (cron or interval) and delete schedules |
-| DLQ | Control ▸ DLQ | Inspect entries, retry one/all, purge |
-| Webhooks | Control ▸ Webhooks | Create / enable / delete job-event webhooks |
-| Ops | Control ▸ Diagnostics | Health, ping, storage, memory, connections, totals |
-| View | Queues / Jobs / DLQ / Cron / Metrics / Workers / Logs | Read-only browsing + basic actions |
+| Dashboard | http://localhost:5273 | The UI (`/api/*` is proxied to `:6790` in dev) |
+| Control agent | http://127.0.0.1:6800 | Starts / stops / restarts the server process |
+| bunqueue server | http://localhost:6790 | Your queue server — started from the **Server** page or run separately |
+
+Prefer separate terminals? The individual commands still exist — see [Scripts](#scripts).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Browser
+        UI["Dashboard (React 19 SPA)"]
+    end
+    subgraph Local
+        Agent["Control agent (Bun)<br/>127.0.0.1:6800"]
+        Server["bunqueue server<br/>:6790 HTTP · :6789 TCP"]
+    end
+    UI -- "HTTP: queues, jobs, DLQ, cron…" --> Server
+    UI -- "SSE: live activity" --> Server
+    UI -- "/control/* start·stop·restart" --> Agent
+    Agent -- "spawn / kill process" --> Server
+```
+
+- **Reads** by polling (`usePolledData`) and a Server-Sent Events stream (`useActivityStream`).
+- **Writes** through the same HTTP API, with every mutation shape-verified against the live server.
+- **Process lifecycle** — the one thing HTTP can't do — is delegated to the local control agent.
+
+Two HTTP clients coexist on purpose: `src/lib/api.ts` (first-generation view pages) and
+`src/lib/bq.ts` (the complete, shape-verified client used by every `Control ▸ *` page). See
+[`docs/`](docs/README.md) for the full, source-verified reference.
 
 ## Configuration
 
-| Env var | Purpose | Default |
+All dashboard variables are build-time (`VITE_*`) and can **also** be changed at runtime from the
+in-app **Settings** page. Copy [`.env.example`](.env.example) to `.env` to set defaults.
+
+| Variable | Purpose | Default |
 | --- | --- | --- |
 | `VITE_BUNQUEUE_URL` | bunqueue server origin | `/api` (dev proxy → `:6790`) |
-| `VITE_BUNQUEUE_TOKEN` | Bearer token if `AUTH_TOKENS` is set | – |
-| `VITE_BUNQUEUE_AGENT_URL` | Control agent origin | `http://localhost:6800` |
-
-You can also change the server URL, token and refresh interval at runtime under
-**Settings**.
+| `VITE_BUNQUEUE_TOKEN` | Bearer token, if the server has `AUTH_TOKENS` set | — |
+| `VITE_BUNQUEUE_AGENT_URL` | Control-agent origin | `http://localhost:6800` |
+| `AGENT_PORT` | Control-agent port | `6800` |
+| `AGENT_ALLOWED_ORIGINS` | Extra browser origins allowed to drive the agent (comma-separated) | dev defaults |
+| `AGENT_TOKEN` | Optional bearer token required on state-changing agent requests | — (off) |
 
 ## Scripts
 
+| Command | Does |
+| --- | --- |
+| `bun start` | **Agent + dashboard together** (one-command dev) |
+| `bun dev` | Dashboard only (Vite dev server) |
+| `bun run agent` | Control agent only |
+| `bun run build` | Typecheck (`tsc --noEmit`) + production build → `dist/` |
+| `bun run preview` | Preview the production build |
+| `bun run check` | Biome lint + format (the CI gate) |
+| `bun run check:fix` | Biome lint + format with safe fixes applied |
+| `bun test` | Unit + agent-lifecycle tests |
+
+## Docker
+
+A multi-stage image builds the SPA with Bun and serves it with nginx (gzip, SPA history fallback,
+immutable asset caching). Published to the GitHub Container Registry on every push.
+
 ```bash
-bun dev            # dev server
-bun run agent/index.ts  # control agent (process lifecycle)
-bun run build      # typecheck + production build → dist/
-bun run preview    # preview the production build
-bun run check      # Biome lint + format
-bun test           # unit + agent lifecycle tests
+# Pull & run the published image (`edge` tracks main; use `vX.Y.Z`/`latest` after a release)
+docker run --rm -p 8080:80 ghcr.io/egeominotti/bunqueue-dashboard:edge
+# → http://localhost:8080  (set the server URL from the Settings page)
+
+# …or build locally, optionally baking in a default server origin
+docker build --build-arg VITE_BUNQUEUE_URL=https://queue.example.com -t bunqueue-dashboard .
+docker run --rm -p 8080:80 bunqueue-dashboard
 ```
 
-## How it works
+Tags: `latest` and `vX.Y.Z` on releases, `edge` on `main`.
 
-See [`docs/`](docs/README.md): architecture, page-by-page behaviour, the control
-agent, the API mapping (with verified response-shape gotchas), and the
-development workflow.
+## Deployment
 
-> Alerts are stored locally in the browser (bunqueue OSS has no alerting
-> backend); everything else reads and writes live to the server.
-# bunqueue-dashboard
-# bunqueue-dashboard
+- **GitHub Pages** — every push to `main` builds and publishes the static SPA
+  (`.github/workflows/pages.yml`). Enable it once under **Settings ▸ Pages ▸ Source → GitHub
+  Actions**. The build sets the correct sub-path base and a `404.html` SPA fallback automatically.
+- **Container** — self-host the published `ghcr.io` image behind any reverse proxy.
+- **Static host** — `bun run build` emits a plain `dist/` you can serve from any CDN or static host.
+
+Because the deployed build is a static shell, point it at a reachable bunqueue server via
+`VITE_BUNQUEUE_URL` (build time) or the **Settings** page (runtime).
+
+## Testing & quality gate
+
+Three commands must be green before a change is considered done — the same checks CI runs:
+
+```bash
+bun run build     # tsc --noEmit + vite build
+bun run check     # Biome lint + format (production-grade config)
+bun test          # unit + agent-lifecycle tests
+```
+
+CI enforces this on every push and pull request. See [Contributing](#contributing).
+
+## Project structure
+
+```
+bunqueue-dashboard/
+├── .github/workflows/   # CI, Pages deploy, Docker publish, Release
+├── agent/               # Bun control agent (process lifecycle) — server.ts, manager.ts, index.ts
+├── docker/              # nginx.conf for the container image
+├── docs/                # source-verified reference (architecture, pages, API mapping, known issues)
+├── scripts/dev.ts       # one-command dev launcher (`bun start`)
+├── src/
+│   ├── lib/             # api.ts, bq.ts, hooks, formatters, job-action gating
+│   ├── components/      # layout shell, UI kit, Zustand stores
+│   └── pages/           # view pages + Control ▸ * operator pages
+└── test/                # bun test (format, sse, manager, agent lifecycle, s3 store)
+```
+
+Full walkthrough in [`docs/README.md`](docs/README.md).
+
+## Security
+
+The control agent can spawn processes, so it is hardened by design (`agent/server.ts`):
+
+- Binds **`127.0.0.1` only**.
+- **CORS locked to an allowlist** — `Access-Control-Allow-Origin` is never `*`.
+- Requests carrying a **disallowed `Origin` are rejected (403)** before reaching the process manager,
+  blocking drive-by CSRF from a malicious tab.
+- Optional **`AGENT_TOKEN`** adds a bearer-token gate on state-changing requests.
+
+Keep the agent on loopback (or an equivalently trusted network) and set `AGENT_TOKEN` for shared
+machines. See [`docs/known-issues.md`](docs/known-issues.md) for the honest, verified limitations.
+
+## Contributing
+
+1. Keep it **additive** — prefer new files + minimal glue over rewriting existing ones
+   (see [`CLAUDE.md`](CLAUDE.md)).
+2. Make the [gate](#testing--quality-gate) green: `bun run build && bun run check && bun test`.
+3. Open a PR — the template walks you through the checklist. CI must pass.
+
+## License
+
+[MIT](LICENSE) © Egeo Minotti

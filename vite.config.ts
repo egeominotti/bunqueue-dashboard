@@ -9,6 +9,9 @@ import { defineConfig } from 'vite';
 // server origin (see src/lib/api.ts) or serve the built assets behind the same
 // origin as the server.
 export default defineConfig({
+  // Served from `/` in dev and Docker; GitHub Pages sets VITE_BASE to the
+  // project sub-path (e.g. `/bunqueue-dashboard/`) so asset URLs resolve.
+  base: process.env.VITE_BASE ?? '/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },

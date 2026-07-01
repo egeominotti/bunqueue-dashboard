@@ -4,8 +4,32 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity).",
+  "license": "MIT",
+  "author": "Egeo Minotti",
+  "homepage": "https://github.com/egeominotti/bunqueue-dashboard#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egeominotti/bunqueue-dashboard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/egeominotti/bunqueue-dashboard/issues"
+  },
+  "keywords": [
+    "bunqueue",
+    "dashboard",
+    "queue",
+    "jobs",
+    "react",
+    "vite",
+    "bun"
+  ],
+  "engines": {
+    "bun": ">=1.3.0"
+  },
   "scripts": {
+    "start": "bun run scripts/dev.ts",
     "dev": "vite",
+    "agent": "bun run agent/index.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "bun test",

@@ -1,0 +1,79 @@
+name: Deploy to GitHub Pages
+
+# Builds the dashboard as a static SPA and publishes it to GitHub Pages on every
+# push to main. Pages serves the app from the project sub-path
+# (https://<owner>.github.io/<repo>/), so we build with VITE_BASE set to that
+# path and copy index.html -> 404.html to give React Router a client-side
+# fallback for deep links.
+#
+# NOTE: the deployed build is a static shell. Point it at a reachable bunqueue
+# server via the in-app Settings page (or a build-time VITE_BUNQUEUE_URL); the
+# dev `/api` proxy and the local control agent are not available on Pages.
+#
+# One-time setup: repo Settings ▸ Pages ▸ "Build and deployment" ▸ Source =
+# "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; don't cancel an in-progress one mid-publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: 1.3.14
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Build
+        env:
+          VITE_BASE: ${{ steps.pages.outputs.base_path }}/
+        run: bun run build
+
+      - name: SPA fallback (404 -> index.html)
+        run: cp dist/index.html dist/404.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

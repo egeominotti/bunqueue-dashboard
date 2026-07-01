@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+dist
+dist-ssr
+docs
+test
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+.DS_Store
+*.local
+*.tsbuildinfo
+coverage
+scratchpad

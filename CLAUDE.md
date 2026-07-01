@@ -27,10 +27,18 @@ React 19 · React Router 7 · Zustand 5 · Vite 8 · Tailwind CSS v4 · Biome ·
 ## Layout
 
 ```
-dashboard/
+bunqueue-dashboard/
+├── .github/
+│   ├── workflows/             # ci.yml · pages.yml · docker.yml · release.yml (see “CI/CD” below)
+│   ├── dependabot.yml         # weekly npm / actions / docker bumps
+│   └── pull_request_template.md
 ├── agent/                     # Bun control agent (process lifecycle) — NOT linted/typechecked with src
 │   ├── manager.ts             # ProcessManager: spawn/kill bunqueue, log ring buffer, dbStats()
-│   └── index.ts               # HTTP server exposing /control/* (binds 127.0.0.1, NO auth — see docs/known-issues.md)
+│   ├── server.ts              # fetch handler + origin/CORS/token policy (unit-tested)
+│   └── index.ts               # binds 127.0.0.1; Origin allowlist + locked CORS + optional AGENT_TOKEN
+├── docker/nginx.conf          # SPA history fallback + gzip + immutable asset caching for the image
+├── scripts/dev.ts             # one-command dev launcher (`bun start`) — NOT linted/typechecked with src
+├── Dockerfile                 # multi-stage: Bun build → nginx serve
 ├── src/
 │   ├── lib/                   # api.ts, bq.ts, bqTypes.ts, types.ts, jobActions.ts, sse.ts, format.ts, cn.ts,
 │   │                           # usePolledData.ts, useActivityStream.ts, useThroughputSeries.ts
@@ -47,8 +55,8 @@ dashboard/
 │   │       ├── job/            # JobInspector subcomponents: JobTimeline, JobBackoff
 │   │       └── queue/          # QueueControl subcomponents: QueueActions, ConfigForms
 │   ├── App.tsx                # routes — see docs/pages.md for the verified route→page table
-│   └── main.tsx                # entry (fonts, theme, router)
-├── test/                      # bun test (format, sse, manager)
+│   └── main.tsx                # entry (fonts, theme, router; basename = import.meta.env.BASE_URL for Pages)
+├── test/                      # bun test (format, sse, manager, agent lifecycle, s3 store)
 └── docs/                      # how it works — see docs/README.md; docs/known-issues.md tracks verified gaps
 ```
 
@@ -56,23 +64,72 @@ dashboard/
 
 ```bash
 bun install
-bun run agent/index.ts      # control agent → http://127.0.0.1:6800 (for start/stop/restart)
-bun dev                     # dashboard → http://localhost:5273 (/api proxied to :6790)
+bun start                   # agent + dashboard together (Ctrl-C stops both) — the simple path
 ```
 
-The dashboard reads data from a bunqueue server (start it yourself, or from the
-Server page via the agent).
+`bun start` (scripts/dev.ts) launches the control agent (http://127.0.0.1:6800) and the dashboard
+(http://localhost:5273, `/api` proxied to `:6790`). Prefer separate processes? The granular commands
+still work:
+
+```bash
+bun run agent               # control agent only  → http://127.0.0.1:6800
+bun dev                     # dashboard only      → http://localhost:5273
+```
+
+The dashboard reads data from a bunqueue server. Start it from **Control ▸ Server** (the agent runs
+it) or point the dashboard at an existing server via Settings / `VITE_BUNQUEUE_URL`.
 
 ## Gate — all three must be green before considering a change done
 
 ```bash
 bun run build     # tsc --noEmit + vite build
-bun run check     # biome lint + format
+bun run check     # biome lint + format (production-grade config)
 bun test          # unit + agent lifecycle tests
 ```
 
-`biome.json` is a **nested** config (`"root": false`) so it does not conflict with
-the repo-root biome — never make it a root config again.
+CI runs this exact gate on every push and PR (`.github/workflows/ci.yml`).
+
+### Biome config
+
+`biome.json` is a **production-grade, root config** (`"root": true`, schema pinned to the installed
+CLI). It **must** be root: this is a standalone repository with no parent Biome config, and with
+`"root": false` Biome silently falls back to *default* rules on every file (thousands of spurious
+errors — that is a broken gate, not real findings). The config enables `recommended` plus a curated
+strict set (const/import-type/self-closing/optional-chain/template/no-double-equals/…) as **errors**,
+with a few aspirational rules (`useExhaustiveDependencies`, `noUnusedFunctionParameters`, perf/spread)
+as **warnings** so they surface without breaking the gate. `agent/` and `scripts/` are excluded
+(they are Bun-runtime infra, not part of the app bundle). Keep new `src/` code passing the strict
+rules; do not silence a rule to dodge a real fix.
+
+## CI/CD
+
+GitHub Actions under `.github/workflows/` (Bun pinned to the same version as local/Docker):
+
+- **ci.yml** — on push to `main` + every PR: `bun run check`, `bun run build`, `bun test`; uploads
+  the `dist/` artifact. This is the merge gate.
+- **pages.yml** — on push to `main`: builds with `VITE_BASE` = the Pages sub-path, adds a
+  `404.html` SPA fallback, deploys to GitHub Pages. (Enable once: Settings ▸ Pages ▸ Source → GitHub
+  Actions.)
+- **docker.yml** — on push to `main` + tags `v*`: builds the multi-arch image and pushes to
+  `ghcr.io/egeominotti/bunqueue-dashboard` (`edge` on main, semver + `latest` on tags).
+- **release.yml** — on tags `v*`: re-runs the gate, zips `dist/`, publishes a GitHub Release with
+  generated notes.
+
+**The lockfile (`bun.lock`) is committed on purpose** — every workflow installs with
+`bun install --frozen-lockfile`. Do not re-add it to `.gitignore`.
+
+Deploy note: `vite.config.ts` reads `base` from `VITE_BASE` (default `/`), and `main.tsx` passes
+`basename={import.meta.env.BASE_URL}` so the SPA works both at root (dev / Docker) and under the
+Pages sub-path.
+
+## Control agent security
+
+The agent can spawn processes, so `agent/server.ts` enforces: **loopback bind (127.0.0.1)**, **CORS
+locked to an allowlist** (ACAO never `*`), **403 on any disallowed `Origin`** (blocks drive-by CSRF),
+and an **optional `AGENT_TOKEN`** bearer gate on state-changing requests. It is *not* the
+"unauthenticated RCE by design" it once was — do not describe it that way. Configure via
+`AGENT_ALLOWED_ORIGINS` / `AGENT_TOKEN`. Full threat model in `agent/server.ts`; verified limits in
+`docs/known-issues.md`.
 
 ## Verified API-shape gotchas (learned from live testing — keep `bq.ts` honest)
 
@@ -89,5 +146,5 @@ the repo-root biome — never make it a root config again.
 - Which job actions apply to which job state is centralized in `src/lib/jobActions.ts::actionGates` — use it,
   don't re-derive.
 - Full endpoint map, request bodies, and the job-action state table live in `docs/api-mapping.md`. Verified,
-  honest list of current dashboard bugs/limitations (including the control agent's lack of auth) lives in
-  `docs/known-issues.md` — check it before assuming something is a fresh bug.
+  honest list of current dashboard bugs/limitations lives in `docs/known-issues.md` — check it before assuming
+  something is a fresh bug.

@@ -6,4 +6,9 @@ dist-ssr/
 .env
 .env.*
 !.env.example
-bun.lock
+
+# Build/test noise
+*.tsbuildinfo
+coverage/
+
+# bun.lock IS committed on purpose — CI uses `bun install --frozen-lockfile`.
