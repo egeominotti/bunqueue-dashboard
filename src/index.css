@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+/* Dark is the default look; `light:` overrides apply under [data-theme=light]. */
+@custom-variant light (&:where([data-theme='light'], [data-theme='light'] *));
+
+:root,
+[data-theme="dark"] {
+  --bg: #08080a;
+  --surface: #0e0e12;
+  --surface-2: #17171c;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.12);
+  --text: #f4f4f5;
+  --text-muted: #a8a8b3;
+  --text-faint: #868c98;
+  --sidebar: #09090b;
+  --accent: #ec4899;
+  --accent-fg: #ffffff;
+}
+
+[data-theme="light"] {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --line: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.14);
+  --text: #18181b;
+  --text-muted: #52525b;
+  --text-faint: #71717a;
+  --sidebar: #ffffff;
+  --accent: #db2777;
+  --accent-fg: #ffffff;
+}
+
+/* Map runtime CSS variables into Tailwind tokens so utilities like `bg-surface`,
+   `text-muted`, `border-line`, `text-accent` flip with the theme automatically. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-sidebar: var(--sidebar);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+@layer base {
+  * {
+    border-color: var(--line);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  html {
+    /* Fluid root: the whole rem-based type scale (Tailwind text-*, spacing) grows
+       smoothly with the viewport instead of snapping at breakpoints. ~13.5px on a
+       narrow phone → 16px on a wide desktop, tracking width via a small vw term.
+       Because every text-* utility is rem-based, this alone makes typography fluid
+       everywhere without per-element clamps. */
+    font-size: clamp(13.5px, 12.7px + 0.28vw, 16px);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    line-height: 1.55;
+    letter-spacing: -0.005em;
+    font-optical-sizing: auto;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2 {
+    letter-spacing: -0.02em;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--surface-2);
+    border-radius: 8px;
+    border: 2px solid var(--bg);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--line-strong);
+  }
+}
+
+@layer utilities {
+  /* Tabular figures for stat numbers and IDs, matching the reference dashboard. */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}

@@ -1,0 +1,265 @@
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Button } from '@/components/ui/Button';
+import { Card, CardHeader } from '@/components/ui/Card';
+import { CopyButton } from '@/components/ui/CopyButton';
+import { EmptyState, LoadingState } from '@/components/ui/feedback';
+import { Select } from '@/components/ui/form';
+import { IconSearch } from '@/components/ui/icons';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { bq } from '@/lib/bq';
+import type { JobFull } from '@/lib/bqTypes';
+import { formatDateTime, formatDuration } from '@/lib/format';
+import { JobActionsPanel } from './job/JobActionsPanel';
+import { JobBackoff } from './job/JobBackoff';
+import { JobChildren } from './job/JobChildren';
+import { JobDataEditor } from './job/JobDataEditor';
+import { JobLogs } from './job/JobLogs';
+import { JobTimeline } from './job/JobTimeline';
+
+type LookupMode = 'id' | 'custom';
+
+/** Most recent failure message + which attempt it happened on, from the timeline. */
+function lastError(job: JobFull): { message: string; attempt?: number; timestamp?: number } | null {
+  const timeline = job.timeline ?? [];
+  for (let i = timeline.length - 1; i >= 0; i--) {
+    const e = timeline[i];
+    if (e.state === 'failed' && e.error) {
+      return { message: e.error, attempt: e.attempt, timestamp: e.timestamp };
+    }
+  }
+  return null;
+}
+
+export function JobInspector() {
+  const [params, setParams] = useSearchParams();
+  const [idInput, setIdInput] = useState(params.get('id') ?? '');
+  const [lookupBy, setLookupBy] = useState<LookupMode>('id');
+  const [job, setJob] = useState<JobFull | null>(null);
+  const [result, setResult] = useState<{ fetched: boolean; value: unknown }>({
+    fetched: false,
+    value: undefined,
+  });
+  const [loading, setLoading] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const lookup = async (raw: string, mode: LookupMode = lookupBy) => {
+    const key = raw.trim();
+    if (!key) return;
+    setLoading(true);
+    setNotFound(false);
+    setMsg(null);
+    try {
+      const jobRes = await (mode === 'custom' ? bq.jobByCustomId(key) : bq.job(key));
+      const loaded = jobRes.job;
+      // Result is keyed by the resolved internal id — for a custom-id lookup we
+      // only learn it once the job comes back — so fetch it after, best-effort.
+      const resultRes = await bq.jobResult(loaded.id).catch(() => null);
+      setJob(loaded);
+      setIdInput(mode === 'custom' ? loaded.id : key);
+      setParams({ id: loaded.id }, { replace: true });
+      setResult(
+        resultRes
+          ? { fetched: true, value: resultRes.result }
+          : { fetched: false, value: undefined }
+      );
+    } catch {
+      setJob(null);
+      setResult({ fetched: false, value: undefined });
+      setNotFound(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const idParam = params.get('id');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run only when the URL id or the loaded job changes, not on every lookup() identity change
+  useEffect(() => {
+    // Deep-links always carry an internal id — force id-mode regardless of toggle.
+    if (idParam && idParam !== job?.id) lookup(idParam, 'id');
+  }, [idParam, job?.id]);
+
+  const act = async (label: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
+    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    if (!job) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      await fn();
+      setMsg({ ok: true, text: `${label} ✓` });
+      if (label === 'Cancel') {
+        setJob(null);
+        setResult({ fetched: false, value: undefined });
+      } else {
+        await lookup(job.id, 'id');
+      }
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const state = job?.state;
+  const err = job ? lastError(job) : null;
+  const hasStack = (job?.stacktrace?.length ?? 0) > 0;
+  const hasChildren = (job?.childrenIds?.length ?? 0) > 0;
+
+  return (
+    <div>
+      <PageHeader
+        title="Job Inspector"
+        description="Look up any job by ID and drive its full lifecycle."
+      />
+
+      <div className="mb-6 flex max-w-2xl flex-wrap items-center gap-2">
+        <Select
+          value={lookupBy}
+          onChange={(e) => setLookupBy(e.target.value as LookupMode)}
+          className="w-40"
+        >
+          <option value="id">By job ID</option>
+          <option value="custom">By custom ID</option>
+        </Select>
+        <div className="relative min-w-56 flex-1">
+          <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
+          <input
+            value={idInput}
+            onChange={(e) => setIdInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && lookup(idInput)}
+            placeholder={
+              lookupBy === 'custom'
+                ? 'custom / idempotency id — Enter to look up'
+                : 'job id (UUID) — Enter to look up'
+            }
+            className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 font-mono text-sm text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
+          />
+        </div>
+        <Button variant="accent" disabled={loading} onClick={() => lookup(idInput)}>
+          Look up
+        </Button>
+      </div>
+
+      {msg && (
+        <div className={msg.ok ? 'mb-4 text-sm text-emerald-400' : 'mb-4 text-sm text-red-400'}>
+          {msg.text}
+        </div>
+      )}
+
+      {loading && !job ? (
+        <LoadingState label="Loading job…" />
+      ) : notFound ? (
+        <EmptyState title="Job not found" hint="Check the ID, or the job may have been removed." />
+      ) : !job ? (
+        <EmptyState title="No job loaded" hint="Enter a job ID above to inspect it." />
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="flex flex-col gap-6 lg:col-span-2">
+            <Card>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1">
+                    <div className="truncate font-mono text-sm text-fg">{job.id}</div>
+                    <CopyButton value={job.id} />
+                  </div>
+                  <div className="mt-1 font-mono text-xs text-faint">{job.queue}</div>
+                </div>
+                <StatusBadge status={state ?? 'waiting'} />
+              </div>
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+                <Kv k="Priority" v={String(job.priority ?? 0)} />
+                <Kv k="Attempts" v={`${job.attempts ?? 0} / ${job.maxAttempts ?? '?'}`} />
+                <Kv k="Progress" v={`${job.progress ?? 0}%`} />
+                <Kv k="Created" v={formatDateTime(job.createdAt)} />
+                <Kv k="Started" v={formatDateTime(job.startedAt ?? undefined)} />
+                <Kv k="Completed" v={formatDateTime(job.completedAt ?? undefined)} />
+                <Kv
+                  k="Duration"
+                  v={formatDuration(
+                    job.startedAt && job.completedAt ? job.completedAt - job.startedAt : undefined
+                  )}
+                />
+                <div>
+                  <dt className="text-[11px] uppercase tracking-wider text-faint">Custom ID</dt>
+                  <dd className="flex items-center gap-1 text-fg">
+                    <span className="truncate font-mono">{job.customId ?? '—'}</span>
+                    {job.customId && <CopyButton value={job.customId} />}
+                  </dd>
+                </div>
+              </dl>
+            </Card>
+
+            <Card>
+              <CardHeader title="Data" />
+              <Json value={job.data} />
+            </Card>
+
+            <JobDataEditor
+              data={job.data}
+              busy={busy}
+              onSave={(parsed) => act('Data', () => bq.updateJobData(job.id, parsed))}
+            />
+
+            {state === 'completed' && (
+              <Card>
+                <CardHeader title="Result" />
+                {result.fetched && result.value !== undefined && result.value !== null ? (
+                  <Json value={result.value} />
+                ) : (
+                  <p className="text-xs text-faint">No result stored for this job.</p>
+                )}
+              </Card>
+            )}
+
+            {(err || hasStack) && (
+              <Card>
+                <CardHeader title="Error" />
+                {err && (
+                  <div className="mb-3">
+                    <p className="text-sm text-red-400">{err.message}</p>
+                    <p className="mt-1 text-[11px] text-faint">
+                      {err.attempt != null ? `Attempt ${err.attempt} · ` : ''}
+                      {formatDateTime(err.timestamp)}
+                    </p>
+                  </div>
+                )}
+                {hasStack && (
+                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-3 font-mono text-xs text-red-400/90">
+                    {job.stacktrace?.join('\n')}
+                  </pre>
+                )}
+              </Card>
+            )}
+
+            <JobLogs key={job.id} jobId={job.id} />
+            {hasChildren && <JobChildren key={job.id} jobId={job.id} />}
+            <JobTimeline timeline={job.timeline} />
+            <JobBackoff job={job} />
+          </div>
+
+          <JobActionsPanel job={job} busy={busy} act={act} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Kv({ k, v }: { k: string; v: string }) {
+  return (
+    <div>
+      <dt className="text-[11px] uppercase tracking-wider text-faint">{k}</dt>
+      <dd className="text-fg">{v}</dd>
+    </div>
+  );
+}
+
+function Json({ value }: { value: unknown }) {
+  return (
+    <pre className="max-h-64 overflow-auto rounded-lg bg-surface-2 p-3 font-mono text-xs text-muted">
+      {JSON.stringify(value ?? null, null, 2)}
+    </pre>
+  );
+}
