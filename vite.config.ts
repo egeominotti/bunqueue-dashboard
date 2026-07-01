@@ -33,6 +33,14 @@ export default defineConfig({
   },
   server: {
     port: 5273,
+    // The control agent runs a bunqueue server whose SQLite database lives in
+    // ./data (and its -wal/-shm sidecars are written on every DB operation).
+    // Without this, each write trips Vite's file watcher and reloads the whole
+    // page — continuously during any activity (and constantly under Benchmark
+    // load). Ignoring ./data keeps the dev page stable; only source changes HMR.
+    watch: {
+      ignored: ['**/data/**'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:6790',
