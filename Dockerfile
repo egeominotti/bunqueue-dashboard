@@ -17,7 +17,7 @@ ENV VITE_BUNQUEUE_URL=$VITE_BUNQUEUE_URL
 RUN bun run build
 
 # ---- Serve stage: nginx serving the static SPA -------------------------------
-FROM nginx:1.27-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 LABEL org.opencontainers.image.title="bunqueue-dashboard" \
       org.opencontainers.image.description="Web dashboard for a bunqueue server" \
       org.opencontainers.image.source="https://github.com/egeominotti/bunqueue-dashboard"
