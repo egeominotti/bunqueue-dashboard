@@ -56,6 +56,7 @@ const NAV: NavGroup[] = [
       { to: '/dlq-control', label: 'DLQ Control', icon: IconDlq },
       { to: '/webhooks', label: 'Webhooks', icon: IconLightning },
       { to: '/diagnostics', label: 'Diagnostics', icon: IconMetrics },
+      { to: '/benchmark', label: 'Benchmark', icon: IconLightning },
     ],
   },
   {

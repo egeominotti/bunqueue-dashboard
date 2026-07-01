@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { CopyButton } from '@/components/ui/CopyButton';
 import { OfflineBanner } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/form';
 import { IconPause, IconPlay, IconRefresh } from '@/components/ui/icons';
@@ -9,9 +10,11 @@ import { StatCard } from '@/components/ui/StatCard';
 import { StatusDot } from '@/components/ui/StatusBadge';
 import { bq } from '@/lib/bq';
 import type { ServerConfig, ServerStatus } from '@/lib/bqTypes';
-import { cn } from '@/lib/cn';
 import { formatBytes, formatDateTime, formatRelativeTime, formatUptime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
+import { AgentInfoCard } from './server/AgentInfoCard';
+import { EnvVarsEditor } from './server/EnvVarsEditor';
+import { ProcessLogs } from './server/ProcessLogs';
 
 export function ServerControl() {
   const { data, error, refetch } = usePolledData(() => bq.control.status(), []);
@@ -55,6 +58,8 @@ export function ServerControl() {
   const status = data?.status ?? 'stopped';
   const running = status === 'running';
   const transitioning = status === 'starting' || status === 'stopping' || busy != null;
+  const httpPort = data?.runningConfig?.httpPort ?? data?.config?.httpPort ?? 6790;
+  const serverBase = `http://localhost:${httpPort}`;
 
   return (
     <div>
@@ -158,13 +163,33 @@ export function ServerControl() {
           running={running}
           transitioning={transitioning}
         />
-        <LogsCard />
+        <ProcessLogs />
       </div>
 
-      <div className="mt-4 space-y-1 text-xs text-faint">
+      <div className="mt-6">
+        <AgentInfoCard agentBase={bq.agentBase} />
+      </div>
+
+      <div className="mt-4 space-y-1.5 text-xs text-faint">
+        {running && (
+          <p className="flex items-center gap-2 font-mono">
+            <span className="text-muted">API</span>
+            <a
+              href={`${serverBase}/health`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:underline"
+            >
+              {serverBase}
+            </a>
+            <CopyButton value={serverBase} />
+          </p>
+        )}
         {data?.db && (
-          <p className="truncate font-mono" title={data.db.path}>
-            data: {data.db.path}
+          <p className="flex items-center gap-2 font-mono" title={data.db.path}>
+            <span className="text-muted">data</span>
+            <span className="truncate">{data.db.path}</span>
+            <CopyButton value={data.db.path} />
           </p>
         )}
         {!running && data?.exitCode != null && (
@@ -210,13 +235,20 @@ function ConfigCard({
 
   // Fields differ from what the live process was launched with → needs a restart.
   const rc = status?.runningConfig ?? null;
+  const envKey = (o: Record<string, string> = {}) =>
+    JSON.stringify(
+      Object.keys(o)
+        .sort()
+        .map((k) => [k, o[k]])
+    );
   const pending =
     running &&
     rc != null &&
     (rc.command !== value.command ||
       rc.httpPort !== value.httpPort ||
       rc.tcpPort !== value.tcpPort ||
-      rc.dataPath !== value.dataPath);
+      rc.dataPath !== value.dataPath ||
+      envKey(rc.extraEnv) !== envKey(value.extraEnv));
 
   const busy = transitioning || restarting;
 
@@ -280,7 +312,10 @@ function ConfigCard({
           : 'Edit and save; the config is used the next time the server starts.'}
       </p>
       <div className="flex flex-col gap-3">
-        <Field label="Command">
+        <Field
+          label="Command"
+          hint="The exact command the agent runs to launch bunqueue. It receives HTTP_PORT, TCP_PORT and BUNQUEUE_DATA_PATH in its environment. The default needs a global 'bunqueue' binary — or point it at a local entry, e.g. bun run /path/to/bunqueue/src/main.ts."
+        >
           <Input
             value={value.command}
             disabled={busy}
@@ -289,7 +324,7 @@ function ConfigCard({
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="HTTP port">
+          <Field label="HTTP port" hint="Dashboard API + SSE.">
             <Input
               type="number"
               value={value.httpPort}
@@ -297,7 +332,7 @@ function ConfigCard({
               onChange={(e) => set({ httpPort: Number(e.target.value) })}
             />
           </Field>
-          <Field label="TCP port">
+          <Field label="TCP port" hint="Binary protocol. Must differ from HTTP.">
             <Input
               type="number"
               value={value.tcpPort}
@@ -306,11 +341,24 @@ function ConfigCard({
             />
           </Field>
         </div>
-        <Field label="Data path">
+        <Field
+          label="Data path"
+          hint="SQLite database file, relative to the agent's working directory. The parent folder must already exist — SQLite creates the file, not the directory."
+        >
           <Input
             value={value.dataPath}
             disabled={busy}
             onChange={(e) => set({ dataPath: e.target.value })}
+          />
+        </Field>
+        <Field
+          label="Environment variables"
+          hint="Injected into the server process on start, on top of the ports + data path. Applies on the next restart."
+        >
+          <EnvVarsEditor
+            value={value.extraEnv ?? {}}
+            onChange={(extraEnv) => set({ extraEnv })}
+            disabled={busy}
           />
         </Field>
         <div className="flex flex-wrap items-center gap-3">
@@ -328,50 +376,6 @@ function ConfigCard({
           {saved && <span className="text-xs text-emerald-400">Saved</span>}
           {err && <span className="text-xs text-red-400">{err}</span>}
         </div>
-      </div>
-    </Card>
-  );
-}
-
-function LogsCard() {
-  const { data } = usePolledData(() => bq.control.logs(), []);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const lines = data?.lines ?? [];
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new lines
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [lines.length]);
-
-  return (
-    <Card padded={false} className="overflow-hidden">
-      <div className="border-b border-line px-5 py-3">
-        <h3 className="text-base font-semibold text-fg">Process logs</h3>
-      </div>
-      <div
-        ref={scrollRef}
-        className="max-h-80 overflow-y-auto p-4 font-mono text-xs leading-relaxed"
-      >
-        {lines.length === 0 ? (
-          <p className="text-faint">No output yet.</p>
-        ) : (
-          lines.map((l) => (
-            <div
-              key={l.seq}
-              className={cn(
-                'whitespace-pre-wrap',
-                l.stream === 'stderr'
-                  ? 'text-red-400/90'
-                  : l.stream === 'sys'
-                    ? 'text-accent/80'
-                    : 'text-muted'
-              )}
-            >
-              {l.line}
-            </div>
-          ))
-        )}
       </div>
     </Card>
   );

@@ -167,6 +167,14 @@ export const bq = {
     srv<{ ok: boolean; id: string }>(`/queues/${q(queue)}/jobs`, body('POST', b)),
   addJobsBulk: (queue: string, jobs: AddJobBody[]) =>
     srv<{ ok: boolean; ids: string[] }>(`/queues/${q(queue)}/jobs/bulk`, body('POST', { jobs })),
+  // Worker-side consume: reserve up to `count` jobs, then ack (complete) them by
+  // id. Used by the Benchmark page to simulate workers draining a queue.
+  pullBatch: (queue: string, count: number) =>
+    srv<{ ok: boolean; jobs: { id: string }[] }>(
+      `/queues/${q(queue)}/jobs/pull-batch`,
+      body('POST', { count })
+    ),
+  ackBatch: (ids: string[]) => srv<{ ok: boolean }>('/jobs/ack-batch', body('POST', { ids })),
   cancelJob: (id: string) => srv(`/jobs/${q(id)}`, { method: 'DELETE' }),
   promoteJob: (id: string) => srv(`/jobs/${q(id)}/promote`, body('POST')),
   discardJob: (id: string) => srv(`/jobs/${q(id)}/discard`, body('POST')),

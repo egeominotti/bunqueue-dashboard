@@ -12,11 +12,20 @@ export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: st
   );
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+export function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
       <Label>{label}</Label>
       {children}
+      {hint && <p className="text-xs leading-relaxed text-faint">{hint}</p>}
     </div>
   );
 }

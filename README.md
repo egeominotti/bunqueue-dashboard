@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/logo.svg" alt="bunqueue dashboard" width="340" />
+
 # bunqueue dashboard
 
 **A web dashboard that _fully drives_ a [bunqueue](https://bunqueue.dev) server** — monitor and

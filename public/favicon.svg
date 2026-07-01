@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <title>bunqueue</title>
+  <defs>
+    <linearGradient id="box" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f9a8d4"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+    <linearGradient id="ear" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fce7f3"/>
+      <stop offset="100%" stop-color="#fbcfe8"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="96" height="96" rx="24" fill="url(#box)"/>
+  <g transform="translate(50,52) scale(0.86)">
+    <ellipse cx="-16" cy="-32" rx="8" ry="20" fill="#ffffff" opacity="0.92"/>
+    <ellipse cx="-16" cy="-32" rx="4" ry="14" fill="url(#ear)"/>
+    <ellipse cx="16" cy="-32" rx="8" ry="20" fill="#ffffff" opacity="0.92"/>
+    <ellipse cx="16" cy="-32" rx="4" ry="14" fill="url(#ear)"/>
+    <circle cx="0" cy="0" r="28" fill="#ffffff" opacity="0.97"/>
+    <ellipse cx="-10" cy="-4" rx="5" ry="6" fill="#18181b"/>
+    <ellipse cx="10" cy="-4" rx="5" ry="6" fill="#18181b"/>
+    <circle cx="-8" cy="-6" r="2" fill="#ffffff"/>
+    <circle cx="12" cy="-6" r="2" fill="#ffffff"/>
+    <ellipse cx="0" cy="8" rx="4" ry="3" fill="#be185d"/>
+    <path d="M -6 14 Q 0 20 6 14" stroke="#be185d" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>

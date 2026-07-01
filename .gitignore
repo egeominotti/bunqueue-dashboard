@@ -12,3 +12,6 @@ dist-ssr/
 coverage/
 
 # bun.lock IS committed on purpose — CI uses `bun install --frozen-lockfile`.
+
+# Local bunqueue server data (created by the control agent)
+data/

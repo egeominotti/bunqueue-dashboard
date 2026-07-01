@@ -12,6 +12,9 @@ import { NotFound } from './pages/NotFound';
 // default-export contract. The <Suspense> boundary lives in AppLayout (around
 // <Outlet/>) so the sidebar/topbar shell never blanks during a chunk load.
 const AddJob = lazy(() => import('./pages/control/AddJob').then((m) => ({ default: m.AddJob })));
+const Benchmark = lazy(() =>
+  import('./pages/control/Benchmark').then((m) => ({ default: m.Benchmark }))
+);
 const CronManager = lazy(() =>
   import('./pages/control/CronManager').then((m) => ({ default: m.CronManager }))
 );
@@ -87,6 +90,7 @@ export function App() {
         <Route path="/dlq-control" element={<DlqControl />} />
         <Route path="/webhooks" element={<Webhooks />} />
         <Route path="/diagnostics" element={<Diagnostics />} />
+        <Route path="/benchmark" element={<Benchmark />} />
         <Route path="/usage" element={<Usage />} />
         <Route path="/s3" element={<S3BackupPro />} />
         <Route path="/s3-classic" element={<S3Backup />} />
