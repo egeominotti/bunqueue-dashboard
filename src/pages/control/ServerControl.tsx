@@ -1,20 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { CopyButton } from '@/components/ui/CopyButton';
 import { OfflineBanner } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/form';
-import { IconPause, IconPlay, IconRefresh } from '@/components/ui/icons';
+import { IconRefresh } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { StatCard } from '@/components/ui/StatCard';
-import { StatusDot } from '@/components/ui/StatusBadge';
 import { bq } from '@/lib/bq';
 import type { ServerConfig, ServerStatus } from '@/lib/bqTypes';
-import { formatBytes, formatDateTime, formatRelativeTime, formatUptime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 import { AgentInfoCard } from './server/AgentInfoCard';
 import { EnvVarsEditor } from './server/EnvVarsEditor';
 import { ProcessLogs } from './server/ProcessLogs';
+import { StatusConsole } from './server/StatusConsole';
+import { StoragePanel } from './server/StoragePanel';
 
 export function ServerControl() {
   const { data, error, refetch } = usePolledData(() => bq.control.status(), []);
@@ -58,43 +56,12 @@ export function ServerControl() {
   const status = data?.status ?? 'stopped';
   const running = status === 'running';
   const transitioning = status === 'starting' || status === 'stopping' || busy != null;
-  const httpPort = data?.runningConfig?.httpPort ?? data?.config?.httpPort ?? 6790;
-  const serverBase = `http://localhost:${httpPort}`;
 
   return (
     <div>
       <PageHeader
         title="Server"
-        description="Start, stop and restart the bunqueue server process."
-        actions={
-          <>
-            <Button
-              variant="success"
-              size="sm"
-              disabled={running || transitioning}
-              onClick={() => run('start', () => bq.control.start())}
-            >
-              <IconPlay className="size-3.5" /> Start
-            </Button>
-            <Button
-              variant="warning"
-              size="sm"
-              disabled={!running || transitioning}
-              onClick={() => run('stop', () => bq.control.stop(), 'Stop the bunqueue server?')}
-            >
-              <IconPause className="size-3.5" /> Stop
-            </Button>
-            <Button
-              size="sm"
-              disabled={transitioning}
-              onClick={() =>
-                run('restart', () => bq.control.restart(), 'Restart the bunqueue server?')
-              }
-            >
-              <IconRefresh className="size-3.5" /> Restart
-            </Button>
-          </>
-        }
+        description="Supervise the bunqueue server process — lifecycle, configuration, storage and logs."
       />
 
       {actionError && (
@@ -103,58 +70,17 @@ export function ServerControl() {
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Card>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-faint">Status</div>
-          <div className="mt-2 flex items-center gap-2 text-xl font-semibold capitalize text-fg">
-            <StatusDot label="" tone={running ? 'green' : status === 'stopped' ? 'red' : 'amber'} />
-            {status}
-          </div>
-        </Card>
-        <StatCard
-          label="Health"
-          value={data?.healthy ? 'Healthy' : running ? 'Starting…' : '—'}
-          tone={data?.healthy ? 'green' : 'default'}
-          compact
-        />
-        <StatCard label="PID" value={data?.pid ?? '—'} compact />
-        <StatCard
-          label="Uptime"
-          value={
-            running && data?.startedAt ? formatUptime((Date.now() - data.startedAt) / 1000) : '—'
-          }
-          compact
-        />
-      </div>
-
-      {data?.db && (
-        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-          <StatCard
-            label="Database"
-            value={formatBytes(data.db.size)}
-            tone={data.db.exists ? 'accent' : 'default'}
-            hint={data.db.exists ? 'main .db' : 'not created yet'}
-            compact
-          />
-          <StatCard
-            label="WAL"
-            value={formatBytes(data.db.walSize)}
-            hint="write-ahead log"
-            compact
-          />
-          <StatCard
-            label="On disk"
-            value={formatBytes(data.db.totalSize)}
-            hint="db + wal + shm"
-            compact
-          />
-          <StatCard
-            label="DB modified"
-            value={data.db.mtimeMs ? formatRelativeTime(data.db.mtimeMs) : '—'}
-            compact
-          />
-        </div>
-      )}
+      <StatusConsole
+        status={data}
+        agentBase={bq.agentBase}
+        transitioning={transitioning}
+        busy={busy}
+        onStart={() => run('starting', () => bq.control.start())}
+        onStop={() => run('stopping', () => bq.control.stop(), 'Stop the bunqueue server?')}
+        onRestart={() =>
+          run('restarting', () => bq.control.restart(), 'Restart the bunqueue server?')
+        }
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <ConfigCard
@@ -163,45 +89,14 @@ export function ServerControl() {
           running={running}
           transitioning={transitioning}
         />
-        <ProcessLogs />
+        <div className="flex flex-col gap-6">
+          {data?.db && <StoragePanel db={data.db} />}
+          <ProcessLogs />
+        </div>
       </div>
 
       <div className="mt-6">
         <AgentInfoCard agentBase={bq.agentBase} />
-      </div>
-
-      <div className="mt-4 space-y-1.5 text-xs text-faint">
-        {running && (
-          <p className="flex items-center gap-2 font-mono">
-            <span className="text-muted">API</span>
-            <a
-              href={`${serverBase}/health`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-accent hover:underline"
-            >
-              {serverBase}
-            </a>
-            <CopyButton value={serverBase} />
-          </p>
-        )}
-        {data?.db && (
-          <p className="flex items-center gap-2 font-mono" title={data.db.path}>
-            <span className="text-muted">data</span>
-            <span className="truncate">{data.db.path}</span>
-            <CopyButton value={data.db.path} />
-          </p>
-        )}
-        {!running && data?.exitCode != null && (
-          <p className={data.exitCode === 0 ? '' : 'text-red-400'}>
-            last exit code: {data.exitCode}
-          </p>
-        )}
-        {data?.version && (
-          <p>
-            bunqueue v{data.version} · started {formatDateTime(data.startedAt)}
-          </p>
-        )}
       </div>
     </div>
   );
