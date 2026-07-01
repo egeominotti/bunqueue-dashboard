@@ -10,6 +10,7 @@ control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and 
 [![Deploy to GitHub Pages](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml)
 [![Docker](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Status: Beta](https://img.shields.io/badge/status-beta-f59e0b)
 
 ![React 19](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
 ![Vite 8](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
@@ -20,6 +21,10 @@ control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and 
 </div>
 
 ---
+
+> ⚠️ **Beta.** bunqueue dashboard is under active development — interfaces and
+> behavior may change between releases. Review it before relying on it for
+> unattended production use.
 
 ## Table of contents
 
@@ -159,8 +164,10 @@ Tags: `latest` and `vX.Y.Z` on releases, `edge` on `main`.
 ## Deployment
 
 - **GitHub Pages** — every push to `main` builds and publishes the static SPA
-  (`.github/workflows/pages.yml`). Enable it once under **Settings ▸ Pages ▸ Source → GitHub
-  Actions**. The build sets the correct sub-path base and a `404.html` SPA fallback automatically.
+  (`.github/workflows/pages.yml`). The workflow **attempts** to auto-provision Pages; if the first
+  run reports `Get Pages site failed`, enable it once under **Settings ▸ Pages ▸ Source → GitHub
+  Actions** (the default `GITHUB_TOKEN` can't create a Pages site on its own). The build sets the
+  correct sub-path base and a `404.html` SPA fallback automatically.
 - **Container** — self-host the published `ghcr.io` image behind any reverse proxy.
 - **Static host** — `bun run build` emits a plain `dist/` you can serve from any CDN or static host.
 

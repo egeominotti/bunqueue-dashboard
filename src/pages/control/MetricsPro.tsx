@@ -44,10 +44,10 @@ export function MetricsPro() {
   const series = useThroughputSeries(60);
   const [page, setPage] = useState(0);
   const { data, error, loading, refetch } = usePolledData(async () => {
-    // One /dashboard + one /queues/summary — was 2 + up to 20 queueDetail calls
-    // per poll. Summary carries every queue's counts in a single request.
-    const [o, summary] = await Promise.all([bq.overview(), bq.queuesSummary()]);
-    return { o, details: summary };
+    // Only /queues/summary here — the live overview (stats/throughput/latency)
+    // comes from the 1s sampler below, so /dashboard isn't polled twice.
+    const summary = await bq.queuesSummary();
+    return { details: summary };
   }, []);
 
   const details = data?.details ?? [];
@@ -60,7 +60,7 @@ export function MetricsPro() {
 
   if (loading && !data && !error) return <LoadingState label="Loading metrics…" />;
 
-  const { stats, throughput, latency } = data?.o ?? EMPTY_OVERVIEW;
+  const { stats, throughput, latency } = series.latest ?? EMPTY_OVERVIEW;
   const rate = errorRate(stats.totalCompleted, stats.totalFailed);
   const trend = depthTrend(series.depth);
   const depthNow = series.depth.length ? series.depth[series.depth.length - 1] : 0;

@@ -22,23 +22,22 @@ export function DlqPro() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // One /dashboard/queues for the per-queue DLQ counts + grand total, plus — only
-  // when a queue is selected — one paginated /dlq page and one /dlq/stats for
-  // that queue. Previously this fanned out one /dlq/stats per DLQ-bearing queue
-  // on every poll; now it's at most three requests regardless of queue count.
+  // The queue list (per-queue DLQ counts + grand total + dropdown) changes
+  // slowly, so poll it on its own slow cadence instead of on the fast DLQ poll.
+  const { data: qs, refetch: refetchQueues } = usePolledData(() => bq.queues(), [], {
+    intervalMs: 10000,
+  });
+  const queues = qs?.queues ?? [];
+  const total = queues.reduce((a, q) => a + q.dlq, 0);
+
+  // Fast poll: only the selected queue's paginated /dlq page + /dlq/stats.
   const fetcher = useCallback(async () => {
-    const qsr = await bq.queues();
-    const total = qsr.queues.reduce((a, q) => a + q.dlq, 0);
-    if (!queue) {
-      return { queues: qsr.queues, total, entries: [], entriesTotal: 0, stats: null };
-    }
+    if (!queue) return { entries: [], entriesTotal: 0, stats: null };
     const [list, statsRes] = await Promise.all([
       bq.dlq(queue, PAGE_SIZE, page * PAGE_SIZE),
       bq.dlqStats(queue).catch(() => null),
     ]);
     return {
-      queues: qsr.queues,
-      total,
       entries: list.entries ?? [],
       entriesTotal: list.total ?? 0,
       stats: statsRes?.stats ?? null,
@@ -53,7 +52,10 @@ export function DlqPro() {
     try {
       const r = await fn();
       setMsg(`${label}: ${r?.count ?? 'ok'}`);
+      // Refresh the selected queue's page AND the queue list (grand total /
+      // "DLQ by queue" grid / dropdown counts) after a retry or purge.
       refetch();
+      refetchQueues();
     } catch (e) {
       setMsg((e as Error).message);
     } finally {
@@ -74,8 +76,8 @@ export function DlqPro() {
   // Grid shows only queues that actually have DLQ entries (the rest are noise),
   // sorted by DLQ size — a natural bound on the rendered list.
   const dlqQueues = useMemo(
-    () => (data?.queues ?? []).filter((q) => q.dlq > 0).sort((a, b) => b.dlq - a.dlq),
-    [data]
+    () => queues.filter((q) => q.dlq > 0).sort((a, b) => b.dlq - a.dlq),
+    [queues]
   );
 
   // Reason/search filter the currently-loaded page (the server paginates but has
@@ -90,7 +92,7 @@ export function DlqPro() {
     );
   }, [data, reason, search, sort]);
 
-  const healthy = (data?.total ?? 0) === 0;
+  const healthy = total === 0;
   // Reason/search/sort act on the loaded page only. When the queue spans more than
   // one server page, say so on the sort control (search is already honestly labeled).
   const filterActive = reason !== 'all' || search.trim() !== '';
@@ -127,7 +129,7 @@ export function DlqPro() {
               healthy ? 'text-emerald-400' : 'text-red-400'
             )}
           >
-            {formatNumber(data?.total)}
+            {formatNumber(total)}
           </div>
         </Card>
         <Card>
@@ -188,7 +190,7 @@ export function DlqPro() {
         <div className="w-48">
           <Select value={queue} onChange={(e) => selectQueue(e.target.value)}>
             <option value="">Select a queue…</option>
-            {(data?.queues ?? []).map((q) => (
+            {queues.map((q) => (
               <option key={q.name} value={q.name}>
                 {q.name}
                 {q.dlq ? ` (${q.dlq})` : ''}

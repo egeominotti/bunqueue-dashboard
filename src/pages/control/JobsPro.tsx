@@ -60,7 +60,8 @@ export function JobsPro() {
   // Queue dropdown: one /queues/summary call (all queues), polled slowly — the
   // queue set changes rarely, so it doesn't ride the fast job cadence.
   const { data: summary } = usePolledData(() => bq.queuesSummary(), [], { intervalMs: 30000 });
-  const { data: overview } = usePolledData(() => bq.overview(), []);
+  // Server-wide totals for the stat cards — slower cadence than the job table.
+  const { data: overview } = usePolledData(() => bq.overview(), [], { intervalMs: 10000 });
 
   // Default to the first queue once the list arrives (there is no cross-queue
   // job-list endpoint, so jobs are always fetched one queue at a time, paginated

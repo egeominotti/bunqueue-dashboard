@@ -1,10 +1,21 @@
 # Development
 
+New here? Start with [getting-started.md](getting-started.md) for a guided first
+run, and [configuration.md](configuration.md) for the full env reference. This
+page is the day-to-day workflow: run, gate, and how to add a page additively.
+
 ## Run
 
 ```bash
 bun install
-bun run agent/index.ts      # control agent (start/stop/restart) → 127.0.0.1:6800
+bun start                   # agent + dashboard together (Ctrl-C stops both)
+```
+
+`bun start` (`scripts/dev.ts`) is the one-command path. Prefer separate
+processes? The granular commands still work:
+
+```bash
+bun run agent               # control agent (start/stop/restart) → 127.0.0.1:6800
 bun dev                     # dashboard → http://localhost:5273
 ```
 
@@ -19,10 +30,17 @@ bun run check     # biome (lint + format);  bun run check:fix to autofix
 bun test          # format + sse + agent-lifecycle tests
 ```
 
+This is the exact gate CI runs on every push and PR
+([ci-cd.md](ci-cd.md)) — keep all three green before considering a change done.
+
 Notes:
-- `biome.json` is a **nested** config (`"root": false`) so it coexists with the
-  repo-root Biome. `src/index.css` (Tailwind v4 at-rules) and `agent/` are
-  excluded from Biome; `agent/` is Bun runtime code and is not in `tsconfig`.
+- `biome.json` is a **production-grade root config** (`"root": true`, schema pinned
+  to the installed CLI). It *must* be root: this is a standalone repo with no parent
+  Biome config, and with `"root": false` Biome silently falls back to default rules
+  on every file (a broken gate, not real findings). It enables `recommended` plus a
+  curated strict set as errors, with a few aspirational rules as warnings.
+  `src/index.css` (Tailwind v4 at-rules), `agent/`, and `scripts/` are excluded from
+  Biome; `agent/` and `scripts/` are Bun runtime code and are not in `tsconfig`.
 - `bunfig.toml` preloads `test/setup.ts` (a `localStorage` shim) so store imports
   work under `bun test`.
 

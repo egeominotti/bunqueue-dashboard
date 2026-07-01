@@ -16,6 +16,21 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split the React runtime (react, react-dom, react-router-dom) into its
+        // own chunk so app-only changes don't bust the ~190KB vendor cache on
+        // returning visitors. Function form is required — Vite 8 / Rolldown
+        // rejects the object form of manualChunks.
+        manualChunks(id) {
+          if (id.includes('node_modules') && /[\\/]react(-dom|-router-dom)?[\\/]/.test(id)) {
+            return 'react-vendor';
+          }
+        },
+      },
+    },
+  },
   server: {
     port: 5273,
     proxy: {

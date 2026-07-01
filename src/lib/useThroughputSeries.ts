@@ -14,13 +14,21 @@ export interface ThroughputSeries {
  * a rolling window, for the live charts. One poller feeds both series (no extra
  * request). Independent of the page poll interval.
  */
-export function useThroughputSeries(windowSize = 60): ThroughputSeries {
+type Overview = Awaited<ReturnType<typeof bq.overview>>;
+
+export interface ThroughputData extends ThroughputSeries {
+  /** Latest full /dashboard overview, so a consuming page needn't poll it too. */
+  latest: Overview | null;
+}
+
+export function useThroughputSeries(windowSize = 60): ThroughputData {
   const [series, setSeries] = useState<ThroughputSeries>({
     push: [],
     complete: [],
     fail: [],
     depth: [],
   });
+  const [latest, setLatest] = useState<Overview | null>(null);
   const mounted = useRef(true);
   const inFlight = useRef(false);
 
@@ -37,6 +45,7 @@ export function useThroughputSeries(windowSize = 60): ThroughputSeries {
       try {
         const o = await bq.overview();
         if (!mounted.current) return;
+        setLatest(o);
         const depth = (o.stats.waiting ?? 0) + (o.stats.active ?? 0) + (o.stats.delayed ?? 0);
         setSeries((s) => ({
           push: [...s.push, o.throughput.pushPerSec].slice(-windowSize),
@@ -58,7 +67,7 @@ export function useThroughputSeries(windowSize = 60): ThroughputSeries {
     };
   }, [windowSize]);
 
-  return series;
+  return { ...series, latest };
 }
 
 /**

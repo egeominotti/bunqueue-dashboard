@@ -17,7 +17,9 @@ export function QueueControl() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const { data: qs } = usePolledData(() => bq.queues(), []);
+  // Queue picker only — the queue set changes rarely, so poll it slowly instead
+  // of on the fast global cadence (the live per-queue data has its own poll below).
+  const { data: qs } = usePolledData(() => bq.queues(), [], { intervalMs: 30000 });
   useEffect(() => {
     if (!queue && qs?.queues?.length) setQueue(qs.queues[0].name);
   }, [qs, queue]);

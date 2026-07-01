@@ -51,7 +51,6 @@ const EMPTY = {
 export function OverviewPro() {
   const baseUrl = useConnectionStore((s) => s.baseUrl);
   const token = useConnectionStore((s) => s.token);
-  const { events } = useActivityStream();
 
   const { data, error, loading, refetch } = usePolledData(async () => {
     // One /dashboard + one /queues/summary — not an N-queue fan-out. Summary
@@ -211,35 +210,43 @@ export function OverviewPro() {
         )}
       </div>
 
-      {/* Recent Activity */}
-      <div className="mt-8">
-        <SectionHeading title="Recent Activity" to="/logs" />
-        <Card padded={false}>
-          {events.length === 0 ? (
-            <p className="py-8 text-center text-sm text-faint">Waiting for live activity…</p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {events.slice(0, 8).map((e) => (
-                <li key={e.seq} className="flex items-center justify-between px-5 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className={cn('size-2 rounded-full', dotFor(e.status))} />
-                    <div className="text-sm">
-                      <span className="font-mono font-medium text-fg">{e.queue || '—'}</span>
-                      <span className="text-faint"> · </span>
-                      <span className="font-mono text-xs text-faint">
-                        {e.jobId ? e.jobId.slice(0, 8) : '—'}
-                      </span>
-                      <span className="text-faint"> · </span>
-                      <span className="capitalize text-muted">{e.status}</span>
-                    </div>
+      {/* Recent Activity — its own SSE-subscribing leaf so live events re-render
+          only this list, not the stat cards / queue-health grid above. */}
+      <RecentActivity />
+    </div>
+  );
+}
+
+function RecentActivity() {
+  const { events } = useActivityStream();
+  return (
+    <div className="mt-8">
+      <SectionHeading title="Recent Activity" to="/logs" />
+      <Card padded={false}>
+        {events.length === 0 ? (
+          <p className="py-8 text-center text-sm text-faint">Waiting for live activity…</p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {events.slice(0, 8).map((e) => (
+              <li key={e.seq} className="flex items-center justify-between px-5 py-3">
+                <div className="flex items-center gap-3">
+                  <span className={cn('size-2 rounded-full', dotFor(e.status))} />
+                  <div className="text-sm">
+                    <span className="font-mono font-medium text-fg">{e.queue || '—'}</span>
+                    <span className="text-faint"> · </span>
+                    <span className="font-mono text-xs text-faint">
+                      {e.jobId ? e.jobId.slice(0, 8) : '—'}
+                    </span>
+                    <span className="text-faint"> · </span>
+                    <span className="capitalize text-muted">{e.status}</span>
                   </div>
-                  <span className="text-xs text-faint">{formatRelativeTime(e.timestamp)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
+                </div>
+                <span className="text-xs text-faint">{formatRelativeTime(e.timestamp)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   );
 }

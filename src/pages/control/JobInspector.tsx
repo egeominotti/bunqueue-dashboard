@@ -57,7 +57,10 @@ export function JobInspector() {
       const loaded = jobRes.job;
       // Result is keyed by the resolved internal id — for a custom-id lookup we
       // only learn it once the job comes back — so fetch it after, best-effort.
-      const resultRes = await bq.jobResult(loaded.id).catch(() => null);
+      // Only completed jobs have a stored result (the Result card renders only for
+      // 'completed'), so skip the request for any other state.
+      const resultRes =
+        loaded.state === 'completed' ? await bq.jobResult(loaded.id).catch(() => null) : null;
       setJob(loaded);
       setIdInput(mode === 'custom' ? loaded.id : key);
       setParams({ id: loaded.id }, { replace: true });

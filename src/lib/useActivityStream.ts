@@ -45,6 +45,10 @@ export function useActivityStream(queue?: string) {
   const [connected, setConnected] = useState(false);
 
   const stamps = useRef<number[]>([]);
+  // Incoming job events and counter deltas are buffered here and applied on a
+  // ~150ms flush timer, so a high-rate stream can't force a re-render per frame.
+  const pendingEvents = useRef<ActivityEvent[]>([]);
+  const pendingCounters = useRef<ActivityCounters>({ ...EMPTY });
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -54,6 +58,8 @@ export function useActivityStream(queue?: string) {
     setEvents([]);
     setCounters(EMPTY);
     stamps.current = [];
+    pendingEvents.current = [];
+    pendingCounters.current = { ...EMPTY };
 
     // Abortable delay so a pending reconnect wait resolves immediately on
     // cleanup. The abort listener is removed on both paths so repeated
@@ -97,14 +103,14 @@ export function useActivityStream(queue?: string) {
         error: d.error,
         progress: d.progress,
       };
-      setEvents((prev) => [ev, ...prev].slice(0, MAX_EVENTS));
-      setCounters((prev) => ({
-        total: prev.total + 1,
-        completed: prev.completed + (status === 'completed' ? 1 : 0),
-        failed: prev.failed + (status === 'failed' ? 1 : 0),
-        waiting: prev.waiting + (status === 'waiting' ? 1 : 0),
-        active: prev.active + (status === 'active' ? 1 : 0),
-      }));
+      // Buffer instead of setState-per-frame; the flush timer applies these.
+      pendingEvents.current.push(ev);
+      const pc = pendingCounters.current;
+      pc.total += 1;
+      if (status === 'completed') pc.completed += 1;
+      else if (status === 'failed') pc.failed += 1;
+      else if (status === 'waiting') pc.waiting += 1;
+      else if (status === 'active') pc.active += 1;
       stamps.current.push(Date.now());
     };
 
@@ -127,9 +133,31 @@ export function useActivityStream(queue?: string) {
     };
     run();
 
+    // Coalesce buffered events/counters into at most ~7 state updates/sec,
+    // independent of the stream's frame rate.
+    const flushTimer = setInterval(() => {
+      if (pendingEvents.current.length) {
+        const batch = pendingEvents.current;
+        pendingEvents.current = [];
+        setEvents((prev) => [...batch.reverse(), ...prev].slice(0, MAX_EVENTS));
+      }
+      const pc = pendingCounters.current;
+      if (pc.total) {
+        pendingCounters.current = { ...EMPTY };
+        setCounters((prev) => ({
+          total: prev.total + pc.total,
+          completed: prev.completed + pc.completed,
+          failed: prev.failed + pc.failed,
+          waiting: prev.waiting + pc.waiting,
+          active: prev.active + pc.active,
+        }));
+      }
+    }, 150);
+
     return () => {
       cancelled = true;
       ctrl.abort();
+      clearInterval(flushTimer);
       setConnected(false);
     };
     // Reconnect when the target queue or connection settings change.

@@ -136,7 +136,9 @@ export class ProcessManager {
 
   private push(stream: LogLine['stream'], line: string): void {
     this.logs.push({ seq: this.seq++, ts: Date.now(), stream, line });
-    if (this.logs.length > MAX_LOGS) this.logs.splice(0, this.logs.length - MAX_LOGS);
+    // Amortized trim: only splice once the buffer overshoots by a slack margin, so
+    // steady-state logging isn't an O(n) array shift on every single line.
+    if (this.logs.length > MAX_LOGS + 256) this.logs.splice(0, this.logs.length - MAX_LOGS);
   }
 
   async start(): Promise<StatusSnapshot> {

@@ -1,33 +1,64 @@
+import { lazy } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { AppLayout } from './components/layout/AppLayout';
-import { Cron } from './pages/Cron';
-import { AddJob } from './pages/control/AddJob';
-import { CronManager } from './pages/control/CronManager';
-import { Diagnostics } from './pages/control/Diagnostics';
-import { DlqControl } from './pages/control/DlqControl';
-import { DlqPro } from './pages/control/DlqPro';
-import { JobInspector } from './pages/control/JobInspector';
-import { JobsPro } from './pages/control/JobsPro';
-import { LogsPro } from './pages/control/LogsPro';
-import { MetricsPro } from './pages/control/MetricsPro';
 import { OverviewPro } from './pages/control/OverviewPro';
-import { QueueControl } from './pages/control/QueueControl';
-import { QueuesOverview } from './pages/control/QueuesOverview';
-import { S3BackupPro } from './pages/control/S3BackupPro';
-import { ServerControl } from './pages/control/ServerControl';
-import { Webhooks } from './pages/control/Webhooks';
-import { Dlq } from './pages/Dlq';
-import { Jobs } from './pages/Jobs';
-import { Logs } from './pages/Logs';
-import { Metrics } from './pages/Metrics';
+// Eager: the layout shell, the landing route ('/'), and the trivial 404 — so the
+// most common first paint has no lazy-chunk flash. Every other route is split
+// into its own chunk (loaded on demand) to keep the initial bundle small.
 import { NotFound } from './pages/NotFound';
-import { Overview } from './pages/Overview';
-import { QueueDetail } from './pages/QueueDetail';
-import { Queues } from './pages/Queues';
-import { S3Backup } from './pages/S3Backup';
-import { Settings } from './pages/Settings';
-import { Usage } from './pages/Usage';
-import { Workers } from './pages/Workers';
+
+// Route-level code splitting. Each page becomes its own chunk fetched only when
+// its route is first visited; the named-export remap adapts to React.lazy's
+// default-export contract. The <Suspense> boundary lives in AppLayout (around
+// <Outlet/>) so the sidebar/topbar shell never blanks during a chunk load.
+const AddJob = lazy(() => import('./pages/control/AddJob').then((m) => ({ default: m.AddJob })));
+const CronManager = lazy(() =>
+  import('./pages/control/CronManager').then((m) => ({ default: m.CronManager }))
+);
+const Diagnostics = lazy(() =>
+  import('./pages/control/Diagnostics').then((m) => ({ default: m.Diagnostics }))
+);
+const DlqControl = lazy(() =>
+  import('./pages/control/DlqControl').then((m) => ({ default: m.DlqControl }))
+);
+const DlqPro = lazy(() => import('./pages/control/DlqPro').then((m) => ({ default: m.DlqPro })));
+const JobInspector = lazy(() =>
+  import('./pages/control/JobInspector').then((m) => ({ default: m.JobInspector }))
+);
+const JobsPro = lazy(() => import('./pages/control/JobsPro').then((m) => ({ default: m.JobsPro })));
+const LogsPro = lazy(() => import('./pages/control/LogsPro').then((m) => ({ default: m.LogsPro })));
+const MetricsPro = lazy(() =>
+  import('./pages/control/MetricsPro').then((m) => ({ default: m.MetricsPro }))
+);
+const QueueControl = lazy(() =>
+  import('./pages/control/QueueControl').then((m) => ({ default: m.QueueControl }))
+);
+const QueuesOverview = lazy(() =>
+  import('./pages/control/QueuesOverview').then((m) => ({ default: m.QueuesOverview }))
+);
+const S3BackupPro = lazy(() =>
+  import('./pages/control/S3BackupPro').then((m) => ({ default: m.S3BackupPro }))
+);
+const ServerControl = lazy(() =>
+  import('./pages/control/ServerControl').then((m) => ({ default: m.ServerControl }))
+);
+const Webhooks = lazy(() =>
+  import('./pages/control/Webhooks').then((m) => ({ default: m.Webhooks }))
+);
+const Cron = lazy(() => import('./pages/Cron').then((m) => ({ default: m.Cron })));
+const Dlq = lazy(() => import('./pages/Dlq').then((m) => ({ default: m.Dlq })));
+const Jobs = lazy(() => import('./pages/Jobs').then((m) => ({ default: m.Jobs })));
+const Logs = lazy(() => import('./pages/Logs').then((m) => ({ default: m.Logs })));
+const Metrics = lazy(() => import('./pages/Metrics').then((m) => ({ default: m.Metrics })));
+const Overview = lazy(() => import('./pages/Overview').then((m) => ({ default: m.Overview })));
+const QueueDetail = lazy(() =>
+  import('./pages/QueueDetail').then((m) => ({ default: m.QueueDetail }))
+);
+const Queues = lazy(() => import('./pages/Queues').then((m) => ({ default: m.Queues })));
+const S3Backup = lazy(() => import('./pages/S3Backup').then((m) => ({ default: m.S3Backup })));
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
+const Usage = lazy(() => import('./pages/Usage').then((m) => ({ default: m.Usage })));
+const Workers = lazy(() => import('./pages/Workers').then((m) => ({ default: m.Workers })));
 
 export function App() {
   return (

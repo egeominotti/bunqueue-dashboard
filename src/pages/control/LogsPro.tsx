@@ -21,7 +21,14 @@ export function LogsPro() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
 
-  const { data: qs, error, refetch } = usePolledData(() => bq.queues(), []);
+  // Dropdown options only — slow-poll so it doesn't ride the live SSE cadence.
+  const {
+    data: qs,
+    error,
+    refetch,
+  } = usePolledData(() => bq.queues(), [], {
+    intervalMs: 30000,
+  });
   const { events, counters, throughput, connected } = useActivityStream(
     queue === ALL ? undefined : queue
   );

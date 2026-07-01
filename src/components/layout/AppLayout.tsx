@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Sidebar } from './Sidebar';
@@ -21,7 +21,9 @@ export function AppLayout() {
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar onMenu={() => setNavOpen(true)} />
           <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
-            <Outlet />
+            <Suspense fallback={<div className="p-2 text-sm text-muted">Loading…</div>}>
+              <Outlet />
+            </Suspense>
           </main>
         </div>
       </div>

@@ -10,8 +10,9 @@ name: Deploy to GitHub Pages
 # server via the in-app Settings page (or a build-time VITE_BUNQUEUE_URL); the
 # dev `/api` proxy and the local control agent are not available on Pages.
 #
-# One-time setup: repo Settings ▸ Pages ▸ "Build and deployment" ▸ Source =
-# "GitHub Actions".
+# Pages is auto-provisioned by the "Configure Pages" step (enablement: true), so
+# no manual Settings toggle is required — the first run enables it. (If your org
+# restricts Pages, enable it once under Settings ▸ Pages ▸ Source → GitHub Actions.)
 
 on:
   push:
@@ -51,6 +52,13 @@ jobs:
       - name: Configure Pages
         id: pages
         uses: actions/configure-pages@v5
+        with:
+          # Best-effort: try to provision Pages (build type = GitHub Actions) on
+          # the first run. With the default GITHUB_TOKEN this can be a no-op —
+          # creating a Pages *site* needs administration:write, which GITHUB_TOKEN
+          # cannot hold — so if the first deploy fails with "Get Pages site failed",
+          # enable it once under Settings ▸ Pages ▸ Source → GitHub Actions.
+          enablement: true
 
       - name: Build
         env:

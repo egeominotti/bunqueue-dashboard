@@ -7,7 +7,8 @@ import { type AddJobBody, bq } from '@/lib/bq';
 import { usePolledData } from '@/lib/usePolledData';
 
 export function AddJob() {
-  const { data: qs } = usePolledData(() => bq.queues(), []);
+  // Queue name datalist only — rarely changes, so slow-poll it.
+  const { data: qs } = usePolledData(() => bq.queues(), [], { intervalMs: 30000 });
   const [queue, setQueue] = useState('');
   const [dataText, setDataText] = useState('{\n  "hello": "world"\n}');
   const [count, setCount] = useState('1');

@@ -108,8 +108,9 @@ GitHub Actions under `.github/workflows/` (Bun pinned to the same version as loc
 - **ci.yml** — on push to `main` + every PR: `bun run check`, `bun run build`, `bun test`; uploads
   the `dist/` artifact. This is the merge gate.
 - **pages.yml** — on push to `main`: builds with `VITE_BASE` = the Pages sub-path, adds a
-  `404.html` SPA fallback, deploys to GitHub Pages. (Enable once: Settings ▸ Pages ▸ Source → GitHub
-  Actions.)
+  `404.html` SPA fallback, deploys to GitHub Pages. It best-effort auto-enables Pages
+  (`configure-pages enablement: true`); if the first run fails with `Get Pages site failed`, enable
+  Settings ▸ Pages ▸ Source → GitHub Actions once (GITHUB_TOKEN can't create the site itself).
 - **docker.yml** — on push to `main` + tags `v*`: builds the multi-arch image and pushes to
   `ghcr.io/egeominotti/bunqueue-dashboard` (`edge` on main, semver + `latest` on tags).
 - **release.yml** — on tags `v*`: re-runs the gate, zips `dist/`, publishes a GitHub Release with

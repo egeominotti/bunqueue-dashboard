@@ -127,6 +127,12 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
           <span className="rounded-md bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
             dash
           </span>
+          <span
+            title="Beta — under active development"
+            className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400"
+          >
+            beta
+          </span>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 pb-4">

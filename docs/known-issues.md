@@ -131,6 +131,19 @@ The items below are the ones **still** open (mostly confined to the off-nav
   "Objects are not valid as a React child". Confined to `/dlq-classic`
   (off-nav); the default `/dlq` (`DlqPro`) is unaffected.
 
+## Performance (off-nav legacy pages)
+
+- **`Jobs.tsx` (classic, `/jobs-classic`) polls the full queue list every 3s.**
+  `usePolledData(() => api.queues(500), [])` (Jobs.tsx:32) fetches up to 500 full
+  queue rows on the fast global cadence purely to feed the queue dropdown and the
+  `slice(0, 25)` fan-out list — data that changes rarely. The primary route
+  `/jobs` → `JobsPro` already throttles the equivalent to 30s
+  (`{ intervalMs: 30000 }`), so the real user path is efficient. Left as-is per
+  the additive rule (classic pages are reported, not edited in place); the fix, if
+  ever wanted, is to add `{ intervalMs: 30000 }` to that call. An efficiency pass
+  applied the same throttle to every *Pro* page (QueueControl, LogsPro, AddJob,
+  JobsPro overview) and split the DLQ/Metrics duplicate `/dashboard` polls.
+
 ## UX gaps
 
 - **`src/pages/Alerts.tsx` is fully built but unreachable.** See

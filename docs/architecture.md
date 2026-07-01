@@ -114,8 +114,10 @@ A tiny local Bun process (`agent/`) that supervises a bunqueue server child
 process, because a browser can't start/stop an OS process and bunqueue's HTTP
 API has no process-lifecycle endpoint. See [agent.md](agent.md) for the full
 reference (endpoints, `ServerConfig`/`runningConfig` split, `dbStats()`).
-**Read the security note in [known-issues.md](known-issues.md) before ever
-exposing its port beyond your own loopback** — it has no authentication.
+Because it can spawn processes it binds `127.0.0.1` only and is guarded by a
+**locked-CORS Origin allowlist** (never `*`) plus an optional `AGENT_TOKEN`
+bearer gate — see [agent.md](agent.md#security) and [SECURITY.md](../SECURITY.md).
+Keep its port on loopback (or an equally trusted network) regardless.
 
 ## Theming
 
