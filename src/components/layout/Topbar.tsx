@@ -65,14 +65,28 @@ export function Topbar({ onMenu }: { onMenu?: () => void }) {
           <span className="hidden text-faint sm:inline">bunqueue</span>
         </div>
       </div>
-      <Link
-        to="/settings"
-        title="Settings"
-        aria-label="Open settings"
-        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-fuchsia-600 text-xs font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-      >
-        bq
-      </Link>
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event('command-palette:open'))}
+          title="Command palette (⌘K)"
+          aria-label="Open command palette"
+          className="hidden items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 text-xs text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:flex"
+        >
+          <span>Search</span>
+          <kbd className="rounded border border-line bg-surface-2 px-1 font-mono text-[10px]">
+            ⌘K
+          </kbd>
+        </button>
+        <Link
+          to="/settings"
+          title="Settings"
+          aria-label="Open settings"
+          className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-fuchsia-600 text-xs font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+        >
+          bq
+        </Link>
+      </div>
     </header>
   );
 }

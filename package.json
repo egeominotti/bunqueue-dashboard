@@ -1,7 +1,7 @@
 {
   "name": "bunqueue-dashboard",
   "private": true,
-  "version": "0.0.2",
+  "version": "0.0.3",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity).",
   "license": "MIT",
@@ -31,6 +31,7 @@
     "dev": "vite",
     "agent": "bun run agent/index.ts",
     "build": "tsc --noEmit && vite build",
+    "size": "bun run scripts/check-bundle.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",

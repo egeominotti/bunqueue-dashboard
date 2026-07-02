@@ -24,10 +24,12 @@ import { cn } from '@/lib/cn';
 import { usePolledData } from '@/lib/usePolledData';
 import { SidebarFooter } from './SidebarFooter';
 
-type NavItem = { to: string; label: string; icon: typeof IconOverview; end?: boolean };
-type NavGroup = { section: string | null; items: NavItem[] };
+export type NavItem = { to: string; label: string; icon: typeof IconOverview; end?: boolean };
+export type NavGroup = { section: string | null; items: NavItem[] };
 
-const NAV: NavGroup[] = [
+// The single source of truth for the app's navigation, also consumed by the
+// command palette (Cmd/Ctrl-K) so new sections show up there automatically.
+export const NAV: NavGroup[] = [
   { section: null, items: [{ to: '/', label: 'Overview', icon: IconOverview, end: true }] },
   {
     section: 'Queues',

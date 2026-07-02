@@ -15,6 +15,17 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-07-03
+
+### Added
+- **Command palette (Cmd/Ctrl-K).** Fuzzy-search every page plus a few actions
+  (toggle theme, open docs) and jump there, fully keyboard-driven (↑/↓, ↵, esc),
+  with an accessible backdrop and a Topbar search trigger. Its command list is
+  sourced from the sidebar nav, so new sections appear automatically.
+- **Bundle-size budget** (`bun run size`), enforced in CI: fails the build if the
+  total gzipped JavaScript exceeds 230 KB (currently ~162 KB), so a careless
+  dependency can't silently bloat the app.
+
 ## [0.0.2] - 2026-07-03
 
 ### Added
@@ -86,6 +97,7 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.2...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.3...HEAD
+[0.0.3]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/egeominotti/bunqueue-dashboard/releases/tag/v0.0.1

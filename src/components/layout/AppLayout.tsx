@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { CommandPalette } from '@/components/CommandPalette';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -54,6 +55,7 @@ export function AppLayout() {
             </Suspense>
           </main>
         </div>
+        <CommandPalette />
       </div>
     </ErrorBoundary>
   );
