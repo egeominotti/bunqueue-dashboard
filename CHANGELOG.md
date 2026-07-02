@@ -13,11 +13,18 @@ matching version section (or `[Unreleased]`) as the GitHub Release body.
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-07-02
+## [0.2.2] - 2026-07-02
 
-First tagged release. The dashboard fully drives a bunqueue server over its public
-HTTP API plus a local control agent, with a Pro page set and a read-only SQLite
-inspector.
+### Fixed
+- Changelog version headings now match the tags `release.yml` auto-creates (this
+  project was already at `v0.2.x`, not `v0.1.0`), so each release's notes are
+  sourced from its own `CHANGELOG.md` section instead of falling back to the
+  generated commit list.
+
+## [0.2.1] - 2026-07-02
+
+Enterprise SQLite inspector, a full UI/UX pass across every section, and a large
+stability sweep.
 
 ### Added
 - **Database inspector** (`/database`): read-only SQLite browser served by the
@@ -30,8 +37,9 @@ inspector.
   disposable worker (synchronous fallback in compiled binaries).
 - **Pro pages** `UsagePro` and `WorkersPro`; `/cron` now serves the full Cron
   Manager. Classic first-generation pages remain reachable at `*-classic`.
-- **Standalone executables** for 5 platforms and a continuous-delivery release
-  pipeline (this changelog now backs the release notes).
+- **`CHANGELOG.md`** is now the source of GitHub Release notes: `release.yml`
+  publishes the released version's section (falling back to `[Unreleased]`, then
+  to auto-generated notes).
 - App-wide `ErrorBoundary`, semantic theme-aware status colors, and a mobile nav
   drawer.
 
@@ -54,5 +62,6 @@ inspector.
 - Segment-based `/db/tables` routing so tables literally named `schema` or `cell`
   resolve correctly.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/egeominotti/bunqueue-dashboard/releases/tag/v0.1.0
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.0...v0.2.1
