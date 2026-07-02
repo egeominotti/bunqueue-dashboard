@@ -4,129 +4,65 @@ title: Usage
 
 # Usage
 
-> Route `/usage` · source `src/pages/control/UsagePro.tsx`
+A single, read-only snapshot of how hard your bunqueue server is working — lifetime job totals, live queue counts, error rate, memory, uptime, and disk health.
+
+**Where:** open `/usage` from the sidebar.
 
 ![Usage](../screenshots/usage.png)
 
-A single-screen, read-only summary of **cumulative resource usage** on the connected
-bunqueue server: lifetime job totals, live queue counts, error rate, process memory,
-uptime, and an honest disk-health verdict. Everything auto-refreshes on the dashboard's
-global poll — the "Live" dot next to the title signals that.
+## What you'll see
 
-## What it shows
+The page opens with a **Live** dot next to the title — that means everything on screen refreshes on its own. Below it sit six stat cards, then two detail cards: **Runtime** and **Storage**.
 
-The page header reads **Usage — "Cumulative resource usage on the connected server."**
-with a `live` indicator (`PageHeader … live`). Below it are six stat cards, then two
-detail cards (Runtime and Storage).
+The six top cards:
 
-### Top stat cards (six)
+| Card | What it tells you |
+| --- | --- |
+| **Completed** | Total jobs that have finished successfully since the server started counting. Always shown in green. |
+| **Failed** | Total jobs that have failed. Turns red when the number is above zero. |
+| **Waiting** | Jobs queued right now, waiting for a worker. Shown in amber. |
+| **Active** | Jobs being processed at this very moment. Shown in blue. |
+| **Error Rate** | Share of finished jobs that failed, as a percentage. Green when healthy, red once it passes 5%. |
+| **Uptime** | How long the server process has been running. Shows a dash (`—`) if the server just started. |
 
-Rendered in a responsive grid (2 columns on mobile → 6 on `xl`). Each is a `StatCard`
-with a colour `tone`.
+The **Runtime** card breaks down the workload and process footprint:
 
-| Field (label) | Meaning | Source / derivation | Colour behaviour |
-| --- | --- | --- | --- |
-| **Completed** | Lifetime count of jobs that finished successfully | `stats.totalCompleted` | Always green (`tone="green"`) |
-| **Failed** | Lifetime count of jobs that failed | `stats.totalFailed` | Red when non-zero, otherwise neutral (`tone={stats.totalFailed ? 'red' : 'default'}`) |
-| **Waiting** | Jobs currently queued and waiting to run | `stats.waiting` | Amber (`tone="amber"`) |
-| **Active** | Jobs currently being processed right now | `stats.active` | Blue (`tone="blue"`) |
-| **Error Rate** | Share of terminal jobs that failed, as a percentage | `errorRate(totalCompleted, totalFailed)` = `failed ÷ (completed + failed)`, formatted with `formatPercent` (2 decimals) | Red above 5% (`rate > 0.05`), otherwise green |
-| **Uptime** | How long the server process has been running | `stats.uptime` (milliseconds) ÷ 1000 → `formatUptime` (days/hours/minutes) | Neutral; shows `—` when uptime is 0/absent |
+| Row | What it tells you |
+| --- | --- |
+| **Jobs pushed** | Total jobs ever added to the server. |
+| **Jobs pulled** | Total jobs ever picked up by workers. |
+| **Heap used** | Memory actively in use by the server process. |
+| **RSS** | Total memory the process is holding. |
+| **Cron jobs** | How many scheduled (cron) jobs are registered. |
 
-::: info Number formatting
-Counts go through `formatNumber` (locale `Intl.NumberFormat`), so large values use the
-locale thousands separator — e.g. `5825` renders as `5.825` in the reference/demo locale.
-Non-finite or null values fall back to `0`. `Error Rate` is a fraction ×100 with two
-decimals; `0` completed **and** `0` failed yields `0%` (division guarded in `errorRate`).
+The **Storage** card is a single health verdict:
+
+- **Healthy** (green) — "Disk writes are being accepted."
+- **Disk full — writes suspended** (red) — appears when the server can no longer write to disk. When available, it also shows the underlying error and how long ago writes stopped.
+
+::: tip
+Large counts use your locale's thousands separator, so a value like `5825` may appear as `5,825` (or `5.825` in some locales).
 :::
-
-### Runtime card
-
-A definition list (`<dl>`) of five rows (`Row` label/value pairs):
-
-| Row | Meaning | Source / derivation |
-| --- | --- | --- |
-| **Jobs pushed** | Lifetime jobs enqueued into the server | `formatNumber(stats.totalPushed)` |
-| **Jobs pulled** | Lifetime jobs dequeued by workers | `formatNumber(stats.totalPulled)` |
-| **Heap used** | V8 heap in use by the process | `formatBytes(memory.heapUsed * 1024 * 1024)` — `/dashboard` reports memory in **MB**, so it is converted to bytes before formatting |
-| **RSS** | Resident set size (total process memory) | `formatBytes(memory.rss * 1024 * 1024)` — same MB→bytes conversion |
-| **Cron jobs** | Number of registered cron schedules | `String(crons.total)` (raw count, not run through `formatNumber`) |
-
-### Storage card
-
-A single health panel driven by the real `/storage` disk-health flag (`StorageStatusFlat`):
-
-- **Healthy** (green panel): shown when `storage.diskFull` is falsy. Reads **"Healthy"**
-  with subtext **"Disk writes are being accepted."**
-- **Disk full — writes suspended** (red panel): shown when `storage.diskFull` is truthy.
-  Reads **"Disk full — writes suspended"**, and additionally shows:
-  - `storage.error` as muted subtext, when present;
-  - **"since &lt;relative time&gt;"** (`formatRelativeTime(storage.since)`) when
-    `storage.since` is not null — how long ago writes were suspended.
 
 ## What you can do
 
-This page is **read-only** — it has no mutating actions, forms, or `confirm()` gates.
+This screen is a dashboard, not a control panel — there are no buttons that change anything on the server.
 
-| Action | Effect | Confirm? |
-| --- | --- | --- |
-| Watch totals live | Numbers tick up automatically as workers run; no manual refresh needed | — |
-| Spot trouble at a glance | A red **Failed** / **Error Rate** card, or the red **Storage** panel, is your cue to head to DLQ Control or the server host | — |
-| **Retry** (offline banner only) | When the server is unreachable an `OfflineBanner` appears; its Retry button calls `refetch()` to re-poll | No |
+- **Watch totals climb live.** Numbers update on their own as workers run; you never need to refresh.
+- **Spot trouble at a glance.** A red **Failed** or **Error Rate** card, or a red **Storage** panel, is your signal to jump to DLQ Control, Queue Control, or the server host to investigate.
+- **Retry when offline.** If the server can't be reached, a banner appears at the top with a **Retry** button that re-checks the connection.
 
-## States & gating
+## Good to know
 
-- **Loading:** on the very first fetch (no data, no error yet) the page renders a full-page
-  `LoadingState` with the label **"Loading usage…"** (`loading && !data && !error`).
-- **Offline / error:** if either poll throws, an `OfflineBanner` is rendered at the top
-  (with a **Retry** button wired to `refetch`), **but the full layout still renders** —
-  the page falls back to a zeroed `EMPTY` shape (`data ?? EMPTY`) so cards show `0`,
-  Uptime shows `—`, and Storage shows the green "Healthy" panel rather than blocking the
-  whole page. This is intentional so an embedded/down server doesn't erase the layout.
-- **Empty:** there is no distinct empty state — a fresh server simply shows zeros.
-- No controls are ever disabled or hidden; there are no job actions here, so
-  `src/lib/jobActions.ts` state→action gating does not apply to this page.
+- **It's read-only by design.** Nothing here mutates the server — to act on failures, head to DLQ Control, Queue Control, or the server host.
+- **Uptime shows a dash, not `0m`,** when the server has just started or can't be reached.
+- **If the server goes offline,** the layout stays put: an offline banner appears at the top while every card falls back to zeros and Storage shows "Healthy." That's intentional so a temporarily down server doesn't wipe the screen — trust the banner over the numbers when it's showing.
+- **This is the trustworthy Usage screen.** An older `/usage-classic` page still exists but reports uptime roughly 1,000× too large and always claims storage is "Healthy," even when the disk is full. This page fixes both and adds the Error Rate card. See [Known issues](/known-issues) for the full list.
+- **It's a focused summary.** Latency charts, throughput, and the full worker and cron lists aren't shown here — use Metrics and Workers for those.
 
-## Behind the scenes
-
-The page uses the **`bq`** client (not `api`), via `usePolledData`, which fires two
-requests in parallel on each poll:
-
-- `bq.overview()` → **`GET /dashboard`** — returns the flat `OverviewResponse`
-  (`{ ok, stats, memory, crons, … }`, no `data` wrapper). The page reads
-  `stats`, `memory` (MB), and `crons.total` from it.
-- `bq.storage()` → **`GET /storage`** — returns **`{ ok, data: { diskFull, error, since } }`**;
-  the payload is wrapped in `data`, so the page unwraps `storage.data ?? {}`.
-
-**Polling cadence:** `usePolledData` uses the global refresh interval from
-`connectionStore` (`refreshMs`, default **3000 ms**, configurable in Settings, floored at
-500 ms). There is no SSE stream on this page — it is pure polling. The hook does
-change-detection, so a steady poll with unchanged data issues no re-render.
-
-::: warning Response-shape gotcha
-Per `docs/api-mapping.md`, `GET /storage` is **wrapped in `data`** and has **no `path`
-field** — only `diskFull`, `error`, `since`. The classic `lib/api.ts` `storage()` reads
-`data.status.diskFull`/`.path` (neither exists) and always renders "Healthy", masking a
-real disk-full condition. `bq.ts`'s `storage()` used here has the correct flat shape.
-Also note `stats.uptime` from `/dashboard` is in **milliseconds** — this page divides by
-1000 before `formatUptime` (seconds-based); skipping that is the classic page's ~1000×
-uptime bug.
+::: details Under the hood (for developers)
+- Uses the `bq` client (not the legacy `api`).
+- Polls two endpoints in parallel each cycle: `GET /dashboard` (job stats, memory in MB, cron count) and `GET /storage` (disk-health flag, wrapped in `data`).
+- Refresh cadence follows the global interval from Settings (default **3000 ms**, floored at 500 ms). No SSE — pure polling, with change-detection to skip redundant re-renders.
+- `/dashboard` reports `uptime` in milliseconds and memory in megabytes; the page converts both before display.
 :::
-
-## Gotchas
-
-- **Read-only by design.** No buttons mutate state; to act on failures go to DLQ Control,
-  Queue Control, or the server host.
-- **Memory units.** `heapUsed`/`rss` from `/dashboard` are **megabytes**; the page
-  converts MB→bytes (`× 1024 × 1024`) before `formatBytes`. If the server ever changed
-  those units, this figure would be off by ~1,048,576×.
-- **Uptime shows `—`** when `stats.uptime` is 0 or missing (e.g. server just started or a
-  zeroed offline fallback), not `0m`.
-- **Cron count** is the raw number of registered schedules (`crons.total`), rendered
-  without thousands grouping — unlike the other counts.
-- **This Pro page supersedes the classic `/usage-classic`** (`src/pages/Usage.tsx`), which
-  renders uptime ~1000× too large and always shows storage as "Healthy" because it reads
-  the wrong `/storage` shape (see `docs/known-issues.md`). `/usage` fixes both and adds the
-  Error Rate card.
-- **Latency, throughput and full worker/cron lists** from `/dashboard` are **not** shown
-  here — only the fields listed above. For those, use Metrics and Workers.

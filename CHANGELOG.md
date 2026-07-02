@@ -13,6 +13,33 @@ matching version section (or `[Unreleased]`) as the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-07-02
+
+### Changed
+- **User guide is now user-first and simplified.** Every per-section page opens
+  with a plain-language purpose and a **Where** line, then **What you'll see** /
+  **What you can do** / **Good to know** — written for someone *using* the
+  dashboard. Internal detail (endpoints, refresh cadence, source) moved into a
+  collapsed **Under the hood** block; no source paths or component names in the
+  body.
+
+### Added
+- **Professional docs home.** A custom-drawn dashboard hero illustration, a
+  "See it in action" screenshot showcase (uniform framed cards), a one-command
+  quick start, and a capability grid.
+- **Richer `llms.txt`.** Leads with a mental model, the two-API-client design,
+  the control agent, and the verified response-shape gotchas before the page
+  index.
+
+### Fixed
+- **GitHub Pages deploy timeout.** The `actions/deploy-pages` publish step runs
+  ~8-9 minutes on this repo; the larger `/docs` artifact tipped it past the
+  deploy job's 10-minute cap, cancelling it. Raised the deploy job timeout to
+  30 min, the deploy step to 20, and the action's own `timeout` input to 15 min
+  so the publish completes.
+
+## [0.2.4] - 2026-07-02
+
 ### Added
 - **VitePress documentation site**, published to GitHub Pages under `/docs/`
   alongside the app (the app stays at the site root). Built from the existing
@@ -87,7 +114,9 @@ stability sweep.
 - Segment-based `/db/tables` routing so tables literally named `schema` or `cell`
   resolve correctly.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.0...v0.2.1

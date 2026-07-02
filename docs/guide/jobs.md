@@ -4,189 +4,80 @@ title: Jobs Explorer
 
 # Jobs Explorer
 
-> Route `/jobs` · source `src/pages/control/JobsPro.tsx`
+Browse the jobs in a queue, open any one to inspect it, and run the right actions — one job at a time or many at once.
+
+**Where:** open `/jobs` from the sidebar.
 
 ![Jobs Explorer](../screenshots/jobs.png)
 
-The Jobs Explorer is the single-job control surface: browse one queue's jobs with
-server-side pagination, inspect any job, and run state-aware actions (promote,
-retry, requeue, fail, cancel) on one row or on a multi-select of rows.
+## What you'll see
 
-## What it shows
+A **live** indicator in the header tells you the page is refreshing on its own. At the top, six stat cards summarize the **whole server**. Below them are the filters, then the job table.
 
-The page header reads **"Jobs Explorer — Browse, inspect, and manage individual
-jobs."** and carries a **live** indicator (it polls in the background).
+| Element | What it tells you |
+| --- | --- |
+| **Total** | Every job across all states, server-wide. |
+| **Waiting** | Jobs enqueued but not started yet. |
+| **Active** | Jobs being processed right now. |
+| **Completed** | How many jobs have finished successfully (lifetime). |
+| **Failed** | How many jobs have failed (lifetime). Turns red when it's above zero. |
+| **Error Rate** | Failures as a share of finished jobs. Green when healthy, red above 5%. |
 
-### Stat cards (server-wide totals)
+Each row in the table shows one job:
 
-Six compact `StatCard`s sit above the controls. They come from
-`bq.overview()` (`overview.stats`) and describe the **whole server**, not just the
-selected queue — the numbers do not change when you switch the queue dropdown.
-
-| Card | Meaning | Derived from | Colour |
-| --- | --- | --- | --- |
-| **Total** | All jobs across every state | `totalCompleted + totalFailed + waiting + active` | neutral |
-| **Waiting** | Jobs enqueued and not yet started | `stats.waiting` | amber |
-| **Active** | Jobs currently being processed | `stats.active` | blue |
-| **Completed** | Lifetime completed count | `stats.totalCompleted` | green |
-| **Failed** | Lifetime failed count | `stats.totalFailed` | red when non-zero, else neutral |
-| **Error Rate** | Failures as a share of finished jobs | `errorRate(totalCompleted, totalFailed)` → `failed / (completed + failed)`, formatted as a percentage with 2 decimals | red when `> 5%`, else green |
+| Column | What it tells you |
+| --- | --- |
+| **Job ID** | The job's identifier. Hover to see the full ID if it's cut off. |
+| **Status** | The job's current state as a colored badge. |
+| **Priority** | **HIGH**, **MEDIUM**, or **LOW**, based on the job's priority value. |
+| **Created** | When the job was added. |
+| **Duration** | How long the job took to run. Shows `—` until the job has both started and finished. |
+| **Actions** | Inspect, plus any actions the job's state allows. |
 
 ::: info
-"Total" here is a derived sum of four fields, so it counts current waiting/active
-plus lifetime completed/failed — it is not a single server counter. All six cards
-render `0` until the first `overview()` response lands.
+The stat cards describe the entire server, so they **won't** match the counts of the queue you have selected below.
 :::
-
-### Filters and search
-
-| Control | What it does |
-| --- | --- |
-| **Queue dropdown** (`Select`) | Chooses which queue's jobs to list. Options come from `bq.queuesSummary()`. Pre-selected from a `?queue=` URL param when present; otherwise it defaults to the first queue in the summary once the list arrives. Changing it resets to page 0. |
-| **Status filter** (`SegmentedControl`) | `all` · `waiting` · `active` · `completed` · `failed`. Anything other than `all` is passed to the API as a `states` filter. Changing it resets to page 0. |
-| **ID filter** (text input) | Placeholder *"Filter this page by ID…"* — a case-insensitive substring match on `job.id`, applied **client-side to the currently loaded page only** (it never re-queries the server). |
-
-### Job table
-
-A checkbox-select table with a header "select all on page" checkbox and these
-columns:
-
-| Column | Meaning |
-| --- | --- |
-| (checkbox) | Row selection for bulk actions. Header checkbox selects/deselects every row on the page; it reflects "all rows selected" by membership, so it un-checks correctly when the ID filter shrinks the visible rows. |
-| **Job ID** | The job's `id`, monospace, truncated to ~16rem with the full id in a `title` tooltip. |
-| **Status** | A `StatusBadge` for `job.state` (falls back to `waiting` when absent). |
-| **Priority** | Bucketed label from `job.priority`: **HIGH** (amber) when `priority ≥ 10`, **MEDIUM** (blue) when `priority ≥ 1`, **LOW** (faint) otherwise. |
-| **Created** | `formatDateTime(job.createdAt)`. |
-| **Duration** | `formatDuration(completedAt − startedAt)` — only when both timestamps exist; otherwise renders `—`. |
-| **Actions** | Inspect (always) plus state-gated icon buttons — see below. |
-
-Below the table is a `Pagination` control (25 rows per page).
 
 ## What you can do
 
-### Per-row actions
+**Pick a queue.** Use the queue dropdown to choose whose jobs to list. If you arrived from a link with a queue already set, it's pre-selected; otherwise the first queue is chosen for you.
 
-Every row always shows an **Inspect** (eye) button linking to
-`/job?id=<id>` (the Job Inspector). The remaining icon buttons appear **only when
-the job's state permits them** (via `actionGates`):
+**Filter by status.** Switch between `all`, `waiting`, `active`, `completed`, and `failed`.
 
-| Action | Icon | Effect | Confirm? |
-| --- | --- | --- | --- |
-| **Inspect** | eye | Opens the job in the Job Inspector | no |
-| **Promote** | play | Promotes a delayed job to run now (`bq.promoteJob`) | no |
-| **Retry** | refresh | Re-runs the job: an active job via `bq.retryJob` (move-to-wait), a failed/DLQ'd job via `bq.retryDlq(queue, id)` — routed automatically by `retryJobByState` | no |
-| **Requeue** | refresh | Re-inserts a completed job into waiting (`bq.retryCompleted(queue, id)`) | no |
-| **Fail** | close | Force-fails an active job, pushing it down the retry/DLQ path (`bq.failJob`) | **yes** — "Force-fail this active job?" |
-| **Cancel** | trash | Removes a queue-resident job (`bq.cancelJob` → `DELETE /jobs/:id`) | **yes** — "Cancel this job?" |
+**Search this page by ID.** Type in the ID filter to narrow the rows down to a matching ID. This searches only the rows currently on screen (see Good to know).
 
-While an action runs, that row's buttons are disabled (per-id busy tracking), and
-a status line appears above the table: `"<Label> ✓"` in green on success, or
-`"<Label> failed: <message>"` in red on failure. The table refetches after every
-action.
+**Inspect a job.** Click the eye button on any row to open it in the Job Inspector.
 
-### Bulk actions
+**Act on a single job.** Depending on its state, a row also offers:
 
-Select one or more rows to reveal a bulk toolbar showing `<n> selected` and the
-buttons whose action applies to **at least one** selected job:
+- **Promote** — move a delayed job to run now.
+- **Retry** — re-run an active or failed job.
+- **Requeue** — put a completed job back in line to run again.
+- **Fail** — force an active job to fail.
+- **Cancel** — remove a job from the queue.
 
-| Bulk button | Effect | Confirm? |
-| --- | --- | --- |
-| **Retry selected** | Retries each eligible active/failed job | no |
-| **Promote selected** | Promotes each eligible delayed job | no |
-| **Requeue selected** | Requeues each eligible completed job | no |
-| **Fail selected** (warning) | Force-fails each eligible active job | **yes** — "Force-fail `<n>` job(s)?" |
-| **Cancel selected** (danger) | Cancels each eligible queue-resident job | **yes** — "Cancel `<n>` job(s)? This cannot be undone." |
+**Act on many jobs at once.** Tick the checkboxes (or the header checkbox to select the whole page) to reveal a bulk toolbar. It shows how many you've selected and offers **Retry**, **Promote**, **Requeue**, **Fail**, and **Cancel** for the selection. A button appears when the action fits at least one selected job; jobs it doesn't fit are reported as "not eligible / failed" rather than skipped silently.
 
-::: tip
-Bulk actions run against every selected row in parallel (`Promise.allSettled`) and
-report honestly: `"<Label>: <ok> succeeded, <fail> not eligible / failed"`.
-Ineligible rows in a bulk selection are rejected individually rather than skipped,
-so they count toward the "not eligible / failed" tally. The confirm dialog is built
-from the **actual eligible target count**, and the selection is cleared afterward.
-If nothing in the selection is eligible, the toolbar shows *"No actions apply to the
-selected job states."*
+::: warning
+**Fail** and **Cancel** each ask you to confirm first, for one job or a whole selection. **Cancel is destructive** — a cancelled job is removed from the queue and can't be undone.
 :::
 
-## States & gating
+After any action, the row (or selection) reports success or failure in a short status line above the table, and the list refreshes. Buttons on a busy row are disabled until it finishes.
 
-**Loading** — `LoadingState` ("Loading jobs…") shows only on the first load of a
-view when there are no jobs yet and no error. Background polls do not flip back to
-the loading spinner.
+## Good to know
 
-**Empty** — the table body shows a single centered message depending on context:
+- **The ID filter only searches the current page.** It matches the 25 rows on screen, not the whole queue. To find one specific job in a large queue, use the Job Inspector's direct lookup instead.
+- **There's no "page X of Y."** You page through 25 jobs at a time. **Next** stays available as long as a full page arrives; a shorter page means you've reached the end.
+- **Which actions appear depends on the job's state.** A completed job can be requeued but not failed; an active job can be failed or retried but not promoted, and so on. If none of your selected jobs match an action, the toolbar tells you *"No actions apply to the selected job states."*
+- **Changing queue, status, or page clears your selection.** This is on purpose, so a bulk action can never hit rows you picked under a different view.
+- **If the server is unreachable,** a banner with a **Retry** button appears and your already-loaded rows stay visible.
+- This `/jobs` page is the corrected, server-paginated explorer. A separate legacy jobs page exists but isn't what this screen uses — see [Known issues](/known-issues).
 
-- *"Select a queue."* — no queue chosen yet.
-- *"No jobs found."* — a queue is selected but the page returned nothing.
-- *"No jobs on this page match your ID filter."* — the ID filter excluded every
-  loaded row.
+::: details Under the hood (for developers)
+Everything here uses the shape-verified `bq` client (not the legacy `api` client).
 
-**Error / offline** — on a fetch error an `OfflineBanner` with a **Retry** button
-renders above the table; already-loaded rows stay visible.
-
-**Action gating** — which per-row/bulk actions are offered comes entirely from
-`src/lib/jobActions.ts::actionGates(state)`:
-
-| Job state | Cancel | Promote | Retry | Requeue | Fail |
-| --- | :---: | :---: | :---: | :---: | :---: |
-| `waiting` / `prioritized` / `waiting-children` | ✅ | — | — | — | — |
-| `delayed` | ✅ | ✅ | — | — | — |
-| `active` | — | — | ✅ (move-to-wait) | — | ✅ |
-| `failed` (DLQ) | — | — | ✅ (DLQ retry) | — | — |
-| `completed` | — | — | — | ✅ | — |
-
-`actionGates` also exposes `discard`, `setPriority`, `setDelay`, and
-`moveToDelayed`, but the Jobs Explorer table does not surface those — they are used
-by the Job Inspector. Cancel/promote/priority/delay are "in-queue" gates
-(`waiting` / `delayed` / `prioritized` / `waiting-children`); fail/retry-active/
-move-to-delayed require `active`.
-
-## Behind the scenes
-
-All calls use the **`bq`** client (the shape-verified control client), never the
-legacy `api` client.
-
-| Purpose | Call | Endpoint | Cadence |
-| --- | --- | --- | --- |
-| Queue dropdown options | `bq.queuesSummary()` | `GET /queues/summary` | polled every **30 s** |
-| Stat cards | `bq.overview()` | `GET /dashboard` | polled every **10 s** |
-| Job table | `bq.jobsList(queue, states, 25, page*25)` | `GET /queues/:q/jobs/list?states=…&limit=25&offset=…` | polled at the **global refresh interval** (default **3 s**, set in Settings, min 500 ms) |
-
-Mutating calls: `bq.promoteJob` → `POST /jobs/:id/promote`; `bq.retryJob` →
-`POST /jobs/:id/move-to-wait`; `bq.retryDlq` → `POST /queues/:q/dlq/retry`
-(`{ jobId }`); `bq.retryCompleted` → `POST /queues/:q/retry-completed` (`{ id }`);
-`bq.failJob` → `POST /jobs/:id/fail`; `bq.cancelJob` → `DELETE /jobs/:id`.
-
-::: warning Shape gotchas
-- `jobs/list` returns a **flat** `{ ok, jobs }` — there is **no `total`**, so "there
-  might be a next page" is inferred purely from a full page (`jobs.length === 25`).
-- Jobs have **no `name`** field and use **`startedAt` / `completedAt`** (not
-  `processedOn` / `finishedOn`) — that is why Duration is `completedAt − startedAt`.
-- There is **no cross-queue job-list endpoint**: jobs are always fetched one queue at
-  a time (no N-queue fan-out). Each returned job is tagged with its `queue` so the
-  queue-scoped retry/requeue endpoints have the value they need.
-- Responses are tagged with the `queue|status|page` view they were fetched for, so
-  switching any filter never renders the previous view's rows (with live action
-  buttons) under the new selection for a round-trip.
+- Queue dropdown: `GET /queues/summary`, polled every 30 s.
+- Stat cards: `GET /dashboard`, polled every 10 s.
+- Job table: `GET /queues/:q/jobs/list?states=…&limit=25&offset=…`, polled at the global refresh interval (default 3 s, configurable in Settings). The response is flat `{ ok, jobs }` with no `total`, so "next page" is inferred from a full 25-row page.
+- Actions map to: `POST /jobs/:id/promote`, `POST /jobs/:id/move-to-wait`, `POST /queues/:q/dlq/retry`, `POST /queues/:q/retry-completed`, `POST /jobs/:id/fail`, and `DELETE /jobs/:id`. Bulk actions run in parallel with `Promise.allSettled`.
 :::
-
-## Gotchas
-
-- **The ID filter is page-local.** It matches only the 25 rows currently loaded, not
-  the whole queue. To find a specific job across a large queue, prefer the Job
-  Inspector's direct lookup.
-- **Pagination has no true total.** The control shows the page number with **Next**
-  enabled whenever a full 25-row page arrived; a partial page means you have reached
-  the end. There is no "page X of Y".
-- **Stat cards are server-wide.** They summarize the whole server; they will not
-  match the counts of the queue you happen to have selected.
-- **Selections reset on any view change.** Switching queue, status, or page clears
-  the selection by design — a bulk action can never touch rows you selected under a
-  different view.
-- **Bulk buttons appear on partial eligibility.** A button shows if *at least one*
-  selected job is eligible; ineligible rows in that selection are reported as "not
-  eligible / failed" rather than silently ignored.
-- Per `docs/known-issues.md`, `/jobs` (this page) is the corrected explorer — it is
-  server-paginated and throttled (queue list at 30 s). The separate legacy
-  `/jobs-classic` page (`Jobs.tsx`) has the always-`—` Duration column and the 3 s
-  full-queue poll; that is a different page and is not what `/jobs` uses.

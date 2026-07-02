@@ -8,6 +8,9 @@ hero:
     View and control queues, jobs, the dead-letter queue, cron, webhooks,
     workers, live activity — and the server process itself. Talks only to
     bunqueue's public HTTP API plus a tiny local control agent.
+  image:
+    src: /hero.svg
+    alt: The bunqueue dashboard — a live queue control panel
   actions:
     - theme: brand
       text: Illustrated user guide
@@ -83,3 +86,59 @@ features:
     link: /known-issues
     linkText: Known issues
 ---
+
+<div class="home-section">
+
+## See it in action
+
+A real control surface, not a read-only viewer — every screenshot below is a
+live page you can drive.
+
+<div class="home-shots">
+
+[![Overview — real-time health at a glance](./screenshots/overview.png)](/guide/overview)
+
+[![Jobs Explorer — filter, inspect and bulk-action jobs](./screenshots/jobs.png)](/guide/jobs)
+
+[![SQLite inspector — browse tables and run read-only queries](./screenshots/database.png)](/guide/database)
+
+</div>
+
+</div>
+
+<div class="home-section">
+
+## Up and running in one command
+
+```bash
+bun install
+bun start          # control agent + dashboard together — Ctrl-C stops both
+```
+
+`bun start` launches the local control agent (`http://127.0.0.1:6800`) and the
+dashboard (`http://localhost:5273`, `/api` proxied to `:6790`). Point it at a
+bunqueue server from **Server ▸ Control** (the agent starts it for you) or via
+`VITE_BUNQUEUE_URL` / the in-app Settings page.
+
+</div>
+
+<div class="home-section home-cta">
+
+## Everything you can drive
+
+<div class="home-grid">
+
+- **Queues** — pause/resume, rate-limit, concurrency, drain, obliterate
+- **Jobs** — add, inspect, promote, retry, requeue, cancel — all state-gated
+- **Dead-letter queue** — reasons, per-row retry, retry-all, purge
+- **Cron & webhooks** — schedule jobs, register and test endpoints
+- **Workers & metrics** — live throughput, latency percentiles, worker health
+- **Server process** — start / stop / restart bunqueue with live logs
+
+</div>
+
+Start with the **[illustrated user guide](/user-guide)** — one detailed page per
+dashboard section — or read how it all fits together in the
+**[architecture](/architecture)**.
+
+</div>

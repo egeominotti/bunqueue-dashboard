@@ -4,87 +4,49 @@ title: Settings
 
 # Settings
 
-> Route `/settings` · source `src/pages/Settings.tsx`
+Point the dashboard at your bunqueue server and choose how it looks and how often it refreshes.
+
+**Where:** open `/settings` from the sidebar.
 
 ![Settings](../screenshots/settings.png)
 
-The single settings page for the whole dashboard. It decides **which bunqueue server** every page talks to (the `:6790` HTTP API), holds an optional **bearer token**, and controls the two global UI preferences — **theme** and **polling interval** — that every auto-refreshing page reads.
+## What you'll see
 
-::: info Scope
-This page configures the dashboard's connection to the **bunqueue HTTP API** only. The local **control agent** (`127.0.0.1:6800`, used by the Control/Pro pages to start-stop the server process) is not configured here — it is discovered separately by those pages.
-:::
+One simple page with two cards: **Connection** (which server the dashboard talks to) and **Appearance & refresh** (how it looks and how fast it updates).
 
-## What it shows
-
-The page is a single `max-w-2xl` column with a `PageHeader` ("Settings" / "Connection and appearance.") and two `Card`s.
-
-### Connection card
-
-| Field | Meaning |
+| Element | What it tells you |
 | --- | --- |
-| **Server URL** | The base URL the dashboard points at. A local buffer, seeded from the stored `baseUrl`. Placeholder `/api or https://queue.example.com`. Helper text: use `/api` in dev (Vite proxy to `localhost:6790`), or the server origin in production. |
-| **Bearer token (optional)** | Sent as `Authorization: Bearer …` on API calls. Rendered as a password field with a show/hide eye (`IconEye`) toggle. Placeholder `only if AUTH_TOKENS is set`. Hint: kept in memory only — re-enter after reload, or set `VITE_BUNQUEUE_TOKEN`. |
+| **Server URL** | The address of the bunqueue server every page reads from. Use `/api` during local development, or the full server address (like `https://queue.example.com`) in production. |
+| **Bearer token (optional)** | A secret token sent with each request, only needed if your server requires one. Shown as dots; use the eye button to reveal it. |
+| **Theme** | Switch between **Dark** and **Light**. |
+| **Refresh interval** | How often the live pages reload their data: 1, 2, 3, 5, or 10 seconds. |
 
-Inline feedback next to the buttons:
-
-- **`Saved ✓`** (green) — appears for ~2 s after a successful Save.
-- **Test result** — green on success (e.g. `Connected in 12ms · bunqueue v…`), red on failure (the error message).
-- **URL error** (red, below the input) — `Must be an http(s) URL or a path starting with '/'.` when validation fails.
-
-### Appearance & refresh card
-
-Two side-by-side `Select`s:
-
-| Field | Meaning |
-| --- | --- |
-| **Theme** | `Dark` or `Light`. Bound to `useThemeStore`; applies immediately and persists. |
-| **Refresh interval** | Polling cadence used by every auto-refreshing page: `1 second`, `2 seconds`, `3 seconds`, `5 seconds`, `10 seconds` (values `1000`–`10000` ms; default `3000`). |
+Small messages appear next to the buttons: a green **Saved ✓** after you save, a green or red result after you test a connection, and a red note under the URL box if what you typed isn't a valid address.
 
 ## What you can do
 
-| Action | Effect | Confirm? |
-| --- | --- | --- |
-| Edit **Server URL** | Updates the local buffer only — nothing retargets until you Save. | — |
-| **Save** | Validates the URL, then commits URL + token to the connection store (URL trailing slash stripped). Shows `Saved ✓`. On invalid URL, sets the inline error and does **not** save. | No |
-| Enter **Bearer token** | Buffered locally until Save. | — |
-| **Show/Hide** token (eye button) | Toggles the token field between `password` and `text`. | — |
-| **Test connection** | Calls the server's `/health` (via `api.health()`), times the round-trip, and reports `Connected in <ms>ms · bunqueue v<version>`, or the error. Button shows `Testing…` while in flight. | No |
-| Change **Theme** | Applies and persists immediately (no Save needed). | No |
-| Change **Refresh interval** | Applies and persists immediately (no Save needed). | No |
+- **Save your connection.** Type a Server URL (and token if needed), then click **Save**. The dashboard checks the address, applies it everywhere, and shows **Saved ✓**. If the address isn't valid, it shows an error and keeps your old settings.
+- **Test a connection.** Click **Test connection** to ping the server and confirm it answers. On success you'll see how fast it replied and the server version (for example, *Connected in 12ms · bunqueue v…*); on failure you'll see the error. The button reads **Testing…** while it works.
+- **Show or hide the token.** Use the eye button to reveal or mask the token field.
+- **Change the theme.** Pick Dark or Light — it applies instantly and is remembered.
+- **Change the refresh interval.** Pick a speed — it applies instantly and is remembered.
 
-::: tip Buffered inputs
-Server URL and token are held in local component state (`url`, `tok`) and only pushed to the store on **Save**. This is deliberate: committing on every keystroke would retarget all polling at a half-typed URL. Theme and refresh interval, by contrast, write straight to their stores on change.
+::: tip Save before you test
+**Test connection** checks the server you've already saved, not what's currently typed in the box. Save your changes first, then test.
 :::
 
-**URL validation** (`isValidBaseUrl`): a value starting with `/` is always accepted (relative dev-proxy path); otherwise it must parse as a URL with an `http:` or `https:` protocol. Anything else is rejected before saving.
+## Good to know
 
-## States & gating
+- **Server URL and token only take effect when you Save.** Typing alone changes nothing — the dashboard keeps using the last saved values until you click **Save**. This is deliberate, so it never tries to reload data from a half-typed address.
+- **The token is not remembered after you reload.** For security, the token is kept in memory only and cleared when you refresh or close the tab. Re-enter it each session, or have it built into your deployment ahead of time.
+- **Theme and refresh interval are remembered.** They persist across reloads automatically.
+- **This is the only place to set the connection.** Every page — classic and Pro — uses the server, theme, and refresh speed you choose here. There's no per-page override.
+- **Starting or stopping the server lives elsewhere.** This page only chooses which running server to read from. To start, stop, or restart the server process, use **Control ▸ Server**.
+- **Nothing here breaks when the server is offline.** If the server is unreachable, Test simply reports the failure; the connection status shown around the rest of the dashboard is what tells you something's wrong.
 
-- **No loading/empty/error page states.** This page fetches nothing on mount — it renders instantly from the two Zustand stores. There is no list, no polling here, so no skeletons or empty states.
-- **Save** is never disabled; it either commits or shows the inline URL error.
-- **Test connection** is disabled while a test is in flight (`testing`), with the label switching to `Testing…`.
-- **URL error** clears as soon as you edit the field again (`onChange` resets `urlError`).
-- **Offline / bad target**: nothing on this page breaks when the server is unreachable — Test simply reports the failure; other pages are what surface the connection state (sidebar pill, per-page errors).
-
-This page has no job-action gating (`src/lib/jobActions.ts` is not involved).
-
-## Behind the scenes
-
-- **Test connection** is the only network call: `api.health()` → `GET /health` on the classic `api` client (`src/lib/api.ts`). It is called with the non-strict flag so a `{ ok: false }` health payload is not treated as a thrown error — `/health`'s `ok` means "is the server healthy", not "did the request succeed" (see `docs/api-mapping.md`). `GET /health` returns `{ ok, status, version, uptime, queues, connections, memory… }`; the page reads only `ok` and `version`.
-- **Persistence** (Zustand `persist`):
-  - Connection store `bq-dash-connection` (v1) persists **only** `baseUrl` and `refreshMs` via `partialize`/`migrate`. `setBaseUrl` strips a trailing slash; `setRefreshMs` clamps to a `500 ms` minimum. Defaults: `baseUrl` = `VITE_BUNQUEUE_URL` or `/api`, `refreshMs` = `3000`.
-  - Theme store `bq-dash-theme` persists `theme` and re-applies it to `document.documentElement` on rehydrate.
-- **Token** is **never persisted** — it lives in memory only (same at-rest tradeoff as the S3 keys). Seed it at build time with `VITE_BUNQUEUE_TOKEN`, or re-enter it each session.
-- No SSE stream and no polling originate from this page.
-
-## Gotchas
-
-::: warning Token does not survive reload
-The bearer token is intentionally kept in memory only and excluded from `localStorage`; you must re-enter it after every reload (or bake `VITE_BUNQUEUE_TOKEN` in at build time). The store even scrubs tokens written by older builds on rehydrate.
+::: details Under the hood (for developers)
+- **Test connection** is the page's only network call: `GET /health` via the classic `api` client, timed for the round-trip and read for `ok` + `version` (non-strict, since `/health`'s `ok` is a health flag, not a request-success flag).
+- **No polling or SSE** originates here — the page renders instantly from local stores and fetches nothing on mount.
+- **Persistence:** the connection store saves only the base URL (trailing slash stripped) and refresh interval (floored at 500 ms); theme is saved separately and re-applied on load. The bearer token is deliberately excluded from storage. Defaults: URL = `VITE_BUNQUEUE_URL` or `/api`, refresh = 3000 ms.
+- This screen configures the bunqueue HTTP API connection only; the local control agent (`127.0.0.1:6800`) used by the Control/Pro pages is discovered separately.
 :::
-
-- **Save commits both URL and token together** — there is no separate "apply token" action. If you typed a token but never Saved, it isn't in effect yet.
-- **Test uses the *saved* connection**, not the buffered fields: `api.health()` reads the committed store values. Save first, then Test, to check edits you just made.
-- **Refresh interval floor**: values below `500 ms` are clamped by the store, but the dropdown only offers `1 s`–`10 s`, so this only matters if the value is set programmatically.
-- **This is the only settings surface** — both the classic and Pro (Control) page families read the connection/theme it configures; there is no per-page override.
-- The agent (`:6800`) is not configurable here; nothing on this page affects the Control server-lifecycle pages' connection to it.

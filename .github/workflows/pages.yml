@@ -99,7 +99,10 @@ jobs:
     name: Deploy
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # actions/deploy-pages polls until the deployment goes live; on this repo that
+    # step routinely runs ~8-9 min, and the larger /docs artifact tipped it past a
+    # 10-min cap (job cancelled). Give generous headroom — the action self-limits.
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -107,3 +110,9 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        timeout-minutes: 20
+        with:
+          # deploy-pages polls until the deployment is live; its own default is
+          # 10 min (600000 ms) and would fail the step before the job cap. Raise
+          # it to 15 min so the ~8-10 min publish on this repo has headroom.
+          timeout: 900000
