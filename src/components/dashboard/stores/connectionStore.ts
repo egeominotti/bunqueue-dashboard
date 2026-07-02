@@ -20,6 +20,19 @@ interface ConnectionState {
 const envBase = import.meta.env.VITE_BUNQUEUE_URL?.replace(/\/$/, '');
 const envToken = import.meta.env.VITE_BUNQUEUE_TOKEN;
 
+/**
+ * What gets persisted to localStorage. The bearer token is deliberately
+ * excluded — an API credential must not sit in plaintext at rest (same
+ * tradeoff as the S3 keys in s3Store): set VITE_BUNQUEUE_TOKEN or re-enter it
+ * in Settings per session.
+ */
+export function persistedConnectionState(s: ConnectionState): {
+  baseUrl: string;
+  refreshMs: number;
+} {
+  return { baseUrl: s.baseUrl, refreshMs: s.refreshMs };
+}
+
 export const useConnectionStore = create<ConnectionState>()(
   persist(
     (set) => ({
@@ -30,7 +43,14 @@ export const useConnectionStore = create<ConnectionState>()(
       setToken: (token) => set({ token }),
       setRefreshMs: (refreshMs) => set({ refreshMs: Math.max(500, refreshMs) }),
     }),
-    { name: 'bq-dash-connection' }
+    {
+      name: 'bq-dash-connection',
+      // version+migrate rewrite the stored blob on rehydrate, scrubbing tokens
+      // already persisted by older builds (partialize alone only stops new writes).
+      version: 1,
+      partialize: persistedConnectionState,
+      migrate: (persisted) => persistedConnectionState(persisted as ConnectionState),
+    }
   )
 );
 

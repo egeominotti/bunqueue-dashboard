@@ -71,14 +71,24 @@ const NAV: NavGroup[] = [
 
 function ConnectionBadge() {
   const baseUrl = useConnectionStore((s) => s.baseUrl);
-  const { data, error } = usePolledData(() => api.health(), []);
-  const ok = !error && data?.ok !== false;
+  // Passive liveness dot: slow-poll and project the payload to just `ok`, so
+  // the permanent all-pages /health stream is 1 req/15s and steady polls don't
+  // re-render (the full payload carries ever-changing uptime/memory).
+  const { data, error, loading } = usePolledData(
+    async () => ({ ok: (await api.health()).ok }),
+    [],
+    { intervalMs: 15000 }
+  );
+  const ok = !error && data != null && data.ok !== false;
   const host = baseUrl.replace(/^https?:\/\//, '') || 'local';
   return (
     <div className="mx-3 mb-4 flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5">
       <span
-        className={cn('size-1.5 rounded-full', ok ? 'bg-emerald-400' : 'bg-red-400')}
-        title={ok ? 'connected' : 'offline'}
+        className={cn(
+          'size-1.5 rounded-full',
+          loading ? 'bg-zinc-500' : ok ? 'bg-emerald-400' : 'bg-red-400'
+        )}
+        title={loading ? 'connecting' : ok ? 'connected' : 'offline'}
       />
       <span className="truncate font-mono text-[11px] text-muted" title={baseUrl}>
         {host}

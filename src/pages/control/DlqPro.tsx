@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
@@ -44,6 +44,13 @@ export function DlqPro() {
     };
   }, [queue, page]);
   const { data, error, loading, refetch } = usePolledData(fetcher, [queue, page]);
+
+  // Clamp the page when the DLQ shrinks (retries/purges here or elsewhere) so a
+  // stale offset can't render "empty" while entries remain.
+  useEffect(() => {
+    const t = data?.entriesTotal ?? 0;
+    if (page > 0 && page * PAGE_SIZE >= t) setPage(Math.max(0, Math.ceil(t / PAGE_SIZE) - 1));
+  }, [data, page]);
 
   const run = async (label: string, fn: () => Promise<{ count?: number }>) => {
     if (!window.confirm(`${label} for "${queue}"?`)) return;

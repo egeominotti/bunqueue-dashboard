@@ -95,10 +95,15 @@ export function usePolledData<T>(
 
   useEffect(() => {
     mounted.current = true;
-    // A deps change means a new view — reset change-detection and show loading.
+    // A deps change means a new view — reset change-detection, show loading and
+    // drop a stale error so the previous view's OfflineBanner doesn't linger.
     lastKey.current = undefined;
     loadingRef.current = true;
     setLoading(true);
+    if (hadError.current) {
+      hadError.current = false;
+      setError(null);
+    }
 
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;

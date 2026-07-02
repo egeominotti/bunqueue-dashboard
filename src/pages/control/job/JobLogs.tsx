@@ -40,6 +40,7 @@ export function JobLogs({ jobId }: { jobId: string }) {
   }, [load]);
 
   const add = async () => {
+    if (busy) return; // Enter auto-repeat would double-post the same line
     const text = message.trim();
     if (!text) return;
     setBusy(true);

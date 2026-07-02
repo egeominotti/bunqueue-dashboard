@@ -32,7 +32,12 @@ export function errorRate(completed: number, failed: number): number {
 /** "14/03/2026, 17:31:25" */
 export function formatDateTime(ts: number | undefined | null): string {
   if (ts == null || !Number.isFinite(ts)) return '—';
-  return dateFmt.format(new Date(ts));
+  // Finite numbers beyond the valid Date range (±8.64e15) produce an Invalid
+  // Date, and Intl throws a RangeError on it — guard so one absurd timestamp
+  // (e.g. a cron with a huge repeat interval) can't crash a whole page.
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '—';
+  return dateFmt.format(d);
 }
 
 /** Compact "time ago": 0s, 45s, 26m, 3h, 2d ago. */

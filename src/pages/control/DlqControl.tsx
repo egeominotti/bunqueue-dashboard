@@ -33,6 +33,14 @@ export function DlqControl() {
   }, [queue, page]);
   const { data, error, loading, refetch } = usePolledData(fetcher, [queue, page]);
 
+  // Clamp the page when the DLQ shrinks (retry-all/purge here, or external
+  // retries) so a stale offset can't render "empty" while entries remain.
+  useEffect(() => {
+    if (!data) return;
+    const last = Math.max(0, Math.ceil((data.total ?? 0) / PAGE_SIZE) - 1);
+    if (page > last) setPage(last);
+  }, [data, page]);
+
   const run = async (label: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
     setBusy(true);

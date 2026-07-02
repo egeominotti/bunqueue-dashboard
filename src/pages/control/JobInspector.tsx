@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -46,9 +46,14 @@ export function JobInspector() {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Sequence guard (last-to-start wins): Enter can fire concurrent lookups and
+  // without it the slower response would clobber the newer one.
+  const lookupGen = useRef(0);
+
   const lookup = async (raw: string, mode: LookupMode = lookupBy) => {
     const key = raw.trim();
     if (!key) return;
+    const my = ++lookupGen.current;
     setLoading(true);
     setNotFound(false);
     setMsg(null);
@@ -61,6 +66,7 @@ export function JobInspector() {
       // 'completed'), so skip the request for any other state.
       const resultRes =
         loaded.state === 'completed' ? await bq.jobResult(loaded.id).catch(() => null) : null;
+      if (my !== lookupGen.current) return;
       setJob(loaded);
       setIdInput(mode === 'custom' ? loaded.id : key);
       setParams({ id: loaded.id }, { replace: true });
@@ -70,11 +76,12 @@ export function JobInspector() {
           : { fetched: false, value: undefined }
       );
     } catch {
+      if (my !== lookupGen.current) return;
       setJob(null);
       setResult({ fetched: false, value: undefined });
       setNotFound(true);
     } finally {
-      setLoading(false);
+      if (my === lookupGen.current) setLoading(false);
     }
   };
 
@@ -96,6 +103,10 @@ export function JobInspector() {
       if (label === 'Cancel') {
         setJob(null);
         setResult({ fetched: false, value: undefined });
+        // Clear the URL param too — otherwise the deep-link effect immediately
+        // re-fetches the just-deleted job and replaces "Cancel ✓" with
+        // "Job not found".
+        setParams({}, { replace: true });
       } else {
         await lookup(job.id, 'id');
       }
@@ -237,8 +248,8 @@ export function JobInspector() {
               </Card>
             )}
 
-            <JobLogs key={job.id} jobId={job.id} />
-            {hasChildren && <JobChildren key={job.id} jobId={job.id} />}
+            <JobLogs key={`logs-${job.id}`} jobId={job.id} />
+            {hasChildren && <JobChildren key={`children-${job.id}`} jobId={job.id} />}
             <JobTimeline timeline={job.timeline} />
             <JobBackoff job={job} />
           </div>

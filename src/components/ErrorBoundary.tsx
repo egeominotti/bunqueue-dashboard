@@ -6,6 +6,12 @@ import { ErrorState } from '@/components/ui/feedback';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
+  /**
+   * When this changes while an error is shown, the boundary resets — pass the
+   * route pathname so navigating away from a crashed page recovers in-app
+   * instead of requiring a full reload.
+   */
+  resetKey?: string;
 }
 
 interface ErrorBoundaryState {
@@ -26,6 +32,12 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error('ErrorBoundary caught an error', error, info.componentStack);
+  }
+
+  componentDidUpdate(prev: ErrorBoundaryProps): void {
+    if (this.state.error && prev.resetKey !== this.props.resetKey) {
+      this.setState({ error: null });
+    }
   }
 
   render(): ReactNode {

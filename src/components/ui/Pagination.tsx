@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { formatNumber } from '@/lib/format';
 
 /**
@@ -31,18 +32,29 @@ export function Pagination({
 }) {
   const knownTotal = total != null;
   const pageCount = knownTotal ? Math.max(1, Math.ceil(total / pageSize)) : undefined;
-  const start = page * pageSize;
-  const canPrev = page > 0;
-  const canNext = knownTotal ? page < (pageCount as number) - 1 : !!hasNext;
+
+  // Self-correct when the total shrinks below the current page (entries retried/
+  // purged elsewhere): snap back to the last valid page so the caller re-fetches
+  // a real offset instead of showing a false empty state.
+  useEffect(() => {
+    if (knownTotal && page > (pageCount as number) - 1) onPageChange((pageCount as number) - 1);
+  }, [knownTotal, page, pageCount, onPageChange]);
+
+  // Clamp derived display values so the one frame before the effect fires can't
+  // render an impossible "3 / 1".
+  const shownPage = knownTotal ? Math.min(page, (pageCount as number) - 1) : page;
+  const start = shownPage * pageSize;
+  const canPrev = shownPage > 0;
+  const canNext = knownTotal ? shownPage < (pageCount as number) - 1 : !!hasNext;
 
   // Nothing to page through and nowhere to go: don't render a dead control.
-  if (knownTotal && (total as number) <= pageSize && page === 0) return null;
+  if (knownTotal && (total as number) <= pageSize && shownPage === 0) return null;
 
   const summary = knownTotal
     ? (total as number) === 0
       ? `No ${label}`
       : `${formatNumber(start + 1)}–${formatNumber(Math.min(start + pageSize, total as number))} of ${formatNumber(total as number)} ${label}`
-    : `Page ${page + 1}`;
+    : `Page ${shownPage + 1}`;
 
   return (
     <div className={`mt-4 flex items-center justify-between text-sm text-faint ${className ?? ''}`}>
@@ -51,18 +63,18 @@ export function Pagination({
         <button
           type="button"
           disabled={!canPrev}
-          onClick={() => onPageChange(page - 1)}
+          onClick={() => onPageChange(shownPage - 1)}
           className="rounded-md px-3 py-1 text-xs hover:text-fg disabled:opacity-40 disabled:hover:text-faint"
         >
           Previous
         </button>
         <span className="rounded-md bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent tnum">
-          {knownTotal ? `${page + 1} / ${pageCount}` : page + 1}
+          {knownTotal ? `${shownPage + 1} / ${pageCount}` : shownPage + 1}
         </span>
         <button
           type="button"
           disabled={!canNext}
-          onClick={() => onPageChange(page + 1)}
+          onClick={() => onPageChange(shownPage + 1)}
           className="rounded-md px-3 py-1 text-xs hover:text-fg disabled:opacity-40 disabled:hover:text-faint"
         >
           Next

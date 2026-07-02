@@ -18,13 +18,16 @@ export function CronManager() {
   const pageCount = Math.max(1, Math.ceil(crons.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
 
+  const [actErr, setActErr] = useState<string | null>(null);
   const remove = async (name: string) => {
     if (!window.confirm(`Delete cron "${name}"?`)) return;
+    setActErr(null);
     try {
       await bq.deleteCron(name);
       refetch();
-    } catch {
-      /* next poll */
+    } catch (e) {
+      // A confirmed delete that silently no-ops reads as "it worked" — say why.
+      setActErr((e as Error).message);
     }
   };
 
@@ -32,6 +35,11 @@ export function CronManager() {
     <div>
       {error && <OfflineBanner onRetry={refetch} />}
       <PageHeader title="Cron Manager" description="Schedule and manage repeatable jobs." live />
+      {actErr && (
+        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-red-400">
+          {actErr}
+        </div>
+      )}
 
       <Card className="mb-6">
         <CardHeader title="Create schedule" />
@@ -107,8 +115,10 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
   const [every, setEvery] = useState('');
   const [dataText, setDataText] = useState('{}');
   const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const submit = async () => {
+    if (busy) return; // double-click would create the cron twice
     setErr(null);
     if (!name.trim() || !queue.trim()) {
       setErr('Name and queue are required');
@@ -136,6 +146,7 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
       }
       body.repeatEvery = ms;
     }
+    setBusy(true);
     try {
       await onCreate(body);
       setName('');
@@ -143,6 +154,8 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
       setEvery('');
     } catch (e) {
       setErr((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -193,8 +206,8 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
         />
       </Field>
       <div className="flex items-center gap-3">
-        <Button variant="accent" size="sm" onClick={submit}>
-          Create
+        <Button variant="accent" size="sm" onClick={submit} disabled={busy}>
+          {busy ? 'Creating…' : 'Create'}
         </Button>
         {err && <span className="text-xs text-red-400">{err}</span>}
       </div>

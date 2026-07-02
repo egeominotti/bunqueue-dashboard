@@ -91,14 +91,25 @@ export function JobsPro() {
   const rate = stats ? errorRate(stats.totalCompleted, stats.totalFailed) : 0;
 
   const resetPage = () => setPage(0);
+
+  // A different page/queue/status shows different jobs — a selection made on
+  // the old view must not silently carry over to rows it never referred to.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: clear on view change
+  useEffect(() => {
+    setSelected(new Set());
+  }, [queue, status, page]);
+
   const toggle = (id: string) =>
     setSelected((s) => {
       const n = new Set(s);
       n.has(id) ? n.delete(id) : n.add(id);
       return n;
     });
+  // Membership-based (not size-based): search can shrink `rows` while stale
+  // ids remain selected, and sizes would then lie.
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const toggleAll = () =>
-    setSelected((s) => (s.size === rows.length ? new Set() : new Set(rows.map((r) => r.id))));
+    setSelected(() => (allSelected ? new Set() : new Set(rows.map((r) => r.id))));
 
   const runOne = async (
     job: JobFull,
@@ -127,11 +138,13 @@ export function JobsPro() {
   const runBulk = async (
     label: string,
     fn: (job: JobFull) => Promise<unknown>,
-    confirmText?: string
+    // Built from the ACTUAL target count, so the confirm can't overstate what
+    // the action will touch (selection may include rows filtered out of view).
+    confirmText?: (count: number) => string
   ) => {
     const targets = rows.filter((r) => selected.has(r.id));
     if (targets.length === 0) return;
-    if (confirmText && !window.confirm(confirmText)) return;
+    if (confirmText && !window.confirm(confirmText(targets.length))) return;
     setBulkBusy(true);
     setActionMsg(null);
     const results = await Promise.allSettled(targets.map(fn));
@@ -178,7 +191,7 @@ export function JobsPro() {
         actionGates(j.state).fail
           ? bq.failJob(j.id)
           : Promise.reject(new Error(`"${j.state ?? 'unknown'}" is not active`)),
-      `Force-fail ${selected.size} job(s)?`
+      (n) => `Force-fail ${n} job(s)?`
     );
   const bulkCancel = () =>
     runBulk(
@@ -187,7 +200,7 @@ export function JobsPro() {
         actionGates(j.state).cancel
           ? bq.cancelJob(j.id)
           : Promise.reject(new Error(`"${j.state ?? 'unknown'}" cannot be cancelled`)),
-      `Cancel ${selected.size} job(s)? This cannot be undone.`
+      (n) => `Cancel ${n} job(s)? This cannot be undone.`
     );
 
   return (
@@ -325,7 +338,7 @@ export function JobsPro() {
                   <th className="w-10 px-5 py-3">
                     <input
                       type="checkbox"
-                      checked={rows.length > 0 && selected.size === rows.length}
+                      checked={allSelected}
                       onChange={toggleAll}
                       className="accent-accent"
                     />

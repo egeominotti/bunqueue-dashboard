@@ -31,9 +31,12 @@ export function QueueControl() {
       bq.getStallConfig(queue).catch(() => null),
       bq.getDlqConfig(queue).catch(() => null),
     ]);
-    return { detail, stall: stall?.config ?? null, dlq: dlq?.config ?? null };
+    // Tagged with the queue it was fetched for, so a queue switch can't render
+    // (or worse, save) queue A's config under queue B's name for one round-trip.
+    return { queue, detail, stall: stall?.config ?? null, dlq: dlq?.config ?? null };
   }, [queue]);
-  const { data, error, loading, refetch } = usePolledData(fetcher, [queue]);
+  const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue]);
+  const data = raw && raw.queue === queue ? raw : null;
 
   const run = (label: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;

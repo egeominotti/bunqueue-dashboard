@@ -92,7 +92,7 @@ export function LogsPro() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by job name or ID…"
+            placeholder="Search by job ID or queue…"
             className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
           />
         </div>
@@ -103,7 +103,7 @@ export function LogsPro() {
           <thead>
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
               <th className="px-5 py-3 font-medium">Status</th>
-              <th className="px-5 py-3 font-medium">Job Name</th>
+              <th className="px-5 py-3 font-medium">Event</th>
               <th className="px-5 py-3 font-medium">Queue</th>
               <th className="px-5 py-3 text-right font-medium">Timestamp</th>
               <th className="px-5 py-3 text-right font-medium">ID</th>
@@ -125,7 +125,7 @@ export function LogsPro() {
                   <td className="px-5 py-3">
                     <StatusBadge status={e.status} />
                   </td>
-                  <td className="px-5 py-3 text-fg">{e.name || 'unknown'}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-fg">{e.event}</td>
                   <td className="px-5 py-3">
                     <span className="rounded-md bg-surface-2 px-2 py-0.5 font-mono text-xs text-muted">
                       {e.queue || '—'}

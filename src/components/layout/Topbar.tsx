@@ -18,6 +18,7 @@ const TITLES: Record<string, string> = {
   '/dlq-control': 'DLQ Control',
   '/webhooks': 'Webhooks',
   '/diagnostics': 'Diagnostics',
+  '/benchmark': 'Benchmark',
   '/usage': 'Usage',
   '/s3': 'S3 Backup',
   '/settings': 'Settings',

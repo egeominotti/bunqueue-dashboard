@@ -22,7 +22,11 @@ export function AppLayout() {
           <Topbar onMenu={() => setNavOpen(true)} />
           <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
             <Suspense fallback={<div className="p-2 text-sm text-muted">Loading…</div>}>
-              <Outlet />
+              {/* Page-scoped boundary: a crashing page keeps the shell alive and
+                  the error clears on navigation (resetKey = pathname). */}
+              <ErrorBoundary resetKey={pathname}>
+                <Outlet />
+              </ErrorBoundary>
             </Suspense>
           </main>
         </div>

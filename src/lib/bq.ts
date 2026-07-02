@@ -55,7 +55,16 @@ async function call<T>(
     throw new BqError(message, res.status);
   }
   if (res.status === 204) return undefined as T;
-  const data = (await res.json()) as T;
+  // Defensive parse: a 2xx with an empty or non-JSON body must surface as a
+  // BqError (consistent error type), not a raw SyntaxError from res.json().
+  const text = await res.text();
+  if (!text) return undefined as T;
+  let data: T;
+  try {
+    data = JSON.parse(text) as T;
+  } catch {
+    throw new BqError(`Invalid JSON response (HTTP ${res.status})`, res.status);
+  }
   // Many mutating endpoints return HTTP 200 with { ok:false, error } on logical
   // failure (cancel a finished job, purge unknown queue, …). Surface those as
   // errors instead of resolving as success. `strict:false` opts out for the rare

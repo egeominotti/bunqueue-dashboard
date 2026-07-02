@@ -18,12 +18,16 @@ export function Webhooks() {
   const pageCount = Math.max(1, Math.ceil(webhooks.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
 
+  const [actErr, setActErr] = useState<string | null>(null);
   const act = async (fn: () => Promise<unknown>) => {
+    setActErr(null);
     try {
       await fn();
       refetch();
-    } catch {
-      /* next poll reflects state */
+    } catch (e) {
+      // Surface the failure — a silently-snapping-back toggle or a no-op
+      // confirmed delete otherwise reads as "it worked".
+      setActErr((e as Error).message);
     }
   };
 
@@ -32,6 +36,11 @@ export function Webhooks() {
       <PageHeader title="Webhooks" description="HTTP callbacks fired on job events." live />
 
       {error && <OfflineBanner onRetry={refetch} />}
+      {actErr && (
+        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-red-400">
+          {actErr}
+        </div>
+      )}
 
       <Card className="mb-6">
         <CardHeader title="Add webhook" />
@@ -128,16 +137,19 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
   const [secret, setSecret] = useState('');
   const [events, setEvents] = useState<string[]>(['job.completed', 'job.failed']);
   const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const toggle = (ev: string) =>
     setEvents((prev) => (prev.includes(ev) ? prev.filter((e) => e !== ev) : [...prev, ev]));
 
   const submit = async () => {
+    if (busy) return; // a double-click would register the webhook twice
     setErr(null);
     if (!url.trim() || events.length === 0) {
       setErr('URL and at least one event are required');
       return;
     }
+    setBusy(true);
     try {
       await onAdd({
         url,
@@ -149,6 +161,8 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
       setSecret('');
     } catch (e) {
       setErr((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -196,8 +210,8 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
         ))}
       </div>
       <div className="flex items-center gap-3">
-        <Button variant="accent" size="sm" onClick={submit}>
-          Add webhook
+        <Button variant="accent" size="sm" onClick={submit} disabled={busy}>
+          {busy ? 'Adding…' : 'Add webhook'}
         </Button>
         {err && <span className="text-xs text-red-400">{err}</span>}
       </div>

@@ -131,6 +131,24 @@ The items below are the ones **still** open (mostly confined to the off-nav
   "Objects are not valid as a React child". Confined to `/dlq-classic`
   (off-nav); the default `/dlq` (`DlqPro`) is unaffected.
 
+## Correctness (off-nav legacy pages — component-sweep findings, report-only)
+
+A full component sweep confirmed these in the classic pages; left as-is per the
+additive rule (the primary Pro routes are unaffected):
+
+- **`Overview.tsx` (`/overview-classic`) and `Usage.tsx` (`/usage`) render uptime
+  ~1000× too large** — `/dashboard`'s `stats.uptime` is milliseconds but both pass
+  it to the seconds-based `formatUptime` without the `/1000` the Pro pages apply.
+  Note `/usage` IS nav-reachable; fix would be a one-liner if it graduates to a
+  Pro page.
+- **`Jobs.tsx` (`/jobs-classic`) Duration column is always "—" and Name/search are
+  dead** — it reads `processedOn`/`finishedOn` and `name`, none of which exist on
+  real jobs (see the API-shape gotchas).
+- **`Queues.tsx` (`/queues-classic`) header cards labeled as global totals only sum
+  the current 20-row page.**
+- **`Logs.tsx` (`/logs-classic`) "Job Name" column is permanently "unknown"** —
+  SSE events carry no `name` (the Pro LogsPro now shows the event type instead).
+
 ## Performance (off-nav legacy pages)
 
 - **`Jobs.tsx` (classic, `/jobs-classic`) polls the full queue list every 3s.**
