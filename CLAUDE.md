@@ -38,9 +38,9 @@ bunqueue-dashboard/
 │   ├── server.ts              # fetch handler + origin/CORS/token policy (unit-tested)
 │   └── index.ts               # binds 127.0.0.1; Origin allowlist + locked CORS + optional AGENT_TOKEN;
 │                               # SIGINT/SIGTERM stop the managed server (no orphans)
-├── docker/nginx.conf          # SPA history fallback + gzip + immutable asset caching for the image
+├── docker/Caddyfile           # SPA history fallback + gzip/zstd + immutable asset caching for the image
 ├── scripts/dev.ts             # one-command dev launcher (`bun start`) — NOT linted/typechecked with src
-├── Dockerfile                 # multi-stage: Bun build → nginx serve
+├── Dockerfile                 # multi-stage: Bun build → Caddy serve
 ├── src/
 │   ├── lib/                   # api.ts, bq.ts, bqTypes.ts, types.ts, jobActions.ts, sse.ts, format.ts, cn.ts,
 │   │                           # usePolledData.ts, useActivityStream.ts, useThroughputSeries.ts
@@ -120,9 +120,12 @@ GitHub Actions under `.github/workflows/` (Bun pinned to the same version as loc
   x64/arm64, windows x64 — `scripts/serve.ts` via `bun build --compile`: embedded SPA + `/api`
   proxy + control agent in one binary), and publishes a GitHub Release whose body is the
   **`CHANGELOG.md` section for the released version** (auto-generated commit notes appended after).
-  Auto-versioning bumps from the latest `v*` tag with decimal rollover (patch 0–9, then minor:
-  `v0.1.9 → v0.2.0`). Auto-created tags use `GITHUB_TOKEN`, so they don't re-trigger docker.yml —
-  semver/`latest` images still come from manually pushed `v*` tags (`edge` tracks every main push).
+  The version is owned by **`package.json`** (the single source of truth, starting at `0.0.1`):
+  **you MUST bump `package.json`'s `version` on every commit/push to `main`**, and `release.yml`
+  tags/publishes `v<version>` to match (if it wasn't bumped, the tag already exists and the publish
+  is skipped — never a clobber). Auto-created tags use `GITHUB_TOKEN`, so they don't re-trigger
+  docker.yml — semver/`latest` images still come from manually pushed `v*` tags (`edge` tracks every
+  main push).
 
 ## Changelog rule — MANDATORY on every push / for every version
 
@@ -133,7 +136,7 @@ GitHub Release notes. It is not optional bookkeeping — the release body is ext
   `### Added` / `### Changed` / `### Fixed` / `### Removed`. Write it for a human reading the
   release, not a commit dump.
 - **For every version:** rename `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD` — where `x.y.z`
-  is the tag `release.yml` will create (decimal rollover from the latest `v*` tag) and the date is
+  is the **bumped `package.json` version** (the tag `release.yml` will create) and the date is
   today — then start a fresh empty `## [Unreleased]` above it, and add the two reference links at
   the bottom.
 - `release.yml`'s "Extract changelog notes" step publishes the section matching the released tag,

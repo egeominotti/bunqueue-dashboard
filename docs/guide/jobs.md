@@ -1,10 +1,11 @@
 ---
 title: Jobs Explorer
+description: "Browse the jobs in a queue, open any one to inspect it, and run the right actions, one job at a time or many at once."
 ---
 
 # Jobs Explorer
 
-Browse the jobs in a queue, open any one to inspect it, and run the right actions — one job at a time or many at once.
+Browse the jobs in a queue, open any one to inspect it, and run the right actions, one job at a time or many at once.
 
 **Where:** open `/jobs` from the sidebar.
 
@@ -31,7 +32,7 @@ Each row in the table shows one job:
 | **Status** | The job's current state as a colored badge. |
 | **Priority** | **HIGH**, **MEDIUM**, or **LOW**, based on the job's priority value. |
 | **Created** | When the job was added. |
-| **Duration** | How long the job took to run. Shows `—` until the job has both started and finished. |
+| **Duration** | How long the job took to run. Shows `, ` until the job has both started and finished. |
 | **Actions** | Inspect, plus any actions the job's state allows. |
 
 ::: info
@@ -50,16 +51,16 @@ The stat cards describe the entire server, so they **won't** match the counts of
 
 **Act on a single job.** Depending on its state, a row also offers:
 
-- **Promote** — move a delayed job to run now.
-- **Retry** — re-run an active or failed job.
-- **Requeue** — put a completed job back in line to run again.
-- **Fail** — force an active job to fail.
-- **Cancel** — remove a job from the queue.
+- **Promote**, move a delayed job to run now.
+- **Retry**, re-run an active or failed job.
+- **Requeue**, put a completed job back in line to run again.
+- **Fail**, force an active job to fail.
+- **Cancel**, remove a job from the queue.
 
 **Act on many jobs at once.** Tick the checkboxes (or the header checkbox to select the whole page) to reveal a bulk toolbar. It shows how many you've selected and offers **Retry**, **Promote**, **Requeue**, **Fail**, and **Cancel** for the selection. A button appears when the action fits at least one selected job; jobs it doesn't fit are reported as "not eligible / failed" rather than skipped silently.
 
 ::: warning
-**Fail** and **Cancel** each ask you to confirm first, for one job or a whole selection. **Cancel is destructive** — a cancelled job is removed from the queue and can't be undone.
+**Fail** and **Cancel** each ask you to confirm first, for one job or a whole selection. **Cancel is destructive**, a cancelled job is removed from the queue and can't be undone.
 :::
 
 After any action, the row (or selection) reports success or failure in a short status line above the table, and the list refreshes. Buttons on a busy row are disabled until it finishes.
@@ -71,7 +72,7 @@ After any action, the row (or selection) reports success or failure in a short s
 - **Which actions appear depends on the job's state.** A completed job can be requeued but not failed; an active job can be failed or retried but not promoted, and so on. If none of your selected jobs match an action, the toolbar tells you *"No actions apply to the selected job states."*
 - **Changing queue, status, or page clears your selection.** This is on purpose, so a bulk action can never hit rows you picked under a different view.
 - **If the server is unreachable,** a banner with a **Retry** button appears and your already-loaded rows stay visible.
-- This `/jobs` page is the corrected, server-paginated explorer. A separate legacy jobs page exists but isn't what this screen uses — see [Known issues](/known-issues).
+- This `/jobs` page is the corrected, server-paginated explorer. A separate legacy jobs page exists but isn't what this screen uses, see [Known issues](/known-issues).
 
 ::: details Under the hood (for developers)
 Everything here uses the shape-verified `bq` client (not the legacy `api` client).

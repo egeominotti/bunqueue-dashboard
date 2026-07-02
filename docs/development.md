@@ -1,3 +1,8 @@
+---
+title: Development
+description: "Set up, run, build, and test the bunqueue dashboard locally: the one-command dev launcher, the quality gate, and the project layout."
+---
+
 # Development
 
 New here? Start with [getting-started.md](getting-started.md) for a guided first
@@ -31,7 +36,7 @@ bun test          # format + sse + agent-lifecycle tests
 ```
 
 This is the exact gate CI runs on every push and PR
-([ci-cd.md](ci-cd.md)) — keep all three green before considering a change done.
+([ci-cd.md](ci-cd.md)), keep all three green before considering a change done.
 
 Notes:
 - `biome.json` is a **production-grade root config** (`"root": true`, schema pinned
@@ -54,30 +59,27 @@ Notes:
    an existing icon or add one to `ui/icons`).
 4. If the page shows a job/queue state, drive its state-dependent buttons off
    `lib/jobActions.ts::actionGates` rather than re-deriving which actions are
-   legal — see [api-mapping.md](api-mapping.md#job-action-gating).
+   legal, see [api-mapping.md](api-mapping.md#job-action-gating).
 
-**Both steps 2 and 3 are required** — a route with no nav entry (or vice
-versa) is a dead end. `src/pages/Alerts.tsx` is exactly this: fully built,
-routed nowhere, findable only by reading the source (see
+**Both steps 2 and 3 are required**, a route with no nav entry (or vice
+versa) is a dead end. `src/pages/Alerts.tsx` is exactly this: fully built, routed nowhere, findable only by reading the source (see
 [pages.md](pages.md#not-part-of-the-router)). Don't leave a new page in that
 state.
 
 **Do not rewrite existing pages or the `api.ts` client.** Corrected behaviour goes
 in a new page using `bq`. If you find a live bug while working nearby, check
-[known-issues.md](known-issues.md) first — it may already be tracked — and add
+[known-issues.md](known-issues.md) first, it may already be tracked, and add
 it there if not, rather than silently patching something out of scope.
 
 ## Conventions
 
 - Data: `usePolledData(() => bq.x())` returns `{ data, error, loading, refetching, refetch }`.
-  Render `LoadingState` on first load, `ErrorState` on failure with data absent,
-  otherwise the content (keep last data while refreshing).
+  Render `LoadingState` on first load, `ErrorState` on failure with data absent, otherwise the content (keep last data while refreshing).
 - Actions: call `bq.*` then `refetch()`; guard destructive ops with
   `window.confirm`; surface failures inline.
 - Formatting: use `lib/format` (`formatNumber` uses `.` thousands; times are
   relative; durations from `startedAt`/`completedAt`).
-- Styling: Tailwind tokens (`bg-surface`, `text-muted`, `border-line`,
-  `text-accent`), `.tnum` for numbers, mono for IDs.
+- Styling: Tailwind tokens (`bg-surface`, `text-muted`, `border-line`, `text-accent`), `.tnum` for numbers, mono for IDs.
 - Keep files focused; prefer new small components over growing a page past ~300 lines.
 
 ## Tests

@@ -1,16 +1,16 @@
 ---
+description: "Drive your bunqueue server from the browser: view and control queues, jobs, the dead-letter queue, cron, webhooks, workers, live activity, and the server process itself."
 layout: home
 
 hero:
   name: bunqueue dashboard
   text: Drive your queue server from the browser
   tagline: >-
-    View and control queues, jobs, the dead-letter queue, cron, webhooks,
-    workers, live activity — and the server process itself. Talks only to
+    View and control queues, jobs, the dead-letter queue, cron, webhooks, workers, live activity, and the server process itself. Talks only to
     bunqueue's public HTTP API plus a tiny local control agent.
   image:
     src: /hero.svg
-    alt: The bunqueue dashboard — a live queue control panel
+    alt: The bunqueue dashboard, a live queue control panel
   actions:
     - theme: brand
       text: Illustrated user guide
@@ -29,8 +29,7 @@ features:
       height: 30
     title: Full control surface
     details: >-
-      Pause/resume queues, add & retry jobs, edit rate-limit and concurrency,
-      manage cron and webhooks, drain the DLQ — every action gated by the job's
+      Pause/resume queues, add & retry jobs, edit rate-limit and concurrency, manage cron and webhooks, drain the DLQ, every action gated by the job's
       real state so the UI never offers something the server would reject.
     link: /user-guide
     linkText: Tour every page
@@ -50,8 +49,7 @@ features:
       height: 30
     title: Two API clients by design
     details: >-
-      Classic view pages on lib/api.ts; the complete, shape-verified,
-      strict-error-checked lib/bq.ts behind every Pro control page. New work uses bq.
+      Classic view pages on lib/api.ts; the complete, shape-verified, strict-error-checked lib/bq.ts behind every Pro control page. New work uses bq.
     link: /api-mapping
     linkText: Endpoint map & gotchas
   - icon:
@@ -60,9 +58,7 @@ features:
       height: 30
     title: Process lifecycle
     details: >-
-      The one thing HTTP can't do — start, stop and restart the bunqueue process —
-      is delegated to a small local control agent (loopback-bound, CORS-locked,
-      optional token).
+      The one thing HTTP can't do, start, stop and restart the bunqueue process, is delegated to a small local control agent (loopback-bound, CORS-locked, optional token).
     link: /agent
     linkText: The control agent
   - icon:
@@ -72,7 +68,7 @@ features:
     title: Read-only SQLite inspector
     details: >-
       Browse tables, schema and indexes, page through rows, and run read-only
-      queries with EXPLAIN and CSV/JSON export — over the agent's /db/* endpoints.
+      queries with EXPLAIN and CSV/JSON export, over the agent's /db/* endpoints.
     link: /pages
     linkText: Pages & routes
   - icon:
@@ -91,16 +87,16 @@ features:
 
 ## See it in action
 
-A real control surface, not a read-only viewer — every screenshot below is a
+A real control surface, not a read-only viewer, every screenshot below is a
 live page you can drive.
 
 <div class="home-shots">
 
-[![Overview — real-time health at a glance](./screenshots/overview.png)](/guide/overview)
+[![Overview, real-time health at a glance](./screenshots/overview.png)](/guide/overview)
 
-[![Jobs Explorer — filter, inspect and bulk-action jobs](./screenshots/jobs.png)](/guide/jobs)
+[![Jobs Explorer, filter, inspect and bulk-action jobs](./screenshots/jobs.png)](/guide/jobs)
 
-[![SQLite inspector — browse tables and run read-only queries](./screenshots/database.png)](/guide/database)
+[![SQLite inspector, browse tables and run read-only queries](./screenshots/database.png)](/guide/database)
 
 </div>
 
@@ -112,7 +108,7 @@ live page you can drive.
 
 ```bash
 bun install
-bun start          # control agent + dashboard together — Ctrl-C stops both
+bun start          # control agent + dashboard together, Ctrl-C stops both
 ```
 
 `bun start` launches the local control agent (`http://127.0.0.1:6800`) and the
@@ -128,17 +124,17 @@ bunqueue server from **Server ▸ Control** (the agent starts it for you) or via
 
 <div class="home-grid">
 
-- **Queues** — pause/resume, rate-limit, concurrency, drain, obliterate
-- **Jobs** — add, inspect, promote, retry, requeue, cancel — all state-gated
-- **Dead-letter queue** — reasons, per-row retry, retry-all, purge
-- **Cron & webhooks** — schedule jobs, register and test endpoints
-- **Workers & metrics** — live throughput, latency percentiles, worker health
-- **Server process** — start / stop / restart bunqueue with live logs
+- **Queues**, pause/resume, rate-limit, concurrency, drain, obliterate
+- **Jobs**, add, inspect, promote, retry, requeue, cancel, all state-gated
+- **Dead-letter queue**, reasons, per-row retry, retry-all, purge
+- **Cron & webhooks**, schedule jobs, register and test endpoints
+- **Workers & metrics**, live throughput, latency percentiles, worker health
+- **Server process**, start / stop / restart bunqueue with live logs
 
 </div>
 
-Start with the **[illustrated user guide](/user-guide)** — one detailed page per
-dashboard section — or read how it all fits together in the
+Start with the **[illustrated user guide](/user-guide)**, one detailed page per
+dashboard section, or read how it all fits together in the
 **[architecture](/architecture)**.
 
 </div>

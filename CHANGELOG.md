@@ -2,121 +2,59 @@
 
 All notable changes to this project are documented here.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project follows the auto-versioning scheme in `.github/workflows/release.yml`
-(decimal rollover: patch 0–9, then the minor increments — `v0.1.9 → v0.2.0`).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+The version is owned by `package.json` (starting at `0.0.1`) and bumped on every
+push to `main`; `.github/workflows/release.yml` tags and publishes `v<version>`
+to match.
 
 **Process (see `CLAUDE.md`):** before every push to `main`, record changes under
-`## [Unreleased]`. For every version, rename `[Unreleased]` to the version being
-released and start a fresh empty `[Unreleased]`. The release workflow publishes the
-matching version section (or `[Unreleased]`) as the GitHub Release body.
+`## [Unreleased]` and bump `package.json`'s `version`. For every version, rename
+`[Unreleased]` to the bumped version and start a fresh empty `[Unreleased]`. The
+release workflow publishes the matching version section (or `[Unreleased]`) as
+the GitHub Release body.
 
 ## [Unreleased]
 
-## [0.2.5] - 2026-07-02
+## [0.0.1] - 2026-07-02
 
-### Changed
-- **User guide is now user-first and simplified.** Every per-section page opens
-  with a plain-language purpose and a **Where** line, then **What you'll see** /
-  **What you can do** / **Good to know** — written for someone *using* the
-  dashboard. Internal detail (endpoints, refresh cadence, source) moved into a
-  collapsed **Under the hood** block; no source paths or component names in the
-  body.
+First tagged release. A web dashboard that fully drives a bunqueue server over
+its public HTTP API plus a small local control agent, with an illustrated
+documentation site.
 
 ### Added
-- **Professional docs home.** A custom-drawn dashboard hero illustration, a
-  "See it in action" screenshot showcase (uniform framed cards), a one-command
-  quick start, and a capability grid.
-- **Richer `llms.txt`.** Leads with a mental model, the two-API-client design,
-  the control agent, and the verified response-shape gotchas before the page
-  index.
+- **Full control surface.** View and drive queues, jobs, the dead-letter queue,
+  cron, webhooks, and workers. Every job action is gated by the job's real
+  current state (`src/lib/jobActions.ts`) so the UI never offers something the
+  server would reject.
+- **Live, not just polled.** Cheap polling plus a Server-Sent-Events stream for
+  real-time job activity, with automatic reconnect and rolling throughput,
+  latency, and queue-depth charts.
+- **Process lifecycle.** A small local control agent (loopback-bound,
+  CORS-locked to an allowlist, optional `AGENT_TOKEN`) starts, stops, and
+  restarts the bunqueue process with live logs.
+- **Read-only SQLite inspector** (`/database`): browse tables, schema and
+  indexes, page through rows, and run statement-allowlisted, row-capped,
+  read-only queries with `EXPLAIN` and CSV/JSON export.
+- **Two API clients by design:** the original `src/lib/api.ts` behind the
+  first-generation classic pages, and the complete, shape-verified,
+  strict-error-checked `src/lib/bq.ts` behind every Pro control page.
+- **Illustrated documentation site** (VitePress, published to GitHub Pages under
+  `/docs/`): a user-first, screenshot-backed page per dashboard section, a
+  Mermaid data-flow diagram, local search, and auto-generated
+  `llms.txt` / `llms-full.txt`.
+- **Deployment guides:** Docker (Caddy), Kubernetes, PM2, and hosting-platform
+  recipes (Vercel, Netlify, Cloudflare Pages, GitHub Pages, Render, Fly.io,
+  Railway, Google Cloud Run), plus an overview of the two deployment modes.
+- **SEO on the docs:** `sitemap.xml`, `robots.txt`, per-page canonical links and
+  meta descriptions, and Open Graph / Twitter cards.
+- **Docker image** served with Caddy (gzip + zstd, SPA history fallback,
+  immutable asset caching), published to the GitHub Container Registry.
+- **CI/CD:** the lint + build + test gate on every push and PR, GitHub Pages
+  deploy, multi-arch Docker image, and a Release workflow that cross-compiles
+  standalone executables for 5 platforms (the all-in-one SPA + `/api` proxy +
+  control agent in one binary).
+- **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
+  feature icons on the docs home.
 
-### Fixed
-- **GitHub Pages deploy timeout.** The `actions/deploy-pages` publish step runs
-  ~8-9 minutes on this repo; the larger `/docs` artifact tipped it past the
-  deploy job's 10-minute cap, cancelling it. Raised the deploy job timeout to
-  30 min, the deploy step to 20, and the action's own `timeout` input to 15 min
-  so the publish completes.
-
-## [0.2.4] - 2026-07-02
-
-### Added
-- **VitePress documentation site**, published to GitHub Pages under `/docs/`
-  alongside the app (the app stays at the site root). Built from the existing
-  `docs/*.md` as the single source of truth via `scripts`-free
-  `vitepress build docs`; deployed by `pages.yml` (`DOCS_BASE` = the Pages
-  sub-path). New `bun run docs:dev` / `docs:build` / `docs:preview` scripts.
-- **Per-section user guide.** The monolithic guide is split into one detailed,
-  source-grounded page per dashboard section under `docs/guide/*`, grouped in the
-  sidebar exactly like the dashboard (Home · Queues · Monitoring · Control ·
-  Management) plus a Classic-pages appendix. Each page documents every field,
-  action, state/gating rule, the API calls behind it, and its gotchas.
-- **Modern docs features:** a Mermaid data-flow diagram in `architecture.md`,
-  Shiki Twoslash-ready code blocks, cross-page View Transitions, local search,
-  and auto-generated `llms.txt` / `llms-full.txt` for LLM consumption.
-- **Custom brand + iconography:** a new queue-badge logo/favicon (replacing the
-  bunny) and six hand-drawn monoline feature icons on the docs home.
-
-## [0.2.3] - 2026-07-02
-
-### Added
-- **Illustrated user guide** (`docs/user-guide.md`): every routed page documented
-  with a real screenshot (`docs/screenshots/`, captured against a live seeded
-  server) and an explanation of what it shows, the actions it offers, and its
-  known gotchas — Pro pages, classic pages, and the 404 catch-all.
-
-## [0.2.2] - 2026-07-02
-
-### Fixed
-- Changelog version headings now match the tags `release.yml` auto-creates (this
-  project was already at `v0.2.x`, not `v0.1.0`), so each release's notes are
-  sourced from its own `CHANGELOG.md` section instead of falling back to the
-  generated commit list.
-
-## [0.2.1] - 2026-07-02
-
-Enterprise SQLite inspector, a full UI/UX pass across every section, and a large
-stability sweep.
-
-### Added
-- **Database inspector** (`/database`): read-only SQLite browser served by the
-  control agent — sortable/paginated data grid with column type + PK header
-  badges, per-row detail drawer (full untruncated values via a rowid cell fetch,
-  JSON pretty-print, per-value copy), inline column filter, schema tab
-  (columns/indexes/DDL), store metadata cards, and a query runner with history,
-  `EXPLAIN`, and CSV/JSON export. Every connection is opened read-only; an
-  arbitrary query is statement-allowlisted, row-capped, and time-boxed in a
-  disposable worker (synchronous fallback in compiled binaries).
-- **Pro pages** `UsagePro` and `WorkersPro`; `/cron` now serves the full Cron
-  Manager. Classic first-generation pages remain reachable at `*-classic`.
-- **`CHANGELOG.md`** is now the source of GitHub Release notes: `release.yml`
-  publishes the released version's section (falling back to `[Unreleased]`, then
-  to auto-generated notes).
-- App-wide `ErrorBoundary`, semantic theme-aware status colors, and a mobile nav
-  drawer.
-
-### Changed
-- Full UI/UX pass across every section: standardized success/error feedback,
-  destructive confirmations that name their target and count, honest empty
-  states, accessible form labels and focus rings, and WCAG-compliant contrast in
-  the light theme.
-- Server page surfaces live RAM and connection counts; `scripts/dev.ts` spawns
-  services directly so `Ctrl-C` reaches them (no orphaned processes).
-- `docker.yml` / `pages.yml` now run the full gate (lint · build · test) before
-  publishing.
-
-### Fixed
-- 20 adversarially-verified stability fixes across the shared lib, Pro pages, the
-  control agent, and infra (event-order under StrictMode, duration formatting,
-  stale-view races on queue/filter switches, agent SIGINT/SIGTERM cleanup, log
-  pipe flush, `react-router` vendor chunking, standalone-binary `/api` proxy
-  content-encoding, and more).
-- Segment-based `/db/tables` routing so tables literally named `schema` or `cell`
-  resolve correctly.
-
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.5...HEAD
-[0.2.5]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.4...v0.2.5
-[0.2.4]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.3...v0.2.4
-[0.2.3]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.2...v0.2.3
-[0.2.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.1...v0.2.2
-[0.2.1]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.0...v0.2.1
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.1...HEAD
+[0.0.1]: https://github.com/egeominotti/bunqueue-dashboard/releases/tag/v0.0.1

@@ -1,5 +1,6 @@
 ---
 title: Logs
+description: "Watch job activity across all your queues as it happens, in one live feed."
 ---
 
 # Logs
@@ -14,7 +15,7 @@ Watch job activity across all your queues as it happens, in one live feed.
 
 The page is titled **Activity Logs**. At the top, a **Live** indicator shows whether you're connected to the event stream right now. Below it sit six stat cards, a row of filters, and a table of recent events (10 per page).
 
-The stat cards count what has come through *since you opened the page* — they are running totals for this session, not all-time server figures.
+The stat cards count what has come through *since you opened the page*, they are running totals for this session, not all-time server figures.
 
 | Element | What it tells you |
 | --- | --- |
@@ -31,13 +32,13 @@ Each row in the table is a single event:
 | --- | --- |
 | **Status** | A colored badge for the event's state (waiting, active, completed, failed). |
 | **Event** | The exact event type, such as `job:completed`, `job:pushed`, or `job:failed`. |
-| **Queue** | Which queue the event came from, or `—` if none was reported. |
+| **Queue** | Which queue the event came from, or `, ` if none was reported. |
 | **Timestamp** | How long ago the event happened, shown as relative time. |
-| **ID** | The job's ID, or `—` if it wasn't included. |
+| **ID** | The job's ID, or `, ` if it wasn't included. |
 
 ## What you can do
 
-This is a watch-only screen. Nothing here changes your server — the controls only narrow down what the feed shows you.
+This is a watch-only screen. Nothing here changes your server, the controls only narrow down what the feed shows you.
 
 - **Pick a queue.** Use the queue dropdown to focus on one queue, or choose **All Queues** to watch everything. Switching restarts the feed for the new scope (the counts start over).
 - **Filter by status.** Use the status buttons (all / waiting / active / completed / failed) to show only events in that state.
@@ -53,7 +54,7 @@ Changing the queue, status, or search jumps you back to the first page, so you a
 - **This is a live view, not a history log.** It keeps only the most recent 250 events and starts counting from the moment you opened the page. Reloading, navigating away, or switching the queue clears the feed and resets every counter.
 - **You can only search what's on screen.** Because the feed holds the last 250 events, older events that have scrolled off can't be searched or paged back to.
 - **Switching queues restarts the feed.** Moving between **All Queues** and a specific queue reconnects the stream, so the list clears and the rates briefly drop to zero before filling again.
-- **There's no job-name column.** Job events don't carry a name, so the table shows the event type and job ID instead. (The older `/logs-classic` page shows a permanently blank "Job Name" for the same reason — see [Known issues](/known-issues).)
+- **There's no job-name column.** Job events don't carry a name, so the table shows the event type and job ID instead. (The older `/logs-classic` page shows a permanently blank "Job Name" for the same reason, see [Known issues](/known-issues).)
 - **The empty table tells you what's happening.** You'll see **"Connecting to the event stream…"** while it connects, **"Waiting for activity…"** once connected but idle, and **"No events match the current filters."** when your filters hide everything.
 - **It reconnects on its own.** If the connection drops, the **Live** indicator goes off and the feed retries automatically after a couple of seconds. If the server is unreachable, a banner with a **Retry** button appears under the header.
 

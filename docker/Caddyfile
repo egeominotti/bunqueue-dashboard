@@ -1,0 +1,30 @@
+# Caddy config for serving the bunqueue dashboard SPA.
+#
+# - History-API fallback: unknown *routes* return index.html so React Router
+#   deep links and refreshes work.
+# - Fingerprinted /assets/* are the exception: a miss 404s (never falls back to
+#   index.html), so a stale chunk import fails loudly instead of importing HTML.
+# - On-the-fly compression (gzip + zstd); immutable caching for the hashed
+#   assets, no-cache for the HTML shell.
+#
+# The container listens on :80. Put TLS in front of it (a load balancer, an
+# ingress controller, or Caddy's own automatic HTTPS on a public domain).
+
+:80 {
+	root * /usr/share/caddy
+	encode gzip zstd
+
+	# Fingerprinted build assets: cache immutably, and 404 on a miss (no SPA
+	# fallback here) so a stale chunk import never silently receives the shell.
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# Everything else: the HTML shell with SPA history-API fallback.
+	handle {
+		header Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}

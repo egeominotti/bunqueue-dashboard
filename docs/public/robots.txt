@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://egeominotti.github.io/bunqueue-dashboard/docs/sitemap.xml

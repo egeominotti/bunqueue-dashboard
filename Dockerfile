@@ -16,17 +16,18 @@ ARG VITE_BUNQUEUE_URL=""
 ENV VITE_BUNQUEUE_URL=$VITE_BUNQUEUE_URL
 RUN bun run build
 
-# ---- Serve stage: nginx serving the static SPA -------------------------------
-FROM nginx:1.27-alpine AS runtime
+# ---- Serve stage: Caddy serving the static SPA -------------------------------
+FROM caddy:2.8-alpine AS runtime
 LABEL org.opencontainers.image.title="bunqueue-dashboard" \
       org.opencontainers.image.description="Web dashboard for a bunqueue server" \
       org.opencontainers.image.source="https://github.com/egeominotti/bunqueue-dashboard"
 
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY docker/Caddyfile /etc/caddy/Caddyfile
+COPY --from=build /app/dist /usr/share/caddy
 
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+# The base image's default entrypoint runs:
+#   caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

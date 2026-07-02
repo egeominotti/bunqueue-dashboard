@@ -65,7 +65,7 @@ Bun.serve({
     }
 
     // Embedded static assets with SPA history fallback. A missing fingerprinted
-    // /assets/* file must 404 (as docker/nginx.conf does) — falling back to
+    // /assets/* file must 404 (as docker/Caddyfile does) — falling back to
     // index.html would feed HTML to a stale chunk import() and mask the miss.
     const key = url.pathname === '/' ? '/index.html' : url.pathname;
     const asset =

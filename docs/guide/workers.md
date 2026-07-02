@@ -1,5 +1,6 @@
 ---
 title: Workers
+description: "A live registry of every worker connected to your server, so you can confirm your consumers are alive, see how much work each is doing, and evict one…"
 ---
 
 # Workers
@@ -28,7 +29,7 @@ Each row in the table is one worker:
 | Column | What it tells you |
 | --- | --- |
 | **Worker** | The worker's name, with its full id below it |
-| **Queues** | The queues this worker consumes (`—` if none) |
+| **Queues** | The queues this worker consumes (`, ` if none) |
 | **Status** | A pill: green **active** or amber **stale** |
 | **Active** | Jobs this worker is processing right now |
 | **Processed** | Jobs it has completed over its lifetime |
@@ -38,10 +39,10 @@ Each row in the table is one worker:
 
 ## What you can do
 
-- **Unregister a worker** — click the trash icon on its row. You'll be asked to confirm; on success a green message appears above the table, and the list refreshes. This is meant for clearing out a dead or stuck registration.
-- **Retry** — if the server is unreachable, an offline banner appears with a **Retry** button to fetch again.
+- **Unregister a worker**, click the trash icon on its row. You'll be asked to confirm; on success a green message appears above the table, and the list refreshes. This is meant for clearing out a dead or stuck registration.
+- **Retry**, if the server is unreachable, an offline banner appears with a **Retry** button to fetch again.
 
-Workers aren't created or edited here — they're started by your own consumer processes and register themselves. This screen is for watching them and evicting stuck ones.
+Workers aren't created or edited here, they're started by your own consumer processes and register themselves. This screen is for watching them and evicting stuck ones.
 
 ::: warning
 Unregister is **not permanent**. A worker that's still running will re-register on its next heartbeat, so its row can reappear moments after you remove it. Use it to evict a genuinely dead registration, not to pause an active consumer.
@@ -49,7 +50,7 @@ Unregister is **not permanent**. A worker that's still running will re-register 
 
 ## Good to know
 
-- **Stale doesn't mean gone.** A worker that stops heartbeating turns amber and counts toward **Stale**, but stays in the list — with its Last Seen climbing — until you unregister it or the server drops it.
+- **Stale doesn't mean gone.** A worker that stops heartbeating turns amber and counts toward **Stale**, but stays in the list, with its Last Seen climbing, until you unregister it or the server drops it.
 - **The summary cards always reflect the full fleet.** Even when the table is capped, Total, Active, Stale, and Active Jobs are counted across every worker.
 - **The table shows at most 100 workers**, with no pagination. Past that, a note reads "Showing first 100 of N workers." See [Known issues](/known-issues).
 - **First load shows a brief "Loading workers…"**; after that, updates happen quietly in place with no flicker. If no workers are connected, you'll see an empty state instead.

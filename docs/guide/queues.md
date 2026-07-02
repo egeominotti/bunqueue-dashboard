@@ -1,5 +1,6 @@
 ---
 title: Queues
+description: "See every queue on your server at a glance, check how each one is doing, and pause or resume any of them in one click."
 ---
 
 # Queues
@@ -27,7 +28,7 @@ Each row in the table:
 
 | Column | What it tells you |
 | --- | --- |
-| **Queue** | The queue name — click it to open that queue |
+| **Queue** | The queue name, click it to open that queue |
 | **Waiting** | Jobs waiting for a worker |
 | **Active** | Jobs being processed now |
 | **Completed** | Jobs that finished successfully |
@@ -37,7 +38,7 @@ Each row in the table:
 | **Actions** | The pause/resume button, plus an arrow into the queue |
 
 ::: tip
-The four summary cards always add up **every** queue, even while you're searching — the totals stay put as you type, so they always reflect the full fleet.
+The four summary cards always add up **every** queue, even while you're searching, the totals stay put as you type, so they always reflect the full fleet.
 :::
 
 ## What you can do
@@ -46,26 +47,26 @@ The four summary cards always add up **every** queue, even while you're searchin
 - **Resume a queue.** Click the green play icon on a paused row. Work starts flowing again, with the same quick confirmation.
 - **Search.** Type in the filter box to narrow the table to queues whose name contains what you typed. It's case-insensitive.
 - **Open a queue.** Click a row (or the queue name) to jump into that queue's detail view.
-- **Page through queues.** Use the pager below the table — it shows 15 queues per page.
+- **Page through queues.** Use the pager below the table, it shows 15 queues per page.
 - **Recover from an outage.** If the server drops, a banner appears with a **Retry** button that reconnects.
 
-After each pause or resume you'll see a one-line result above the table: a green confirmation (for example, `payments paused ✓`) on success, or a red message explaining what went wrong. Only the row you clicked is disabled while it's working — every other row stays usable.
+After each pause or resume you'll see a one-line result above the table: a green confirmation (for example, `payments paused ✓`) on success, or a red message explaining what went wrong. Only the row you clicked is disabled while it's working, every other row stays usable.
 
 ::: warning
-Pause and resume act **immediately** — there's no confirmation prompt. A single mis-click can pause a live queue, so check the row's **Status** pill afterward to confirm the result. (Heavier, destructive actions like drain live on the individual queue's page, not here.)
+Pause and resume act **immediately**, there's no confirmation prompt. A single mis-click can pause a live queue, so check the row's **Status** pill afterward to confirm the result. (Heavier, destructive actions like drain live on the individual queue's page, not here.)
 :::
 
 ## Good to know
 
-- **The summary cards ignore your search.** They're fleet-wide totals and won't change as you filter — that's intentional, but easy to misread.
+- **The summary cards ignore your search.** They're fleet-wide totals and won't change as you filter, that's intentional, but easy to misread.
 - **The Paused card counts queues, not jobs.** It tells you how many queues are paused, not how many jobs are held.
-- **Numbers are as of the last refresh.** With the default few-seconds cadence — and refreshing paused while the browser tab is in the background — a busy queue can lag reality by a moment. The **Live** badge means the data is polled, not streamed instantly.
+- **Numbers are as of the last refresh.** With the default few-seconds cadence, and refreshing paused while the browser tab is in the background, a busy queue can lag reality by a moment. The **Live** badge means the data is polled, not streamed instantly.
 - **Empty states are explicit.** With no queues yet you'll see *"No queues yet."*; a search that matches nothing shows *"No queues match your search."*
 - **Your place is kept.** If a filter shrinks the list past your current page, you're moved to the last valid page rather than losing your spot.
 - No known issues are specific to this screen. See [Known issues](/known-issues) for the current, honest list.
 
 ::: details Under the hood (for developers)
-- Loads every queue with its counts in a single `GET /queues/summary` call — no per-queue fan-out. Search, sort, and pagination are all client-side.
+- Loads every queue with its counts in a single `GET /queues/summary` call, no per-queue fan-out. Search, sort, and pagination are all client-side.
 - Pause/resume post to `POST /queues/:q/pause` and `POST /queues/:q/resume`; a logical `{ ok: false }` surfaces as the red error line.
 - Polls at the global refresh interval from Settings (default 3000 ms, floored at 500 ms), one request at a time, suspended while the tab is hidden.
 - Uses the `bq` client throughout.

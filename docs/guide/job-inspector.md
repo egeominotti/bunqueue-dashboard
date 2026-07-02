@@ -1,5 +1,6 @@
 ---
 title: Job Inspector
+description: "Look up any single job and drive its whole lifecycle from one screen: inspect its data, result, error, logs and history, edit its payload, and run every…"
 ---
 
 # Job Inspector
@@ -12,7 +13,7 @@ Look up any single job and drive its whole lifecycle from one screen: inspect it
 
 ## What you'll see
 
-At the top there's always a **lookup bar**: a mode dropdown (**By job ID** / **By custom ID**), a search box, and a **Look up** button. Below it, a single status line shows the result of your last action — green for success, red for failure.
+At the top there's always a **lookup bar**: a mode dropdown (**By job ID** / **By custom ID**), a search box, and a **Look up** button. Below it, a single status line shows the result of your last action, green for success, red for failure.
 
 Once a job is loaded, the screen splits into two: a wide left column with detail cards, and a narrow **Actions** rail on the right.
 
@@ -36,10 +37,10 @@ The other cards appear depending on the job:
 | --- | --- |
 | Data | The job's payload as read-only formatted JSON. |
 | Edit data | An editable copy of the payload with a **Save data** button. |
-| Result | The stored return value — only for **completed** jobs. |
-| Error | The last error message and full stack trace — only for **failed** jobs. |
+| Result | The stored return value, only for **completed** jobs. |
+| Error | The last error message and full stack trace, only for **failed** jobs. |
 | Logs | The job's log lines, with controls to refresh, clear, and add lines. |
-| Child values | Resolved return values from a flow job's children — only for parent jobs. |
+| Child values | Resolved return values from a flow job's children, only for parent jobs. |
 | Timeline | The job's state history: enqueued, started, finished, and any retries. |
 | Backoff | A preview of when the remaining retries would run. |
 
@@ -58,7 +59,7 @@ Every job ID elsewhere in the dashboard (Jobs, DLQ, Activity) links straight to 
 1. Change the JSON in the **Edit data** card.
 2. Click **Save data**. Valid JSON is saved and the job reloads; invalid JSON shows an inline message and nothing is sent.
 
-**Run an action** — the Actions rail only shows the actions that are valid for the job's current state. Depending on state, you may see:
+**Run an action**, the Actions rail only shows the actions that are valid for the job's current state. Depending on state, you may see:
 
 | Action | What it does |
 | --- | --- |
@@ -73,22 +74,22 @@ Every job ID elsewhere in the dashboard (Jobs, DLQ, Activity) links straight to 
 | **Fail** | Force-fails an active job (optional reason). |
 | **Cancel (delete)** | Removes the job entirely. |
 
-**Work with logs** — use **Refresh** to reload the lines, type a message and pick a level (`info` / `warn` / `error`) then **Add** to append one, or **Clear logs** to wipe them all.
+**Work with logs**, use **Refresh** to reload the lines, type a message and pick a level (`info` / `warn` / `error`) then **Add** to append one, or **Clear logs** to wipe them all.
 
-**See child values** — on a flow parent, click **Show** to load and view the resolved return values of its children.
+**See child values**, on a flow parent, click **Show** to load and view the resolved return values of its children.
 
-::: warning Some actions ask you to confirm — and a few are destructive
-**Fail**, **Cancel (delete)**, and **Clear logs** each pop up a confirmation first. **Cancel** permanently removes the job, and **Clear logs** permanently deletes its log lines — there's no undo.
+::: warning Some actions ask you to confirm, and a few are destructive
+**Fail**, **Cancel (delete)**, and **Clear logs** each pop up a confirmation first. **Cancel** permanently removes the job, and **Clear logs** permanently deletes its log lines, there's no undo.
 :::
 
 ## Good to know
 
-- **Actions are state-aware.** The rail only offers what the server will accept right now. If nothing applies, you'll see "No actions available for a job in state …". Which actions show up follows the job's location — for example, only delayed jobs can be promoted, and only active jobs can be failed or moved to delayed.
+- **Actions are state-aware.** The rail only offers what the server will accept right now. If nothing applies, you'll see "No actions available for a job in state …". Which actions show up follows the job's location, for example, only delayed jobs can be promoted, and only active jobs can be failed or moved to delayed.
 - **Backoff times are approximate.** The retry schedule is a preview and doesn't include the random jitter the server adds at retry time (up to ±50%, or ±20% for fixed backoff), so read the numbers as "about". "exponential (default)" just means the job uses standard backoff, not that it has none.
 - **Timeline keeps the last 20 entries.** Very retry-heavy jobs only show their most recent transitions; older attempts (and the errors attached to them) drop off.
-- **Requeue is a fresh run, not a replay.** Requeuing a completed job resets its attempts and timestamps and re-runs it — it does not replay the stored result.
+- **Requeue is a fresh run, not a replay.** Requeuing a completed job resets its attempts and timestamps and re-runs it, it does not replay the stored result.
 - **The result is fetched on demand.** A completed job with nothing stored shows "No result stored for this job." rather than an error.
-- **Rapid lookups are safe.** If you hammer Enter, the newest lookup always wins — a slow earlier response can't overwrite it.
+- **Rapid lookups are safe.** If you hammer Enter, the newest lookup always wins, a slow earlier response can't overwrite it.
 - **This is the modern inspector.** The classic Jobs and DLQ views have separate, documented quirks. If something looks off, check [Known issues](/known-issues).
 
 ::: details Under the hood (for developers)

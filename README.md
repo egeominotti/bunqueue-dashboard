@@ -4,7 +4,7 @@
 
 # bunqueue dashboard
 
-**A web dashboard that _fully drives_ a [bunqueue](https://bunqueue.dev) server** — monitor and
+**A web dashboard that _fully drives_ a [bunqueue](https://bunqueue.dev) server**, monitor and
 control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and the server
 **process lifecycle** (start / stop / restart) from one place.
 
@@ -12,6 +12,7 @@ control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and 
 [![Deploy to GitHub Pages](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml)
 [![Docker](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-online-db2777)](https://egeominotti.github.io/bunqueue-dashboard/docs/)
 ![Status: Beta](https://img.shields.io/badge/status-beta-f59e0b)
 
 ![React 19](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
@@ -24,12 +25,23 @@ control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and 
 
 ---
 
-> ⚠️ **Beta.** bunqueue dashboard is under active development — interfaces and
+> ⚠️ **Beta.** bunqueue dashboard is under active development, interfaces and
 > behavior may change between releases. Review it before relying on it for
 > unattended production use.
 
+## 📚 Documentation
+
+**Full, illustrated docs live at
+[egeominotti.github.io/bunqueue-dashboard/docs](https://egeominotti.github.io/bunqueue-dashboard/docs/).**
+
+- **[Illustrated user guide](https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide)**, one detailed, screenshot-backed page per dashboard section.
+- **[Deployment](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/)**, Docker (Caddy), Kubernetes, PM2, and hosting platforms (Vercel, Netlify, Cloudflare, Fly.io, Render, Cloud Run).
+- **[Architecture](https://egeominotti.github.io/bunqueue-dashboard/docs/architecture)** and **[API mapping](https://egeominotti.github.io/bunqueue-dashboard/docs/api-mapping)**, how it fits together and every endpoint it drives.
+- **[llms.txt](https://egeominotti.github.io/bunqueue-dashboard/docs/llms.txt)**, the whole site as a single file for LLMs.
+
 ## Table of contents
 
+- [Documentation](#-documentation)
 - [Why](#why)
 - [Features](#features)
 - [Quick start](#quick-start)
@@ -47,8 +59,8 @@ control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and 
 ## Why
 
 bunqueue exposes a rich HTTP API, but operating it by hand (curl, ad-hoc scripts) is slow and
-error-prone. This dashboard is a **complete operator console**: everything the API can do — plus the
-one thing it can't, managing the server *process* — behind a fast, keyboard-friendly UI.
+error-prone. This dashboard is a **complete operator console**: everything the API can do, plus the
+one thing it can't, managing the server *process*, behind a fast, keyboard-friendly UI.
 
 It talks **only** to bunqueue's public HTTP API (`:6790`) and a small local **control agent**. It
 never imports or modifies bunqueue itself, so it tracks any bunqueue server you point it at.
@@ -90,9 +102,9 @@ on `Ctrl-C`:
 | --- | --- | --- |
 | Dashboard | http://localhost:5273 | The UI (`/api/*` is proxied to `:6790` in dev) |
 | Control agent | http://127.0.0.1:6800 | Starts / stops / restarts the server process |
-| bunqueue server | http://localhost:6790 | Your queue server — started from the **Server** page or run separately |
+| bunqueue server | http://localhost:6790 | Your queue server, started from the **Server** page or run separately |
 
-Prefer separate terminals? The individual commands still exist — see [Scripts](#scripts).
+Prefer separate terminals? The individual commands still exist, see [Scripts](#scripts).
 
 ## Architecture
 
@@ -113,7 +125,7 @@ flowchart LR
 
 - **Reads** by polling (`usePolledData`) and a Server-Sent Events stream (`useActivityStream`).
 - **Writes** through the same HTTP API, with every mutation shape-verified against the live server.
-- **Process lifecycle** — the one thing HTTP can't do — is delegated to the local control agent.
+- **Process lifecycle**, the one thing HTTP can't do, is delegated to the local control agent.
 
 Two HTTP clients coexist on purpose: `src/lib/api.ts` (first-generation view pages) and
 `src/lib/bq.ts` (the complete, shape-verified client used by every `Control ▸ *` page). See
@@ -127,11 +139,11 @@ in-app **Settings** page. Copy [`.env.example`](.env.example) to `.env` to set d
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `VITE_BUNQUEUE_URL` | bunqueue server origin | `/api` (dev proxy → `:6790`) |
-| `VITE_BUNQUEUE_TOKEN` | Bearer token, if the server has `AUTH_TOKENS` set | — |
+| `VITE_BUNQUEUE_TOKEN` | Bearer token, if the server has `AUTH_TOKENS` set | _none_ |
 | `VITE_BUNQUEUE_AGENT_URL` | Control-agent origin | `http://localhost:6800` |
 | `AGENT_PORT` | Control-agent port | `6800` |
 | `AGENT_ALLOWED_ORIGINS` | Extra browser origins allowed to drive the agent (comma-separated) | dev defaults |
-| `AGENT_TOKEN` | Optional bearer token required on state-changing agent requests | — (off) |
+| `AGENT_TOKEN` | Optional bearer token required on state-changing agent requests | _none_ (off) |
 
 ## Scripts
 
@@ -148,8 +160,7 @@ in-app **Settings** page. Copy [`.env.example`](.env.example) to `.env` to set d
 
 ## Docker
 
-A multi-stage image builds the SPA with Bun and serves it with nginx (gzip, SPA history fallback,
-immutable asset caching). Published to the GitHub Container Registry on every push.
+A multi-stage image builds the SPA with Bun and serves it with Caddy (gzip/zstd, SPA history fallback, immutable asset caching). Published to the GitHub Container Registry on every push.
 
 ```bash
 # Pull & run the published image (`edge` tracks main; use `vX.Y.Z`/`latest` after a release)
@@ -165,28 +176,28 @@ Tags: `latest` and `vX.Y.Z` on releases, `edge` on `main`.
 
 ## Deployment
 
-- **Standalone executables** — every [release](https://github.com/egeominotti/bunqueue-dashboard/releases)
+- **Standalone executables**, every [release](https://github.com/egeominotti/bunqueue-dashboard/releases)
   ships self-contained binaries for **Linux (x64/arm64), macOS (x64/arm64) and Windows (x64)**:
-  download one file and run it — it serves the dashboard (assets embedded), proxies `/api` to your
+  download one file and run it, it serves the dashboard (assets embedded), proxies `/api` to your
   bunqueue server (`BUNQUEUE_URL`, default `:6790`) and includes the control agent.
   ```bash
   ./bunqueue-dashboard-vX.Y.Z-darwin-arm64        # → http://localhost:8080
   PORT=3000 BUNQUEUE_URL=https://queue.example.com ./bunqueue-dashboard-vX.Y.Z-linux-x64
   ```
-- **GitHub Pages** — every push to `main` builds and publishes the static SPA
+- **GitHub Pages**, every push to `main` builds and publishes the static SPA
   (`.github/workflows/pages.yml`). The workflow **attempts** to auto-provision Pages; if the first
   run reports `Get Pages site failed`, enable it once under **Settings ▸ Pages ▸ Source → GitHub
   Actions** (the default `GITHUB_TOKEN` can't create a Pages site on its own). The build sets the
   correct sub-path base and a `404.html` SPA fallback automatically.
-- **Container** — self-host the published `ghcr.io` image behind any reverse proxy.
-- **Static host** — `bun run build` emits a plain `dist/` you can serve from any CDN or static host.
+- **Container**, self-host the published `ghcr.io` image behind any reverse proxy.
+- **Static host**, `bun run build` emits a plain `dist/` you can serve from any CDN or static host.
 
 Because the deployed build is a static shell, point it at a reachable bunqueue server via
 `VITE_BUNQUEUE_URL` (build time) or the **Settings** page (runtime).
 
 ## Testing & quality gate
 
-Three commands must be green before a change is considered done — the same checks CI runs:
+Three commands must be green before a change is considered done, the same checks CI runs:
 
 ```bash
 bun run build     # tsc --noEmit + vite build
@@ -201,8 +212,8 @@ CI enforces this on every push and pull request. See [Contributing](#contributin
 ```
 bunqueue-dashboard/
 ├── .github/workflows/   # CI, Pages deploy, Docker publish, Release
-├── agent/               # Bun control agent (process lifecycle) — server.ts, manager.ts, index.ts
-├── docker/              # nginx.conf for the container image
+├── agent/               # Bun control agent (process lifecycle), server.ts, manager.ts, index.ts
+├── docker/              # Caddyfile for the container image
 ├── docs/                # source-verified reference (architecture, pages, API mapping, known issues)
 ├── scripts/dev.ts       # one-command dev launcher (`bun start`)
 ├── src/
@@ -219,9 +230,8 @@ Full walkthrough in [`docs/README.md`](docs/README.md).
 The control agent can spawn processes, so it is hardened by design (`agent/server.ts`):
 
 - Binds **`127.0.0.1` only**.
-- **CORS locked to an allowlist** — `Access-Control-Allow-Origin` is never `*`.
-- Requests carrying a **disallowed `Origin` are rejected (403)** before reaching the process manager,
-  blocking drive-by CSRF from a malicious tab.
+- **CORS locked to an allowlist**, `Access-Control-Allow-Origin` is never `*`.
+- Requests carrying a **disallowed `Origin` are rejected (403)** before reaching the process manager, blocking drive-by CSRF from a malicious tab.
 - Optional **`AGENT_TOKEN`** adds a bearer-token gate on state-changing requests.
 
 Keep the agent on loopback (or an equivalently trusted network) and set `AGENT_TOKEN` for shared
@@ -229,10 +239,10 @@ machines. See [`docs/known-issues.md`](docs/known-issues.md) for the honest, ver
 
 ## Contributing
 
-1. Keep it **additive** — prefer new files + minimal glue over rewriting existing ones
+1. Keep it **additive**, prefer new files + minimal glue over rewriting existing ones
    (see [`CLAUDE.md`](CLAUDE.md)).
 2. Make the [gate](#testing--quality-gate) green: `bun run build && bun run check && bun test`.
-3. Open a PR — the template walks you through the checklist. CI must pass.
+3. Open a PR, the template walks you through the checklist. CI must pass.
 
 ## License
 

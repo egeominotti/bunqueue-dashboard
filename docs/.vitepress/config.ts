@@ -6,6 +6,10 @@ import { withMermaid } from 'vitepress-plugin-mermaid';
 // (pages.yml sets DOCS_BASE=/bunqueue-dashboard/docs/). Must have a trailing slash.
 const base = process.env.DOCS_BASE || '/';
 
+// Canonical production origin for SEO (sitemap, canonical links, og:url). The
+// docs deploy at this URL on GitHub Pages regardless of the local dev base.
+const SITE = 'https://egeominotti.github.io/bunqueue-dashboard/docs';
+
 // withMermaid() wraps defineConfig and registers the Mermaid render component, so
 // ```mermaid fenced blocks in any page become diagrams (used in architecture.md).
 export default withMermaid({
@@ -13,34 +17,65 @@ export default withMermaid({
   lang: 'en-US',
   title: 'bunqueue dashboard',
   description:
-    'How the bunqueue dashboard works — an illustrated guide to every page, the architecture, the control agent, and the HTTP API it drives.',
+    'How the bunqueue dashboard works: an illustrated, user-first guide to every page, plus deployment (Docker, Kubernetes, PM2), the architecture, and the HTTP API it drives.',
   cleanUrls: true,
   lastUpdated: true,
   // The reference docs mention source paths and a few planned pages that don't
   // exist yet; don't fail the build on those. README.md is the GitHub-facing
-  // index — index.md is the site home, so keep README out of the built site.
+  // index, index.md is the site home, so keep README out of the built site.
   ignoreDeadLinks: true,
   srcExclude: ['README.md'],
+
+  // Generates sitemap.xml for search engines.
+  sitemap: { hostname: `${SITE}/` },
 
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
     ['meta', { name: 'theme-color', content: '#ec4899' }],
-    ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:title', content: 'bunqueue dashboard — docs' }],
+    ['meta', { name: 'author', content: 'Egeo Minotti' }],
     [
       'meta',
       {
-        property: 'og:description',
-        content: 'Illustrated guide to every page of the bunqueue dashboard.',
+        name: 'keywords',
+        content:
+          'bunqueue, dashboard, queue, jobs, dead-letter queue, cron, webhooks, workers, react, vite, bun',
       },
     ],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:site_name', content: 'bunqueue dashboard docs' }],
+    ['meta', { property: 'og:image', content: `${SITE}/og.png` }],
+    ['meta', { property: 'og:image:width', content: '1600' }],
+    ['meta', { property: 'og:image:height', content: '1000' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:image', content: `${SITE}/og.png` }],
   ],
+
+  // Per-page SEO: a canonical link, a page-specific og:url/og:title, and a real
+  // per-page description (from frontmatter, falling back to the site default).
+  transformPageData(pageData) {
+    const clean = pageData.relativePath.replace(/index\.md$/, '').replace(/\.md$/, '');
+    const canonical = `${SITE}/${clean}`.replace(/\/$/, clean === '' ? '/' : '');
+    const title = pageData.frontmatter.title || pageData.title || 'bunqueue dashboard';
+    const description =
+      pageData.frontmatter.description ||
+      pageData.description ||
+      'An illustrated, user-first guide to the bunqueue dashboard.';
+    pageData.frontmatter.head ??= [];
+    pageData.frontmatter.head.push(
+      ['link', { rel: 'canonical', href: canonical }],
+      ['meta', { property: 'og:url', content: canonical }],
+      ['meta', { property: 'og:title', content: `${title} · bunqueue dashboard docs` }],
+      ['meta', { property: 'og:description', content: description }],
+      ['meta', { name: 'description', content: description }],
+      ['meta', { name: 'twitter:title', content: `${title} · bunqueue dashboard docs` }],
+      ['meta', { name: 'twitter:description', content: description }]
+    );
+  },
 
   markdown: {
     // Shiki Twoslash: ```ts twoslash blocks get real type-checking + hover types.
     codeTransformers: [transformerTwoslash()],
-    // Twoslash emits raw HTML for the hover popovers.
-    languages: ['ts', 'js', 'bash', 'json', 'jsonc', 'html', 'css'],
+    languages: ['ts', 'js', 'bash', 'json', 'jsonc', 'html', 'css', 'yaml', 'docker'],
   },
 
   vite: {
@@ -55,19 +90,19 @@ export default withMermaid({
         details: [
           '## Mental model',
           '',
-          "It **reads** from a bunqueue server by polling the HTTP API (`usePolledData`, interval from the connection store) and subscribing to a Server-Sent-Events stream (`useActivityStream`) for live job activity. It **writes** through the same API (pause, add job, retry, rate-limit, …), with every job action gated by the job's real current state via `src/lib/jobActions.ts::actionGates` so the UI never offers an action the server would reject.",
+          "It **reads** from a bunqueue server by polling the HTTP API (`usePolledData`, interval from the connection store) and subscribing to a Server-Sent-Events stream (`useActivityStream`) for live job activity. It **writes** through the same API (pause, add job, retry, rate-limit, and so on), with every job action gated by the job's real current state via `src/lib/jobActions.ts::actionGates` so the UI never offers an action the server would reject.",
           '',
-          'The one thing HTTP cannot do — manage the server **process** — is delegated to a small local **control agent** (`agent/`): loopback-bound (127.0.0.1), CORS-locked to an allowlist, with an optional `AGENT_TOKEN` bearer gate, exposing `/control/*` to start, stop and restart bunqueue, plus a read-only SQLite inspector over `/db/*`.',
+          'The one thing HTTP cannot do, manage the server **process**, is delegated to a small local **control agent** (`agent/`): loopback-bound (127.0.0.1), CORS-locked to an allowlist, with an optional `AGENT_TOKEN` bearer gate, exposing `/control/*` to start, stop and restart bunqueue, plus a read-only SQLite inspector over `/db/*`.',
           '',
           '## Two API clients, by design',
           '',
-          '- `src/lib/api.ts` — the original client, used only by the first-generation **classic** pages (reachable at `*-classic` routes).',
-          '- `src/lib/bq.ts` — the complete, shape-verified, strict-error-checked client behind every **Pro** control page (`src/pages/control/*`), which own the sidebar. New work uses `bq`. Its `call()` also throws on HTTP-200-with-`{ok:false}` (except `health()`).',
+          '- `src/lib/api.ts`, the original client, used only by the first-generation **classic** pages (reachable at `*-classic` routes).',
+          '- `src/lib/bq.ts`, the complete, shape-verified, strict-error-checked client behind every **Pro** control page (`src/pages/control/*`), which own the sidebar. New work uses `bq`. Its `call()` also throws on HTTP-200-with-`{ok:false}` (except `health()`).',
           '',
           '## Verified API-shape gotchas',
           '',
           '- `GET /webhooks`, `/workers`, `/storage`, `/ping` wrap the payload in `{ ok, data: {...} }`; `/queues/:q/dlq`, `/dlq/stats`, `/crons`, `/queues/:q/counts` are flat.',
-          '- DLQ entries are nested `{ job, enteredAt, reason, error, attempts[] }` — no top-level `id`/`name`.',
+          '- DLQ entries are nested `{ job, enteredAt, reason, error, attempts[] }`, with no top-level `id`/`name`.',
           '- Jobs have no `name` field and no embedded `result` (fetch via `GET /jobs/:id/result`); they use `startedAt`/`completedAt` (not `processedOn`/`finishedOn`).',
           '',
           'For the full per-section walkthrough see the User guide pages; for endpoint shapes see API mapping; for honest current limits see Known issues.',
@@ -81,22 +116,30 @@ export default withMermaid({
 
     nav: [
       { text: 'User guide', link: '/user-guide' },
+      { text: 'Deploy', link: '/deploy/' },
       { text: 'Architecture', link: '/architecture' },
       { text: 'API', link: '/api-mapping' },
-      { text: 'Known issues', link: '/known-issues' },
-      // Base is NOT auto-applied to external-style links (target:_blank + .txt),
-      // so prefix it explicitly or this 404s under the Pages sub-path.
       { text: 'llms.txt', link: `${base}llms.txt`, target: '_blank' },
     ],
 
-    // Mirrors the dashboard's own sidebar groups (Home · Queues · Monitoring ·
-    // Control · Management) so each dashboard section has its own detailed page.
+    // Mirrors the dashboard's own sidebar groups (Home, Queues, Monitoring,
+    // Control, Management) so each dashboard section has its own detailed page.
     sidebar: [
       {
         text: 'Getting started',
         items: [
           { text: 'User guide (index)', link: '/user-guide' },
           { text: 'Development', link: '/development' },
+        ],
+      },
+      {
+        text: 'Deploy',
+        items: [
+          { text: 'Overview', link: '/deploy/' },
+          { text: 'Docker', link: '/deploy/docker' },
+          { text: 'Kubernetes', link: '/deploy/kubernetes' },
+          { text: 'PM2', link: '/deploy/pm2' },
+          { text: 'Hosting platforms', link: '/deploy/platforms' },
         ],
       },
       {
@@ -122,7 +165,6 @@ export default withMermaid({
       },
       {
         text: 'Guide · Control',
-        collapsed: false,
         items: [
           { text: 'Server Control', link: '/guide/server' },
           { text: 'Add Job', link: '/guide/add-job' },
@@ -168,9 +210,7 @@ export default withMermaid({
 
     search: {
       provider: 'local',
-      options: {
-        detailedView: true,
-      },
+      options: { detailedView: true },
     },
 
     socialLinks: [
@@ -178,13 +218,12 @@ export default withMermaid({
     ],
 
     editLink: {
-      pattern:
-        'https://github.com/egeominotti/bunqueue-dashboard/edit/main/docs/:path',
+      pattern: 'https://github.com/egeominotti/bunqueue-dashboard/edit/main/docs/:path',
       text: 'Edit this page on GitHub',
     },
 
     footer: {
-      message: 'Drives a bunqueue server over its public HTTP API + a local control agent.',
+      message: 'Drives a bunqueue server over its public HTTP API plus a local control agent.',
       copyright: 'MIT · bunqueue dashboard',
     },
   },

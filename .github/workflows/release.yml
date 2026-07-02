@@ -1,11 +1,12 @@
 name: Release
 
 # Publishes a GitHub Release on EVERY push to main (continuous delivery) and on
-# manual version tags (v*). For main pushes the next version is bumped from the
-# latest existing v* tag with decimal rollover — patch 0-9, then the minor
-# increments (…v0.1.9 → v0.2.0 → v0.2.1…) — and the tag is created by the
-# release step itself. The full gate (lint · build · test) re-runs before
-# publishing, and the built dist/ is zipped and attached with generated notes.
+# manual version tags (v*). For main pushes the version comes from package.json
+# (the single source of truth, bumped on every push, starting at 0.0.1) and the
+# matching v<version> tag is created by the release step itself. If package.json
+# was not bumped, its tag already exists and the publish is skipped (never a
+# clobber). The full gate (lint, build, test) re-runs before publishing, and the
+# built dist/ is zipped and attached with generated notes.
 #
 # Note: tags created here use GITHUB_TOKEN, which by design does NOT trigger
 # other workflows — so docker.yml's semver/latest images still come from
@@ -37,7 +38,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Full history so the commit count is correct for auto-versioning.
+          # Full history + tags so the changelog extract and the existing-tag
+          # check (skip-if-already-released) work.
           fetch-depth: 0
 
       - name: Setup Bun
@@ -61,32 +63,16 @@ jobs:
             TAG="${GITHUB_REF_NAME}"
             echo "publish=true" >> "$GITHUB_OUTPUT"
           else
-            # Bump from the latest v* tag with decimal rollover: patch 0-9,
-            # then the minor increments (v0.1.9 → v0.2.0). Self-healing: it
-            # always continues from whatever the highest existing tag is.
-            LAST=$(git tag --list 'v*' --sort=-v:refname | head -1)
-            if [ -z "$LAST" ]; then
-              TAG="v0.1.0"
-            else
-              BASE="${LAST#v}"
-              MAJOR=$(echo "$BASE" | cut -d. -f1 | tr -cd '0-9')
-              MINOR=$(echo "$BASE" | cut -d. -f2 | tr -cd '0-9')
-              PATCH=$(echo "$BASE" | cut -d. -f3 | tr -cd '0-9')
-              : "${MAJOR:=0}" "${MINOR:=1}" "${PATCH:=0}"
-              # 10# forces base-10 so a zero-padded tag (v0.1.08) can't trip
-              # bash's octal parsing.
-              if [ "$((10#$PATCH))" -ge 9 ]; then
-                MINOR=$((10#$MINOR + 1)); PATCH=0
-              else
-                PATCH=$((10#$PATCH + 1))
-              fi
-              TAG="v${MAJOR}.${MINOR}.${PATCH}"
-            fi
-            # Skip if the computed tag somehow exists (re-run race) — fails
-            # safe as a no-publish, never a clobber.
+            # package.json owns the version (bumped on every push to main), and
+            # the release/tag simply follows it — one source of truth. Read it
+            # without assuming a runtime is on PATH.
+            VER=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' package.json | head -1)
+            TAG="v${VER}"
+            # Skip if this version already has a tag (package.json wasn't bumped
+            # this push) — fails safe as a no-publish, never a clobber.
             if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
               echo "publish=false" >> "$GITHUB_OUTPUT"
-              echo "Tag ${TAG} already exists — skipping publish."
+              echo "Tag ${TAG} already exists (package.json version not bumped) — skipping publish."
             else
               echo "publish=true" >> "$GITHUB_OUTPUT"
             fi

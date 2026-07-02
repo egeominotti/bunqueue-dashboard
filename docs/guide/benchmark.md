@@ -1,5 +1,6 @@
 ---
 title: Benchmark
+description: "Push a controlled flood of jobs at your bunqueue server and watch, in real time, how fast it accepts and clears them."
 ---
 
 # Benchmark
@@ -29,9 +30,9 @@ The live stat cards update several times a second:
 | **Data** | Total payload sent (bytes). |
 | **Errors** | Failed sends or acks; turns red if any occur. |
 
-The **Throughput** chart plots the last stretch of the run: send rate (cyan) against completion rate (green), so you can see the server keeping up — or falling behind.
+The **Throughput** chart plots the last stretch of the run: send rate (cyan) against completion rate (green), so you can see the server keeping up, or falling behind.
 
-The **Server queue** card is the ground truth. It reads the server's own counts for your target queue — **Waiting**, **Active**, **Completed**, **Failed**, **Delayed** — every second, independent of the client-side numbers. It's your proof the load actually landed.
+The **Server queue** card is the ground truth. It reads the server's own counts for your target queue, **Waiting**, **Active**, **Completed**, **Failed**, **Delayed**, every second, independent of the client-side numbers. It's your proof the load actually landed.
 
 ## What you can do
 
@@ -62,12 +63,12 @@ It permanently removes waiting, completed, failed, and delayed jobs from the tar
 - **The Summary's latency numbers cover sending only.** The avg / p50 / p95 / p99 / max figures measure how long each batch took to send, not how long workers took to process.
 - **Run history is temporary.** It keeps the last 12 runs and is lost on reload. Export JSON first if you want to compare later.
 - **Everything locks during a run.** All configuration fields, the toggles, the presets, and Clean queue are disabled while a benchmark is active. They free up the moment it ends or you Stop.
-- **Clean queue can't remove active jobs.** Jobs that were pulled but not yet acked can't be cleaned; the server re-queues them itself after its stall timeout. You'll see a note like `Cleaned — N active job(s) remain`.
+- **Clean queue can't remove active jobs.** Jobs that were pulled but not yet acked can't be cleaned; the server re-queues them itself after its stall timeout. You'll see a note like `Cleaned, N active job(s) remain`.
 - **This is real load with real cost.** Stress and Soak runs genuinely write to the server (and fsync if Durable is on). Point it at a disposable or dev server, and use **Clean queue** or **Remove on complete** so you don't leave a large backlog behind.
-- **If the server is unreachable**, the run won't start — you'll get a clear error — and the Server queue card shows a `stale` badge while keeping the last good counts. See [Known issues](/known-issues) for verified limits.
+- **If the server is unreachable**, the run won't start, you'll get a clear error, and the Server queue card shows a `stale` badge while keeping the last good counts. See [Known issues](/known-issues) for verified limits.
 
 ::: tip Drain without producing
-In `duration` mode you can set producers to 0 and run workers alone — handy for clearing a queue that's already full.
+In `duration` mode you can set producers to 0 and run workers alone, handy for clearing a queue that's already full.
 :::
 
 ::: details Under the hood (for developers)
