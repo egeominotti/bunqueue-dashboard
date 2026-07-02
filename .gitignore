@@ -20,3 +20,7 @@ data/
 scripts/embedded.gen.ts
 /bunqueue-dashboard
 /bunqueue-dashboard-*
+
+# VitePress
+docs/.vitepress/dist
+docs/.vitepress/cache

@@ -13,6 +13,23 @@ matching version section (or `[Unreleased]`) as the GitHub Release body.
 
 ## [Unreleased]
 
+### Added
+- **VitePress documentation site**, published to GitHub Pages under `/docs/`
+  alongside the app (the app stays at the site root). Built from the existing
+  `docs/*.md` as the single source of truth via `scripts`-free
+  `vitepress build docs`; deployed by `pages.yml` (`DOCS_BASE` = the Pages
+  sub-path). New `bun run docs:dev` / `docs:build` / `docs:preview` scripts.
+- **Per-section user guide.** The monolithic guide is split into one detailed,
+  source-grounded page per dashboard section under `docs/guide/*`, grouped in the
+  sidebar exactly like the dashboard (Home · Queues · Monitoring · Control ·
+  Management) plus a Classic-pages appendix. Each page documents every field,
+  action, state/gating rule, the API calls behind it, and its gotchas.
+- **Modern docs features:** a Mermaid data-flow diagram in `architecture.md`,
+  Shiki Twoslash-ready code blocks, cross-page View Transitions, local search,
+  and auto-generated `llms.txt` / `llms-full.txt` for LLM consumption.
+- **Custom brand + iconography:** a new queue-badge logo/favicon (replacing the
+  bunny) and six hand-drawn monoline feature icons on the docs home.
+
 ## [0.2.3] - 2026-07-02
 
 ### Added

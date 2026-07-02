@@ -10,6 +10,9 @@ name: Deploy to GitHub Pages
 # server via the in-app Settings page (or a build-time VITE_BUNQUEUE_URL); the
 # dev `/api` proxy and the local control agent are not available on Pages.
 #
+# The illustrated documentation site is built with VitePress into dist/docs and
+# published alongside the app at /<repo>/docs/.
+#
 # Pages is auto-provisioned by the "Configure Pages" step (enablement: true), so
 # no manual Settings toggle is required — the first run enables it. (If your org
 # restricts Pages, enable it once under Settings ▸ Pages ▸ Source → GitHub Actions.)
@@ -72,6 +75,17 @@ jobs:
         env:
           VITE_BASE: ${{ steps.pages.outputs.base_path }}/
         run: bun run build
+
+      # Build the VitePress documentation site and place it under dist/docs so
+      # Pages serves it at https://<owner>.github.io/<repo>/docs/ alongside the
+      # app at the root. DOCS_BASE must match that sub-path (with trailing slash).
+      - name: Build docs site (VitePress)
+        env:
+          DOCS_BASE: ${{ steps.pages.outputs.base_path }}/docs/
+        run: |
+          bun run docs:build
+          mkdir -p dist/docs
+          cp -r docs/.vitepress/dist/. dist/docs/
 
       - name: SPA fallback (404 -> index.html)
         run: cp dist/index.html dist/404.html

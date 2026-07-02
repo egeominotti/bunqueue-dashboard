@@ -1,0 +1,76 @@
+/* Brand + polish for the bunqueue dashboard docs. Mirrors the app's pink accent
+   (#ec4899) and gives screenshots a framed, elevated look. */
+
+:root {
+  --vp-c-brand-1: #db2777;
+  --vp-c-brand-2: #ec4899;
+  --vp-c-brand-3: #f472b6;
+  --vp-c-brand-soft: rgba(236, 72, 153, 0.14);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #f472b6 20%, #ec4899);
+  --vp-home-hero-image-background-image: linear-gradient(
+    -45deg,
+    rgba(236, 72, 153, 0.35),
+    rgba(244, 114, 182, 0.2)
+  );
+  --vp-home-hero-image-filter: blur(48px);
+}
+
+.dark {
+  --vp-c-brand-1: #f472b6;
+  --vp-c-brand-2: #ec4899;
+  --vp-c-brand-3: #db2777;
+}
+
+/* Framed, elevated screenshots. */
+.vp-doc img:not(.VPImage):not([src$='.svg']) {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 10px 34px rgba(0, 0, 0, 0.18);
+  margin: 20px 0;
+}
+
+.dark .vp-doc img:not(.VPImage):not([src$='.svg']) {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* Mermaid diagrams: center and give them breathing room. */
+.vp-doc .mermaid {
+  display: flex;
+  justify-content: center;
+  margin: 22px 0;
+}
+
+/* View Transitions: a soft cross-fade between pages. */
+@keyframes vp-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+::view-transition-old(root) {
+  animation: 90ms cubic-bezier(0.4, 0, 1, 1) both fade-out;
+}
+::view-transition-new(root) {
+  animation: 210ms cubic-bezier(0, 0, 0.2, 1) 40ms both vp-fade-in;
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

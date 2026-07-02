@@ -55,6 +55,33 @@
 
 ## Data flow
 
+```mermaid
+flowchart LR
+  subgraph Dashboard["Dashboard (React SPA)"]
+    P["usePolledData<br/>(interval poll)"]
+    S["useActivityStream<br/>(SSE reader)"]
+    T["useThroughputSeries<br/>(1s tick)"]
+    W["Page actions<br/>(pause / add / retry / …)"]
+  end
+
+  subgraph Server["bunqueue server :6790"]
+    H["HTTP API"]
+    E["/events SSE"]
+  end
+
+  A["Control agent :6800<br/>(loopback, CORS-locked)"]
+  Proc["bunqueue process"]
+
+  P -->|"GET dashboard / summaries"| H
+  T -->|"GET overview each second"| H
+  S <-->|"stream job events"| E
+  W -->|"POST / PUT / DELETE, then refetch"| H
+  W -.->|"start / stop / restart"| A
+  A -->|"spawn / signal"| Proc
+  Proc --- H
+  Proc --- E
+```
+
 - **Polling.** `usePolledData(fetcher, deps)` runs the fetcher immediately and
   every `connectionStore.refreshMs` ms, keeping the last good value while
   refreshing (no flicker) and never calling `setState` after unmount. It has

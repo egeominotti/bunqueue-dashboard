@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title>API clients</title>
+  <path d="M8 7 L4 12 L8 17"/>
+  <path d="M16 7 L20 12 L16 17"/>
+  <line x1="13.5" y1="5.5" x2="10.5" y2="18.5"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ec4899" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title>Full control surface</title>
+  <line x1="3" y1="6" x2="21" y2="6"/>
+  <circle cx="16" cy="6" r="2.6" fill="#ec4899" stroke="none"/>
+  <line x1="3" y1="12" x2="21" y2="12"/>
+  <circle cx="8" cy="12" r="2.6" fill="#ec4899" stroke="none"/>
+  <line x1="3" y1="18" x2="21" y2="18"/>
+  <circle cx="17" cy="18" r="2.6" fill="#ec4899" stroke="none"/>
+</svg>
