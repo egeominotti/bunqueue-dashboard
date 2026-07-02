@@ -46,8 +46,14 @@ jobs:
       - name: Typecheck & build
         run: bun run build
 
-      - name: Test
-        run: bun test
+      - name: Test (with coverage)
+        run: bun test --coverage
+
+      # Report known-vulnerable dependencies. Non-blocking: a newly-published
+      # advisory shouldn't wedge every merge, but it surfaces in the log/summary.
+      - name: Dependency audit
+        run: bun audit
+        continue-on-error: true
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

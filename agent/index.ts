@@ -11,6 +11,7 @@
  * Env:  AGENT_PORT, AGENT_ALLOWED_ORIGINS, AGENT_TOKEN,
  *       BUNQUEUE_START_CMD, HTTP_PORT, TCP_PORT, BUNQUEUE_DATA_PATH
  */
+import { logger } from './logger';
 import { ProcessManager } from './manager';
 import { createFetchHandler, resolveAllowedOrigins } from './server';
 
@@ -34,12 +35,13 @@ let shuttingDown = false;
 const shutdown = (signal: string) => {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`${signal} received — stopping managed server…`);
+  logger.info({ signal }, 'signal received, stopping managed server');
   void mgr.stop().finally(() => process.exit(0));
 };
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
-console.log(`bunqueue dashboard control agent → http://127.0.0.1:${PORT}/control`);
-console.log(`  allowed origins: ${allowedOrigins.join(', ')}`);
-console.log(`  token auth: ${token ? 'on' : 'off'}`);
+logger.info(
+  { url: `http://127.0.0.1:${PORT}/control`, allowedOrigins, tokenAuth: Boolean(token) },
+  'bunqueue dashboard control agent ready'
+);

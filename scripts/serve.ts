@@ -9,15 +9,21 @@
  *   3. Runs the control agent (start/stop/restart bunqueue) on 127.0.0.1:6800
  *      with the same Origin-allowlist security as agent/index.ts.
  *
- * Env: PORT (dashboard, default 8080) · BUNQUEUE_URL · AGENT_PORT ·
- *      AGENT_ALLOWED_ORIGINS · AGENT_TOKEN · BUNQUEUE_START_CMD · HTTP_PORT ·
- *      TCP_PORT · BUNQUEUE_DATA_PATH
+ * Env: PORT (dashboard, default 8080) · BIND_ADDR (default 127.0.0.1) ·
+ *      BUNQUEUE_URL · AGENT_PORT · AGENT_ALLOWED_ORIGINS · AGENT_TOKEN ·
+ *      BUNQUEUE_START_CMD · HTTP_PORT · TCP_PORT · BUNQUEUE_DATA_PATH ·
+ *      LOG_LEVEL (pino level, default info)
  */
+import { logger } from '../agent/logger';
 import { ProcessManager } from '../agent/manager';
 import { createFetchHandler, resolveAllowedOrigins } from '../agent/server';
 import { ASSETS } from './embedded.gen';
 
 const PORT = Number(process.env.PORT) || 8080;
+// Bind loopback by default: the /api proxy forwards to bunqueue's admin API, so
+// listening on all interfaces would expose it to the whole network. Set
+// BIND_ADDR=0.0.0.0 for direct LAN access (e.g. no reverse proxy in front).
+const HOST = process.env.BIND_ADDR || '127.0.0.1';
 const API = (process.env.BUNQUEUE_URL || 'http://localhost:6790').replace(/\/$/, '');
 const AGENT_PORT = Number(process.env.AGENT_PORT) || 6800;
 
@@ -40,6 +46,7 @@ Bun.serve({ port: AGENT_PORT, hostname: '127.0.0.1', fetch: agentHandle });
 // Dashboard + /api proxy.
 Bun.serve({
   port: PORT,
+  hostname: HOST,
   async fetch(req) {
     const url = new URL(req.url);
 
@@ -75,7 +82,11 @@ Bun.serve({
   },
 });
 
-console.log('bunqueue dashboard (standalone)');
-console.log(`  dashboard  → http://localhost:${PORT}`);
-console.log(`  api proxy  → ${API}`);
-console.log(`  agent      → http://127.0.0.1:${AGENT_PORT}/control`);
+logger.info(
+  {
+    dashboard: `http://${HOST}:${PORT}`,
+    apiProxy: API,
+    agent: `http://127.0.0.1:${AGENT_PORT}/control`,
+  },
+  'bunqueue dashboard (standalone) ready'
+);

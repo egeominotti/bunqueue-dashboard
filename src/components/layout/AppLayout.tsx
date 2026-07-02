@@ -27,10 +27,22 @@ export function AppLayout() {
   return (
     <ErrorBoundary>
       <div className="flex h-screen overflow-hidden bg-bg text-fg">
+        {/* First tab stop: lets keyboard/screen-reader users jump past the ~20
+            nav links straight to the page content (WCAG 2.4.1 Bypass Blocks). */}
+        <a
+          href="#main"
+          className="sr-only rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-fg shadow-lg focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50"
+        >
+          Skip to content
+        </a>
         <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar onMenu={() => setNavOpen(true)} />
-          <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
+          <main
+            id="main"
+            tabIndex={-1}
+            className="flex-1 overflow-y-auto px-4 py-5 outline-none sm:px-6 lg:px-8 lg:py-6"
+          >
             <Suspense fallback={<div className="p-2 text-sm text-muted">Loading…</div>}>
               {/* Page-scoped boundary: a crashing page keeps the shell alive and
                   the error clears on ANY navigation (resetKey = location.key —

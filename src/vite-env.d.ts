@@ -9,6 +9,8 @@ interface ImportMetaEnv {
   readonly VITE_BUNQUEUE_URL?: string;
   /** Optional bearer token if the server has AUTH_TOKENS set. */
   readonly VITE_BUNQUEUE_TOKEN?: string;
+  /** Origin of the control agent (start/stop/restart). Defaults to http://localhost:6800. */
+  readonly VITE_BUNQUEUE_AGENT_URL?: string;
 }
 
 interface ImportMeta {

@@ -40,10 +40,12 @@ All configuration is via environment variables:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `8080` | Port the dashboard + `/api` proxy listen on |
+| `BIND_ADDR` | `127.0.0.1` | Interface the dashboard binds to; set `0.0.0.0` for direct LAN access (no reverse proxy) |
 | `BUNQUEUE_URL` | `http://localhost:6790` | The bunqueue server to proxy to |
 | `AGENT_PORT` | `6800` | Control agent port (always bound to `127.0.0.1`) |
 | `AGENT_TOKEN` | _unset_ | Bearer token required on state-changing agent requests |
 | `AGENT_ALLOWED_ORIGINS` | _the served origins_ | Extra browser origins allowed to drive the agent |
+| `LOG_LEVEL` | `info` | pino log level (`debug` / `info` / `warn` / `error`) |
 
 ::: tip Secure the agent
 The control agent can spawn processes. It only ever binds `127.0.0.1`, but if

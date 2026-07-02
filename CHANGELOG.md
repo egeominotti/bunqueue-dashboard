@@ -15,6 +15,36 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-07-03
+
+### Added
+- **Structured logging with pino + pino-pretty** for the control agent and the
+  standalone server (replaces plain `console.log`): pretty and colorized on a
+  terminal, newline-delimited JSON in production, level via `LOG_LEVEL`.
+- **Accessibility:** a "Skip to content" link (bypasses the nav for keyboard and
+  screen-reader users) and full `prefers-reduced-motion` support.
+- **Community-health files:** `SECURITY.md`, `CONTRIBUTING.md`,
+  `CODE_OF_CONDUCT.md`, and bug-report / feature-request issue templates.
+- **CI hardening:** a dependency audit (`bun audit`) and test coverage on every
+  run, plus a **CodeQL** SAST workflow.
+- **Supply-chain integrity:** release binaries now ship a `SHA256SUMS` file and a
+  signed **build-provenance attestation**; the Docker image gets an **SBOM** and
+  a signed provenance attestation (verifiable with `gh attestation verify`).
+- **Full truth-table test** for `jobActions.actionGates` (the job-action gating
+  source of truth).
+- **README hero screenshot** and a screenshot gallery.
+
+### Changed
+- **The standalone server binds `127.0.0.1` by default** (`BIND_ADDR=0.0.0.0` to
+  expose): the `/api` proxy to bunqueue's admin API is no longer reachable from
+  the whole network out of the box.
+- **Dark-theme accent darkened to `#db2777`** so white text on accent buttons and
+  badges meets WCAG AA contrast (was 3.5:1).
+
+### Fixed
+- Declared `VITE_BUNQUEUE_AGENT_URL` in the env type definitions (was read
+  untyped).
+
 ## [0.0.1] - 2026-07-02
 
 First tagged release. A web dashboard that fully drives a bunqueue server over
@@ -56,5 +86,6 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.2...HEAD
+[0.0.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.1...v0.0.2
 [0.0.1]: https://github.com/egeominotti/bunqueue-dashboard/releases/tag/v0.0.1

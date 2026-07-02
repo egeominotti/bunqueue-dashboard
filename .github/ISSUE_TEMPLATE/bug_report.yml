@@ -1,0 +1,62 @@
+name: 🐛 Bug report
+description: Something in the dashboard, agent, or docs is broken or behaves wrong.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please check
+        [known issues](https://egeominotti.github.io/bunqueue-dashboard/docs/known-issues)
+        first, then fill in the details below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, and what you expected instead.
+      placeholder: When I click Retry on a DLQ entry, …
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Control ▸ …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Dashboard (UI)
+        - Control agent
+        - Standalone server / binary
+        - Docker image
+        - Docs
+        - Other / not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Dashboard/binary version or image tag (e.g. v0.0.2, edge).
+    validations:
+      required: false
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, browser, Bun version, how you run it (bun start / binary / Docker).
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / console output
+      render: shell
+    validations:
+      required: false

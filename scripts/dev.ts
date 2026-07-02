@@ -11,6 +11,7 @@
  *   dashboard  → http://localhost:5273   (/api proxied to :6790)
  */
 import type { Subprocess } from 'bun';
+import { logger } from '../agent/logger';
 
 // Spawn the real processes directly — NOT through `bun run <script>`: that
 // interposes a wrapper process which does not forward SIGTERM to its child,
@@ -34,7 +35,7 @@ const children: Subprocess[] = [];
 async function shutdown(reason: string): Promise<void> {
   if (closing) return;
   closing = true;
-  console.log(`\n▸ ${reason} — stopping bunqueue dashboard…`);
+  logger.info({ reason }, 'stopping bunqueue dashboard');
 
   // Ask every child to exit (SIGTERM), then wait for them to actually go.
   for (const child of children) child.kill();
@@ -66,7 +67,10 @@ for (const { name, cmd } of services) {
   );
 }
 
-console.log('▸ bunqueue dashboard up — agent :6800 · dashboard :5273 (Ctrl-C to stop)');
+logger.info(
+  { agent: 'http://127.0.0.1:6800', dashboard: 'http://localhost:5273' },
+  'bunqueue dashboard up (Ctrl-C to stop)'
+);
 
 process.on('SIGINT', () => void shutdown('interrupted'));
 process.on('SIGTERM', () => void shutdown('terminated'));

@@ -14,7 +14,9 @@
   --text-muted: #a8a8b3;
   --text-faint: #868c98;
   --sidebar: #09090b;
-  --accent: #ec4899;
+  /* #db2777 (not the brighter #ec4899): white text on it clears WCAG AA (4.6:1)
+     for accent buttons/badges; #ec4899 measured only 3.5:1. */
+  --accent: #db2777;
   --accent-fg: #ffffff;
   /* Semantic status colors — 400 shades read well on the dark surfaces. */
   --success: #34d399;
@@ -122,5 +124,19 @@
   .tnum {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
+  }
+}
+
+/* Respect the OS "reduce motion" preference: neutralize animations and
+   transitions (spinners, the live "ping" dot, hover motion) for users who ask
+   for it, while keeping content fully visible. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

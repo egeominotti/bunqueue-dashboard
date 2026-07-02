@@ -21,6 +21,20 @@ control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and 
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![Biome](https://img.shields.io/badge/Biome-lint%20%2B%20format-60A5FA?logo=biome&logoColor=white)
 
+<br />
+
+<img src="docs/screenshots/overview.png" alt="bunqueue dashboard — real-time overview: health, throughput, per-queue status, and a live activity feed" width="900" />
+
+<sub>The Overview page. <a href="https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide">See every screen in the illustrated guide →</a></sub>
+
+<details>
+<summary><b>More screenshots</b></summary>
+<br />
+<img src="docs/screenshots/server.png" alt="Server Control — start/stop/restart the bunqueue process with live logs" width="900" />
+<img src="docs/screenshots/jobs.png" alt="Jobs Explorer — filter, inspect, and bulk-action jobs" width="900" />
+<img src="docs/screenshots/database.png" alt="Read-only SQLite inspector — browse tables and run queries" width="900" />
+</details>
+
 </div>
 
 ---
