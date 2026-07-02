@@ -13,6 +13,9 @@ hero:
     alt: The bunqueue dashboard, a live queue control panel
   actions:
     - theme: brand
+      text: Quick start
+      link: /quickstart
+    - theme: alt
       text: Illustrated user guide
       link: /user-guide
     - theme: alt
@@ -104,7 +107,7 @@ live page you can drive.
 
 <div class="home-section">
 
-## Up and running in one command
+## Quick start
 
 ```bash
 bun install
@@ -113,8 +116,10 @@ bun start          # control agent + dashboard together, Ctrl-C stops both
 
 `bun start` launches the local control agent (`http://127.0.0.1:6800`) and the
 dashboard (`http://localhost:5273`, `/api` proxied to `:6790`). Point it at a
-bunqueue server from **Server ▸ Control** (the agent starts it for you) or via
+bunqueue server from **Control ▸ Server** (the agent starts it for you) or via
 `VITE_BUNQUEUE_URL` / the in-app Settings page.
+
+**[Full quickstart guide →](/quickstart)**
 
 </div>
 

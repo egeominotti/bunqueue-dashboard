@@ -115,6 +115,7 @@ export default withMermaid({
     logo: '/logo.svg',
 
     nav: [
+      { text: 'Quickstart', link: '/quickstart' },
       { text: 'User guide', link: '/user-guide' },
       { text: 'Deploy', link: '/deploy/' },
       { text: 'Architecture', link: '/architecture' },
@@ -128,6 +129,7 @@ export default withMermaid({
       {
         text: 'Getting started',
         items: [
+          { text: 'Quickstart', link: '/quickstart' },
           { text: 'User guide (index)', link: '/user-guide' },
           { text: 'Development', link: '/development' },
         ],

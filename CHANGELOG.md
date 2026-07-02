@@ -15,6 +15,14 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-07-03
+
+### Added
+- **Quickstart.** A dedicated Quickstart page (prerequisites, install, one-command
+  run, connecting a server, and next steps), linked from the docs nav and the
+  "Getting started" sidebar group, plus a prominent "Quick start" hero action and
+  section on the docs home.
+
 ## [0.0.4] - 2026-07-03
 
 ### Added
@@ -111,7 +119,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.4...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.5...HEAD
+[0.0.5]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.2...v0.0.3
 [0.0.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.1...v0.0.2
