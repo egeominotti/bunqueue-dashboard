@@ -165,6 +165,14 @@ Tags: `latest` and `vX.Y.Z` on releases, `edge` on `main`.
 
 ## Deployment
 
+- **Standalone executables** — every [release](https://github.com/egeominotti/bunqueue-dashboard/releases)
+  ships self-contained binaries for **Linux (x64/arm64), macOS (x64/arm64) and Windows (x64)**:
+  download one file and run it — it serves the dashboard (assets embedded), proxies `/api` to your
+  bunqueue server (`BUNQUEUE_URL`, default `:6790`) and includes the control agent.
+  ```bash
+  ./bunqueue-dashboard-vX.Y.Z-darwin-arm64        # → http://localhost:8080
+  PORT=3000 BUNQUEUE_URL=https://queue.example.com ./bunqueue-dashboard-vX.Y.Z-linux-x64
+  ```
 - **GitHub Pages** — every push to `main` builds and publishes the static SPA
   (`.github/workflows/pages.yml`). The workflow **attempts** to auto-provision Pages; if the first
   run reports `Get Pages site failed`, enable it once under **Settings ▸ Pages ▸ Source → GitHub

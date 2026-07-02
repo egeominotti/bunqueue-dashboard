@@ -31,6 +31,7 @@
     "dev": "vite",
     "agent": "bun run agent/index.ts",
     "build": "tsc --noEmit && vite build",
+    "build:bin": "bun run build && bun run scripts/gen-embed.ts && bun build scripts/serve.ts --compile --minify --outfile bunqueue-dashboard",
     "preview": "vite preview",
     "test": "bun test",
     "check": "biome check .",

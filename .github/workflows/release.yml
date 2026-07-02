@@ -1,10 +1,11 @@
 name: Release
 
 # Publishes a GitHub Release on EVERY push to main (continuous delivery) and on
-# manual version tags (v*). For main pushes the tag is auto-computed as
-# v0.1.<commit count> — monotonic and deterministic — and created by the release
-# step itself. The full gate (lint · build · test) re-runs before publishing,
-# and the built dist/ is zipped and attached with auto-generated notes.
+# manual version tags (v*). For main pushes the next version is bumped from the
+# latest existing v* tag with decimal rollover — patch 0-9, then the minor
+# increments (…v0.1.9 → v0.2.0 → v0.2.1…) — and the tag is created by the
+# release step itself. The full gate (lint · build · test) re-runs before
+# publishing, and the built dist/ is zipped and attached with generated notes.
 #
 # Note: tags created here use GITHUB_TOKEN, which by design does NOT trigger
 # other workflows — so docker.yml's semver/latest images still come from
@@ -31,7 +32,7 @@ jobs:
   release:
     name: Build & publish release
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,11 +61,29 @@ jobs:
             TAG="${GITHUB_REF_NAME}"
             echo "publish=true" >> "$GITHUB_OUTPUT"
           else
-            TAG="v0.1.$(git rev-list --count HEAD)"
-            # Skip publishing if this auto-tag already exists (re-run, or a
-            # rebase/force-push lowering the commit count — fails safe as a
-            # no-publish, never a clobber). Gaps in the sequence under burst
-            # pushes are acceptable by design.
+            # Bump from the latest v* tag with decimal rollover: patch 0-9,
+            # then the minor increments (v0.1.9 → v0.2.0). Self-healing: it
+            # always continues from whatever the highest existing tag is.
+            LAST=$(git tag --list 'v*' --sort=-v:refname | head -1)
+            if [ -z "$LAST" ]; then
+              TAG="v0.1.0"
+            else
+              BASE="${LAST#v}"
+              MAJOR=$(echo "$BASE" | cut -d. -f1 | tr -cd '0-9')
+              MINOR=$(echo "$BASE" | cut -d. -f2 | tr -cd '0-9')
+              PATCH=$(echo "$BASE" | cut -d. -f3 | tr -cd '0-9')
+              : "${MAJOR:=0}" "${MINOR:=1}" "${PATCH:=0}"
+              # 10# forces base-10 so a zero-padded tag (v0.1.08) can't trip
+              # bash's octal parsing.
+              if [ "$((10#$PATCH))" -ge 9 ]; then
+                MINOR=$((10#$MINOR + 1)); PATCH=0
+              else
+                PATCH=$((10#$PATCH + 1))
+              fi
+              TAG="v${MAJOR}.${MINOR}.${PATCH}"
+            fi
+            # Skip if the computed tag somehow exists (re-run race) — fails
+            # safe as a no-publish, never a clobber.
             if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
               echo "publish=false" >> "$GITHUB_OUTPUT"
               echo "Tag ${TAG} already exists — skipping publish."
@@ -80,11 +99,29 @@ jobs:
           cp README.md dist/README.md
           (cd dist && zip -qr "../bunqueue-dashboard-${{ steps.ver.outputs.tag }}.zip" .)
 
+      # Standalone executables: one self-contained binary per platform that
+      # serves the embedded dashboard, proxies /api to the bunqueue server and
+      # runs the control agent (scripts/serve.ts). Cross-compiled with
+      # `bun build --compile --target=...`.
+      - name: Build standalone executables (all platforms)
+        if: steps.ver.outputs.publish == 'true'
+        run: |
+          bun run scripts/gen-embed.ts
+          for target in bun-linux-x64 bun-linux-arm64 bun-darwin-x64 bun-darwin-arm64 bun-windows-x64; do
+            suffix="${target#bun-}"
+            out="bunqueue-dashboard-${{ steps.ver.outputs.tag }}-${suffix}"
+            if [ "$target" = "bun-windows-x64" ]; then out="${out}.exe"; fi
+            bun build scripts/serve.ts --compile --minify --target="$target" --outfile "$out"
+          done
+          ls -la bunqueue-dashboard-*
+
       - name: Publish GitHub Release
         if: steps.ver.outputs.publish == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           generate_release_notes: true
-          files: bunqueue-dashboard-*.zip
+          files: |
+            bunqueue-dashboard-*.zip
+            bunqueue-dashboard-v*
           fail_on_unmatched_files: true

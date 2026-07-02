@@ -113,10 +113,13 @@ GitHub Actions under `.github/workflows/` (Bun pinned to the same version as loc
   Settings ▸ Pages ▸ Source → GitHub Actions once (GITHUB_TOKEN can't create the site itself).
 - **docker.yml** — on push to `main` + tags `v*`: builds the multi-arch image and pushes to
   `ghcr.io/egeominotti/bunqueue-dashboard` (`edge` on main, semver + `latest` on tags).
-- **release.yml** — on EVERY push to `main` (auto-tag `v0.1.<commit count>`) and on manual tags
-  `v*`: re-runs the gate, zips `dist/`, publishes a GitHub Release with generated notes. Auto-created
-  tags use `GITHUB_TOKEN`, so they don't re-trigger docker.yml — semver/`latest` images still come
-  from manually pushed `v*` tags (`edge` tracks every main push).
+- **release.yml** — on EVERY push to `main` and on manual tags `v*`: re-runs the gate, zips
+  `dist/`, cross-compiles **standalone executables for 5 platforms** (linux x64/arm64, macOS
+  x64/arm64, windows x64 — `scripts/serve.ts` via `bun build --compile`: embedded SPA + `/api`
+  proxy + control agent in one binary), and publishes a GitHub Release with generated notes.
+  Auto-versioning bumps from the latest `v*` tag with decimal rollover (patch 0–9, then minor:
+  `v0.1.9 → v0.2.0`). Auto-created tags use `GITHUB_TOKEN`, so they don't re-trigger docker.yml —
+  semver/`latest` images still come from manually pushed `v*` tags (`edge` tracks every main push).
 
 **The lockfile (`bun.lock`) is committed on purpose** — every workflow installs with
 `bun install --frozen-lockfile`. Do not re-add it to `.gitignore`.
