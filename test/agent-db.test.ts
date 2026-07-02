@@ -22,6 +22,10 @@ beforeAll(() => {
   for (let i = 0; i < 120; i++) {
     ins.run(`job-${String(i).padStart(3, '0')}`, i % 2 ? 'emails' : 'payments', null, i * 1.5);
   }
+  // Tables literally named after the sub-resource suffixes — the reader must
+  // resolve them by exact name, and the agent's segment routing must reach them.
+  db.run('CREATE TABLE "schema" (a INTEGER)');
+  db.run('INSERT INTO "schema" VALUES (1)');
   db.run("INSERT INTO jobs VALUES ('blob-row', 'emails', x'deadbeef', 0)");
   // A row with an over-2000-char text payload (in the queue column) for the
   // truncation + full-cell-fetch tests.
@@ -155,6 +159,16 @@ describe('agent db inspector', () => {
     expect(() => dbRows(PATH, 'jobs', 5, 0, 'score; DROP TABLE jobs')).toThrow('No such column');
   });
 
+  test('resolves a table literally named "schema" by exact name', () => {
+    // The reader keys on the exact table name (no suffix-stripping), so a table
+    // named "schema" is browsable and its own schema is reachable.
+    const rows = dbRows(PATH, 'schema', 10, 0);
+    expect(rows.total).toBe(1);
+    expect(rows.columns).toEqual(['a']);
+    const s = dbSchema(PATH, 'schema');
+    expect(s.columns.map((c) => c.name)).toEqual(['a']);
+  });
+
   test('reports schema: columns, PK, indexes, DDL', () => {
     const s = dbSchema(PATH, 'jobs');
     expect(s.columns.map((c) => c.name)).toEqual(['id', 'queue', 'payload', 'score']);
@@ -166,7 +180,7 @@ describe('agent db inspector', () => {
   test('reports store metadata', () => {
     const i = dbInfo(PATH);
     expect(i.sqliteVersion).toMatch(/^\d+\.\d+/);
-    expect(i.tables).toBe(2);
+    expect(i.tables).toBe(3);
     expect(i.pageSize).toBeGreaterThan(0);
     expect(i.fileSize).toBeGreaterThan(0);
   });

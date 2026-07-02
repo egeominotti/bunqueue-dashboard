@@ -157,19 +157,28 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
       if (pathname === '/db/tables' && method === 'GET') {
         return json({ ok: true, tables: dbTables(mgr.getConfig().dataPath) }, 200, origin);
       }
-      if (pathname.startsWith('/db/tables/') && pathname.endsWith('/schema') && method === 'GET') {
-        const table = decodeURIComponent(pathname.slice('/db/tables/'.length, -'/schema'.length));
-        return json({ ok: true, ...dbSchema(mgr.getConfig().dataPath, table) }, 200, origin);
-      }
-      if (pathname.startsWith('/db/tables/') && pathname.endsWith('/cell') && method === 'GET') {
-        const table = decodeURIComponent(pathname.slice('/db/tables/'.length, -'/cell'.length));
-        const sp = new URL(req.url).searchParams;
-        const rowid = Number(sp.get('rowid'));
-        const column = sp.get('column') ?? '';
-        return json({ ok: true, ...dbCell(mgr.getConfig().dataPath, table, rowid, column) }, 200, origin);
-      }
+      // Segment-based routing (the client percent-encodes the table name, so it
+      // never contains a literal '/'): a single trailing segment is the rows
+      // route; `<table>/schema` and `<table>/cell` are sub-resources. This is
+      // unambiguous even for a table literally named "schema" or "cell".
       if (pathname.startsWith('/db/tables/') && method === 'GET') {
-        const table = decodeURIComponent(pathname.slice('/db/tables/'.length));
+        const segs = pathname.slice('/db/tables/'.length).split('/');
+        const table = decodeURIComponent(segs[0] ?? '');
+        const sub = segs[1];
+        if (segs.length === 2 && sub === 'schema') {
+          return json({ ok: true, ...dbSchema(mgr.getConfig().dataPath, table) }, 200, origin);
+        }
+        if (segs.length === 2 && sub === 'cell') {
+          const sp = new URL(req.url).searchParams;
+          const rowid = Number(sp.get('rowid'));
+          const column = sp.get('column') ?? '';
+          return json(
+            { ok: true, ...dbCell(mgr.getConfig().dataPath, table, rowid, column) },
+            200,
+            origin
+          );
+        }
+        if (segs.length !== 1) return json({ ok: false, error: 'Not found' }, 404, origin);
         const sp = new URL(req.url).searchParams;
         const limit = Number(sp.get('limit')) || 50;
         const offset = Number(sp.get('offset')) || 0;

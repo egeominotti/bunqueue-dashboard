@@ -1,4 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { Database } from 'bun:sqlite';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { rmSync } from 'node:fs';
 import { ProcessManager } from '../agent/manager';
 import {
   corsHeaders,
@@ -118,6 +120,75 @@ describe('agent CSRF-to-RCE protection', () => {
       })
     );
     expect(bad.headers.get('Access-Control-Allow-Origin')).toBeNull();
+  });
+});
+
+describe('agent /db segment routing', () => {
+  // Guards the ROUTER layer (createFetchHandler) that resolves
+  // /db/tables/:name vs /db/tables/:name/{schema,cell} — reverting to the old
+  // `pathname.endsWith('/schema')` logic must fail these.
+  const PATH = `/tmp/bq-agent-route-test-${process.pid}.db`;
+  const ORIGIN = 'http://localhost:5273';
+  let handle: (req: Request) => Promise<Response>;
+
+  const get = (path: string) =>
+    handle(new Request(`http://127.0.0.1:6800${path}`, { headers: { Origin: ORIGIN } }));
+
+  beforeAll(() => {
+    const db = new Database(PATH);
+    db.run('CREATE TABLE jobs (id TEXT PRIMARY KEY, queue TEXT)');
+    db.run("INSERT INTO jobs VALUES ('j1', 'emails')");
+    // A table literally named after a sub-resource suffix — the routing edge.
+    db.run('CREATE TABLE "schema" (a INTEGER)');
+    db.run('INSERT INTO "schema" VALUES (1)');
+    db.close();
+    const m = new ProcessManager();
+    m.setConfig({ dataPath: PATH });
+    handle = createFetchHandler(m, { allowedOrigins: ALLOWED });
+  });
+
+  afterAll(() => {
+    for (const s of ['', '-wal', '-shm']) rmSync(`${PATH}${s}`, { force: true });
+  });
+
+  test('single segment → rows route', async () => {
+    const res = await get('/db/tables/jobs?limit=10');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { columns: string[]; total: number };
+    expect(body.columns).toEqual(['id', 'queue']);
+    expect(body.total).toBe(1);
+  });
+
+  test('<table>/schema → schema route', async () => {
+    const res = await get('/db/tables/jobs/schema');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { columns: { name: string }[] };
+    expect(body.columns.map((c) => c.name)).toEqual(['id', 'queue']);
+  });
+
+  test('<table>/cell → cell route (full value by rowid)', async () => {
+    const rid = ((await (await get('/db/tables/jobs?limit=1')).json()) as { rowids: number[] })
+      .rowids[0];
+    const res = await get(`/db/tables/jobs/cell?rowid=${rid}&column=id`);
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { value: unknown }).value).toBe('j1');
+  });
+
+  test('table literally named "schema": rows AND its own schema both resolve', async () => {
+    const rows = await get('/db/tables/schema'); // → rows of table 'schema', NOT a schema request
+    expect(rows.status).toBe(200);
+    expect(((await rows.json()) as { total: number }).total).toBe(1);
+
+    const sch = await get('/db/tables/schema/schema'); // → schema of table 'schema'
+    expect(sch.status).toBe(200);
+    expect(
+      ((await sch.json()) as { columns: { name: string }[] }).columns.map((c) => c.name)
+    ).toEqual(['a']);
+  });
+
+  test('unknown sub-resource and over-deep paths → 404', async () => {
+    expect((await get('/db/tables/jobs/nope')).status).toBe(404);
+    expect((await get('/db/tables/jobs/schema/extra')).status).toBe(404);
   });
 });
 
