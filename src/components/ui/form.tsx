@@ -54,10 +54,12 @@ export function Toggle({
   checked,
   onChange,
   label,
+  disabled,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -65,10 +67,12 @@ export function Toggle({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn(
         'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-        checked ? 'bg-accent' : 'bg-surface-2 border border-line'
+        checked ? 'bg-accent' : 'bg-surface-2 border border-line',
+        disabled && 'opacity-40'
       )}
     >
       <span
@@ -86,10 +90,12 @@ export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
+  disabled,
 }: {
   options: readonly T[];
   value: T;
   onChange: (v: T) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface p-1">
@@ -97,10 +103,12 @@ export function SegmentedControl<T extends string>({
         <button
           key={opt}
           type="button"
+          disabled={disabled}
           onClick={() => onChange(opt)}
           className={cn(
             'rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors',
-            value === opt ? 'bg-surface-2 text-fg' : 'text-muted hover:text-fg'
+            value === opt ? 'bg-surface-2 text-fg' : 'text-muted hover:text-fg',
+            disabled && 'opacity-40'
           )}
         >
           {opt}

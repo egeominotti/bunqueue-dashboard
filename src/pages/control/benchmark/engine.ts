@@ -4,7 +4,7 @@ import type { AddJobBody } from '@/lib/bq';
 // testable and keeps the engine/UI focused.
 
 export type RunMode = 'count' | 'duration';
-export type Phase = 'idle' | 'running' | 'draining' | 'done' | 'stopped' | 'error';
+export type Phase = 'idle' | 'running' | 'draining' | 'stopping' | 'done' | 'stopped' | 'error';
 
 export interface RunConfig {
   queue: string;
@@ -142,6 +142,17 @@ export const makeJobs = (
 
 export const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Sleep up to `ms`, waking every ≤100ms to re-check `keepWaiting` — so a long
+ * simulated processing delay can be cut short the moment the user hits Stop.
+ */
+export const sleepWhile = async (ms: number, keepWaiting: () => boolean): Promise<void> => {
+  const end = performance.now() + ms;
+  while (keepWaiting() && performance.now() < end) {
+    await sleep(Math.min(100, Math.max(0, end - performance.now())));
+  }
+};
 
 export const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 

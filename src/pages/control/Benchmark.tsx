@@ -1,4 +1,4 @@
-import { type ChangeEvent, useState } from 'react';
+import { type ChangeEvent, useEffect, useState } from 'react';
 import { AreaChart } from '@/components/ui/AreaChart';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -26,29 +26,90 @@ import { useBenchmark } from './benchmark/useBenchmark';
 
 const MODES: readonly RunMode[] = ['count', 'duration'] as const;
 
+// Numeric fields are string-backed in the form (so a field can be cleared while
+// typing — a controlled type=number with Number() coercion can never be emptied)
+// and converted to a RunConfig once, at the Run boundary. run() clamps.
+type NumKey =
+  | 'total'
+  | 'durationS'
+  | 'batch'
+  | 'producers'
+  | 'payload'
+  | 'workers'
+  | 'workerBatch'
+  | 'processMs';
+type Draft = Omit<RunConfig, NumKey> & Record<NumKey, string>;
+
+const NUM_KEYS: readonly NumKey[] = [
+  'total',
+  'durationS',
+  'batch',
+  'producers',
+  'payload',
+  'workers',
+  'workerBatch',
+  'processMs',
+] as const;
+
+const toDraft = (c: RunConfig): Draft => ({
+  ...c,
+  total: String(c.total),
+  durationS: String(c.durationS),
+  batch: String(c.batch),
+  producers: String(c.producers),
+  payload: String(c.payload),
+  workers: String(c.workers),
+  workerBatch: String(c.workerBatch),
+  processMs: String(c.processMs),
+});
+
+const toConfig = (d: Draft): RunConfig => ({
+  ...d,
+  total: Number(d.total),
+  durationS: Number(d.durationS),
+  batch: Number(d.batch),
+  producers: Number(d.producers),
+  payload: Number(d.payload),
+  workers: Number(d.workers),
+  workerBatch: Number(d.workerBatch),
+  processMs: Number(d.processMs),
+});
+
 export function Benchmark() {
-  const [cfg, setCfg] = useState<RunConfig>(DEFAULT_CONFIG);
+  const [draft, setDraft] = useState<Draft>(() => toDraft(DEFAULT_CONFIG));
   const bench = useBenchmark();
   const { phase, live, summary, history } = bench;
-  const active = phase === 'running' || phase === 'draining';
+  const active = phase === 'running' || phase === 'draining' || phase === 'stopping';
 
-  const set = <K extends keyof RunConfig>(k: K, v: RunConfig[K]) =>
-    setCfg((c) => ({ ...c, [k]: v }));
-  const num =
-    <K extends keyof RunConfig>(k: K) =>
-    (e: ChangeEvent<HTMLInputElement>) =>
-      set(k, Number(e.target.value) as RunConfig[K]);
+  const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  const num = (k: NumKey) => (e: ChangeEvent<HTMLInputElement>) => set(k, e.target.value);
 
-  // Live server-side queue depth — proof the load lands and drains.
-  const { data: counts } = usePolledData(
-    () => bq.counts(cfg.queue.trim() || 'benchmark').catch(() => null),
-    [cfg.queue],
-    { intervalMs: 1000 }
-  );
+  const applyPreset = (p: Partial<RunConfig>) =>
+    setDraft((prev) => {
+      const next: Draft = { ...prev };
+      for (const [k, v] of Object.entries(p)) {
+        (next as Record<string, unknown>)[k] = NUM_KEYS.includes(k as NumKey) ? String(v) : v;
+      }
+      return next;
+    });
+
+  // Debounce the queue name so typing doesn't fire a counts fetch per keystroke
+  // (and the card header always matches the queue whose counts are shown).
+  const [pollQueue, setPollQueue] = useState(DEFAULT_CONFIG.queue);
+  useEffect(() => {
+    const t = setTimeout(() => setPollQueue(draft.queue.trim() || DEFAULT_CONFIG.queue), 400);
+    return () => clearTimeout(t);
+  }, [draft.queue]);
+
+  // Live server-side queue depth — proof the load lands and drains. Errors flow
+  // to usePolledData, which keeps the last good counts (card stays mounted).
+  const { data: counts } = usePolledData(() => bq.counts(pollQueue), [pollQueue], {
+    intervalMs: 1000,
+  });
   const c = counts?.counts ?? null;
 
   const cleanup = async () => {
-    const q = cfg.queue.trim();
+    const q = draft.queue.trim();
     if (!q || !window.confirm(`Remove benchmark jobs from "${q}"?`)) return;
     for (const state of ['waiting', 'completed', 'failed', 'delayed']) {
       try {
@@ -57,18 +118,64 @@ export function Benchmark() {
         /* state not cleanable */
       }
     }
+    // Pulled-but-unacked jobs can't be cleaned; the server requeues them after
+    // its stall timeout — tell the user instead of silently under-cleaning.
+    const after = await bq.counts(q).catch(() => null);
+    const activeLeft = after?.counts?.active ?? 0;
+    if (activeLeft > 0) {
+      window.alert(
+        `${activeLeft} job(s) are still active (pulled but not acked) and cannot be cleaned. ` +
+          'The server requeues them as waiting after the stall timeout — run Clean queue again then.'
+      );
+    }
   };
 
-  const total = clampInt(cfg.total, 1, LIMITS.total);
-  const producePct = cfg.mode === 'count' ? Math.min(100, (live.pushed / total) * 100) : 0;
-  const drainPct = cfg.mode === 'count' ? Math.min(100, (live.completed / total) * 100) : 0;
+  // Progress and result labels derive from the config the RUN was started with,
+  // not the still-editable form (editing fields must not rewrite a shown result).
+  const shown = bench.runCfg ?? toConfig(draft);
+  const shownTotal = clampInt(shown.total, 1, LIMITS.total);
+  const shownWorkers = clampInt(shown.workers, 0, LIMITS.workers);
+  const producePct =
+    shown.mode === 'count' && (active || summary)
+      ? Math.min(100, (live.pushed / shownTotal) * 100)
+      : 0;
+  const drainPct =
+    shown.mode === 'count' && (active || summary)
+      ? Math.min(100, (live.completed / shownTotal) * 100)
+      : 0;
   const durationPct =
-    cfg.mode === 'duration'
+    shown.mode === 'duration'
       ? Math.min(
           100,
-          (live.elapsedMs / (clampInt(cfg.durationS, 1, LIMITS.durationS) * 1000)) * 100
+          (live.elapsedMs / (clampInt(shown.durationS, 1, LIMITS.durationS) * 1000)) * 100
         )
       : 0;
+
+  const heading =
+    phase === 'running'
+      ? shown.mode === 'duration'
+        ? 'Running…'
+        : 'Producing…'
+      : phase === 'draining'
+        ? 'Draining…'
+        : phase === 'stopping'
+          ? 'Stopping…'
+          : phase === 'error'
+            ? 'Error'
+            : summary
+              ? 'Result'
+              : 'Ready';
+
+  const etaText =
+    (phase === 'running' || phase === 'draining') && live.etaMs != null
+      ? live.etaMs > 0
+        ? `ETA ${fmtMs(live.etaMs)}`
+        : 'finishing…'
+      : phase === 'stopped'
+        ? 'stopped early'
+        : phase === 'done'
+          ? 'complete'
+          : '';
 
   return (
     <div>
@@ -76,12 +183,16 @@ export function Benchmark() {
         title="Benchmark"
         description="Drive real load against the server — producers bulk-enqueue jobs while simulated workers pull, process and ack them. Throughput is measured client-side; the queue genuinely fills and drains."
         actions={
-          active ? (
+          phase === 'stopping' ? (
+            <Button variant="warning" size="sm" disabled>
+              <IconPause className="size-3.5" /> Stopping…
+            </Button>
+          ) : active ? (
             <Button variant="warning" size="sm" onClick={bench.stop}>
               <IconPause className="size-3.5" /> Stop
             </Button>
           ) : (
-            <Button variant="success" size="sm" onClick={() => bench.run(cfg)}>
+            <Button variant="success" size="sm" onClick={() => bench.run(toConfig(draft))}>
               <IconPlay className="size-3.5" /> Run benchmark
             </Button>
           )
@@ -101,7 +212,7 @@ export function Benchmark() {
             key={name}
             type="button"
             disabled={active}
-            onClick={() => setCfg((prev) => ({ ...prev, ...PRESETS[name] }))}
+            onClick={() => applyPreset(PRESETS[name])}
             className="rounded-md border border-line bg-surface-2 px-2.5 py-1 text-xs text-muted transition-colors hover:border-line-strong hover:text-fg disabled:opacity-40"
           >
             {name}
@@ -115,7 +226,7 @@ export function Benchmark() {
           <div className="flex flex-col gap-3">
             <Field label="Queue" hint="Jobs are enqueued here (created on first push).">
               <Input
-                value={cfg.queue}
+                value={draft.queue}
                 disabled={active}
                 onChange={(e) => set('queue', e.target.value)}
               />
@@ -124,23 +235,37 @@ export function Benchmark() {
             <Field
               label="Mode"
               hint={
-                cfg.mode === 'count'
+                draft.mode === 'count'
                   ? 'Push a fixed number of jobs.'
                   : 'Run producers + workers for a fixed time.'
               }
             >
-              <SegmentedControl options={MODES} value={cfg.mode} onChange={(m) => set('mode', m)} />
+              <SegmentedControl
+                options={MODES}
+                value={draft.mode}
+                onChange={(m) => set('mode', m)}
+                disabled={active}
+              />
             </Field>
 
-            {cfg.mode === 'count' ? (
+            {draft.mode === 'count' ? (
               <Field label="Total jobs" hint={`max ${formatNumber(LIMITS.total)}`}>
-                <Input type="number" value={cfg.total} disabled={active} onChange={num('total')} />
+                <Input
+                  type="number"
+                  min={1}
+                  max={LIMITS.total}
+                  value={draft.total}
+                  disabled={active}
+                  onChange={num('total')}
+                />
               </Field>
             ) : (
               <Field label="Duration (s)" hint={`max ${LIMITS.durationS}s`}>
                 <Input
                   type="number"
-                  value={cfg.durationS}
+                  min={1}
+                  max={LIMITS.durationS}
+                  value={draft.durationS}
                   disabled={active}
                   onChange={num('durationS')}
                 />
@@ -154,18 +279,29 @@ export function Benchmark() {
               <Field label="Producers" hint={`parallel, max ${LIMITS.producers}`}>
                 <Input
                   type="number"
-                  value={cfg.producers}
+                  min={draft.mode === 'duration' ? 0 : 1}
+                  max={LIMITS.producers}
+                  value={draft.producers}
                   disabled={active}
                   onChange={num('producers')}
                 />
               </Field>
               <Field label="Push batch" hint={`jobs/req, max ${LIMITS.batch}`}>
-                <Input type="number" value={cfg.batch} disabled={active} onChange={num('batch')} />
+                <Input
+                  type="number"
+                  min={1}
+                  max={LIMITS.batch}
+                  value={draft.batch}
+                  disabled={active}
+                  onChange={num('batch')}
+                />
               </Field>
               <Field label="Payload" hint={`bytes/job, max ${formatNumber(LIMITS.payload)}`}>
                 <Input
                   type="number"
-                  value={cfg.payload}
+                  min={0}
+                  max={LIMITS.payload}
+                  value={draft.payload}
                   disabled={active}
                   onChange={num('payload')}
                 />
@@ -179,7 +315,9 @@ export function Benchmark() {
               <Field label="Workers" hint={`0 = produce only, max ${LIMITS.workers}`}>
                 <Input
                   type="number"
-                  value={cfg.workers}
+                  min={0}
+                  max={LIMITS.workers}
+                  value={draft.workers}
                   disabled={active}
                   onChange={num('workers')}
                 />
@@ -187,7 +325,9 @@ export function Benchmark() {
               <Field label="Pull batch" hint={`jobs/pull, max ${LIMITS.workerBatch}`}>
                 <Input
                   type="number"
-                  value={cfg.workerBatch}
+                  min={1}
+                  max={LIMITS.workerBatch}
+                  value={draft.workerBatch}
                   disabled={active}
                   onChange={num('workerBatch')}
                 />
@@ -195,23 +335,33 @@ export function Benchmark() {
               <Field label="Process (ms)" hint="simulated work per pull">
                 <Input
                   type="number"
-                  value={cfg.processMs}
+                  min={0}
+                  max={LIMITS.processMs}
+                  value={draft.processMs}
                   disabled={active}
                   onChange={num('processMs')}
                 />
               </Field>
             </div>
 
-            <Toggle
-              checked={cfg.durable}
-              onChange={(v) => set('durable', v)}
-              label="Durable (fsync each job)"
-            />
-            <Toggle
-              checked={cfg.removeOnComplete}
-              onChange={(v) => set('removeOnComplete', v)}
-              label="Remove on complete"
-            />
+            <div className="flex items-center gap-2">
+              <Toggle
+                checked={draft.durable}
+                onChange={(v) => set('durable', v)}
+                label="Durable (fsync each job)"
+                disabled={active}
+              />
+              <span className="text-sm text-muted">Durable (fsync each job)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Toggle
+                checked={draft.removeOnComplete}
+                onChange={(v) => set('removeOnComplete', v)}
+                label="Remove on complete"
+                disabled={active}
+              />
+              <span className="text-sm text-muted">Remove on complete</span>
+            </div>
 
             <div className="pt-1">
               <Button variant="ghost" size="sm" disabled={active} onClick={cleanup}>
@@ -224,28 +374,16 @@ export function Benchmark() {
         <div className="flex flex-col gap-6 lg:col-span-2">
           <Card>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-fg">
-                {phase === 'running'
-                  ? 'Producing…'
-                  : phase === 'draining'
-                    ? 'Draining…'
-                    : summary
-                      ? 'Result'
-                      : 'Ready'}
-              </h3>
-              <span className="text-xs text-faint">
-                {live.etaMs != null && active ? `ETA ${fmtMs(live.etaMs)}` : ''}
-                {phase === 'stopped' ? 'stopped early' : ''}
-                {phase === 'done' ? 'complete' : ''}
-              </span>
+              <h3 className="text-base font-semibold text-fg">{heading}</h3>
+              <span className="text-xs text-faint">{etaText}</span>
             </div>
 
             <ProgressBar
-              label="Produced"
-              pct={cfg.mode === 'duration' ? durationPct : producePct}
+              label={shown.mode === 'duration' ? 'Elapsed' : 'Produced'}
+              pct={shown.mode === 'duration' ? durationPct : producePct}
               tone="accent"
             />
-            {cfg.workers > 0 && cfg.mode === 'count' && (
+            {shownWorkers > 0 && shown.mode === 'count' && (
               <ProgressBar label="Completed" pct={drainPct} tone="emerald" />
             )}
 
@@ -257,21 +395,12 @@ export function Benchmark() {
                 tone="green"
                 compact
               />
-              <StatCard
-                label="Push/sec"
-                value={`${fmtRate(summary?.pushPerSec ?? live.pushPerSec)}`}
-                compact
-              />
-              <StatCard
-                label="Done/sec"
-                value={`${fmtRate(summary?.donePerSec ?? live.donePerSec)}`}
-                tone="green"
-                compact
-              />
+              <StatCard label="Push/sec" value={fmtRate(live.pushPerSec)} compact />
+              <StatCard label="Done/sec" value={fmtRate(live.donePerSec)} tone="green" compact />
               <StatCard label="Elapsed" value={fmtMs(live.elapsedMs)} compact />
               <StatCard
                 label="Active workers"
-                value={`${live.activeWorkers}/${cfg.workers}`}
+                value={`${live.activeWorkers}/${shownWorkers}`}
                 tone="blue"
                 compact
               />
@@ -339,7 +468,7 @@ export function Benchmark() {
 
       {c && (
         <Card className="mt-6">
-          <CardHeader title={`Server queue: ${cfg.queue.trim()}`} />
+          <CardHeader title={`Server queue: ${pollQueue}`} />
           <p className="-mt-3 mb-4 text-xs text-faint">Live counts from the server (poll 1s).</p>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
             <StatCard label="Waiting" value={formatNumber(c.waiting ?? 0)} tone="amber" compact />

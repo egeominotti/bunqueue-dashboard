@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { CopyButton } from '@/components/ui/CopyButton';
+import { formatNumber } from '@/lib/format';
 import { fmtMs, fmtRate, type RunRecord } from './engine';
 
 /** Recent runs, newest first, with copy + JSON export for comparison. */
@@ -52,9 +53,9 @@ export function RunHistory({ history, onClear }: { history: RunRecord[]; onClear
                 <td className="px-5 py-2 capitalize text-muted">{r.mode}</td>
                 <td className="px-5 py-2 text-right tnum text-muted">{r.producers}</td>
                 <td className="px-5 py-2 text-right tnum text-muted">{r.workers}</td>
-                <td className="px-5 py-2 text-right tnum text-fg">{fmtRate(r.pushed)}</td>
+                <td className="px-5 py-2 text-right tnum text-fg">{formatNumber(r.pushed)}</td>
                 <td className="px-5 py-2 text-right tnum text-emerald-400">
-                  {fmtRate(r.completed)}
+                  {formatNumber(r.completed)}
                 </td>
                 <td className="px-5 py-2 text-right tnum text-accent">{fmtRate(r.pushPerSec)}/s</td>
                 <td className="px-5 py-2 text-right tnum text-emerald-400">
