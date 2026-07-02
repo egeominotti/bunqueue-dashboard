@@ -6,9 +6,11 @@ name: Deploy to GitHub Pages
 # path and copy index.html -> 404.html to give React Router a client-side
 # fallback for deep links.
 #
-# NOTE: the deployed build is a static shell. Point it at a reachable bunqueue
-# server via the in-app Settings page (or a build-time VITE_BUNQUEUE_URL); the
-# dev `/api` proxy and the local control agent are not available on Pages.
+# The deployed app runs in DEMO mode (VITE_DEMO=1): a bundled fetch/SSE shim
+# answers every bunqueue API call from a fixture captured from a real server, so
+# the public Pages URL is a fully explorable live demo with no backend. To drive
+# a real server instead, run your own build (Docker / the standalone binary)
+# without VITE_DEMO and point it at the server via Settings / VITE_BUNQUEUE_URL.
 #
 # The illustrated documentation site is built with VitePress into dist/docs and
 # published alongside the app at /<repo>/docs/.
@@ -71,9 +73,10 @@ jobs:
           # enable it once under Settings ▸ Pages ▸ Source → GitHub Actions.
           enablement: true
 
-      - name: Build
+      - name: Build (demo mode)
         env:
           VITE_BASE: ${{ steps.pages.outputs.base_path }}/
+          VITE_DEMO: '1'
         run: bun run build
 
       # Build the VitePress documentation site and place it under dist/docs so

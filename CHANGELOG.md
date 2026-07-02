@@ -15,6 +15,23 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-07-03
+
+### Added
+- **Demo mode.** A bundled fetch/SSE shim answers every bunqueue API call from a
+  fixture captured from a real bunqueue 2.8.26 server, so the whole dashboard is
+  explorable with no backend: queues, jobs, DLQ, cron, webhooks, and a live
+  activity feed that actually animates. A "Live demo" badge marks it. The demo
+  code and its fixture load lazily, so they add nothing to the normal bundle.
+- **Live demo hosting.** The GitHub Pages app now ships in demo mode, so
+  `https://egeominotti.github.io/bunqueue-dashboard/` is a fully clickable live
+  demo. Linked from the README, the docs home, and the Quickstart.
+
+### Changed
+- The GitHub Pages build serves the root app in demo mode (`VITE_DEMO=1`) instead
+  of an empty "point it at your server" shell. To drive a real server, build your
+  own (Docker / the standalone binary) without `VITE_DEMO`.
+
 ## [0.0.6] - 2026-07-03
 
 ### Added
@@ -129,7 +146,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.6...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.7...HEAD
+[0.0.7]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.3...v0.0.4

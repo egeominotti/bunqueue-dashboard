@@ -6,7 +6,9 @@ description: Get the bunqueue dashboard running in one command, then point it at
 # Quickstart
 
 Get the dashboard running in under a minute, then connect it to a bunqueue
-server.
+server. Prefer to look before you install? Open the
+[live demo](https://egeominotti.github.io/bunqueue-dashboard/), the full
+dashboard running on sample data with no server needed.
 
 ## Prerequisites
 

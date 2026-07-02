@@ -16,6 +16,9 @@ hero:
       text: Quick start
       link: /quickstart
     - theme: alt
+      text: Live demo
+      link: https://egeominotti.github.io/bunqueue-dashboard/
+    - theme: alt
       text: Illustrated user guide
       link: /user-guide
     - theme: alt

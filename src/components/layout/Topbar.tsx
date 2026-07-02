@@ -1,5 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 import { IconMenu } from '@/components/ui/icons';
+import { isDemo } from '@/lib/demo/isDemo';
+
+const DEMO = isDemo();
 
 const TITLES: Record<string, string> = {
   '/': 'Overview',
@@ -66,6 +69,15 @@ export function Topbar({ onMenu }: { onMenu?: () => void }) {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {DEMO && (
+          <span
+            title="Showing canned sample data. No real bunqueue server is connected."
+            className="hidden items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent sm:inline-flex"
+          >
+            <span className="size-1.5 rounded-full bg-accent" />
+            Live demo
+          </span>
+        )}
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event('command-palette:open'))}

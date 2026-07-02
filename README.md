@@ -8,11 +8,16 @@
 control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and the server
 **process lifecycle** (start / stop / restart) from one place.
 
+### [▶ Try the live demo](https://egeominotti.github.io/bunqueue-dashboard/)
+
+The full dashboard running on sample data, no server needed.
+
 [![CI](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml)
 [![Deploy to GitHub Pages](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml)
 [![Docker](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Documentation](https://img.shields.io/badge/docs-online-db2777)](https://egeominotti.github.io/bunqueue-dashboard/docs/)
+[![Live demo](https://img.shields.io/badge/live%20demo-online-22c55e)](https://egeominotti.github.io/bunqueue-dashboard/)
 ![Status: Beta](https://img.shields.io/badge/status-beta-f59e0b)
 
 ![React 19](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
@@ -23,16 +28,16 @@ control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and 
 
 <br />
 
-<img src="docs/screenshots/overview.png" alt="bunqueue dashboard — real-time overview: health, throughput, per-queue status, and a live activity feed" width="900" />
+<img src="docs/screenshots/overview.png" alt="bunqueue dashboard, real-time overview: health, throughput, per-queue status, and a live activity feed" width="900" />
 
 <sub>The Overview page. <a href="https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide">See every screen in the illustrated guide →</a></sub>
 
 <details>
 <summary><b>More screenshots</b></summary>
 <br />
-<img src="docs/screenshots/server.png" alt="Server Control — start/stop/restart the bunqueue process with live logs" width="900" />
-<img src="docs/screenshots/jobs.png" alt="Jobs Explorer — filter, inspect, and bulk-action jobs" width="900" />
-<img src="docs/screenshots/database.png" alt="Read-only SQLite inspector — browse tables and run queries" width="900" />
+<img src="docs/screenshots/server.png" alt="Server Control, start/stop/restart the bunqueue process with live logs" width="900" />
+<img src="docs/screenshots/jobs.png" alt="Jobs Explorer, filter, inspect, and bulk-action jobs" width="900" />
+<img src="docs/screenshots/database.png" alt="Read-only SQLite inspector, browse tables and run queries" width="900" />
 </details>
 
 </div>
