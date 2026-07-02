@@ -4,6 +4,9 @@ Internal reference for the bunqueue dashboard. Everything here was verified
 against the current source (not written from memory or assumption) — where
 the code has a rough edge, it's documented rather than glossed over.
 
+- [user-guide.md](user-guide.md) — **illustrated tour of every page**: a real
+  screenshot per route plus what it shows, the actions it offers, and its
+  gotchas. Start here if you want to *use* the dashboard rather than hack on it.
 - [architecture.md](architecture.md) — components, data flow, the two API
   clients, the control agent, theming.
 - [pages.md](pages.md) — every route, exactly which component it renders,

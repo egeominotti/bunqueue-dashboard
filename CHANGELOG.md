@@ -13,6 +13,14 @@ matching version section (or `[Unreleased]`) as the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-07-02
+
+### Added
+- **Illustrated user guide** (`docs/user-guide.md`): every routed page documented
+  with a real screenshot (`docs/screenshots/`, captured against a live seeded
+  server) and an explanation of what it shows, the actions it offers, and its
+  known gotchas — Pro pages, classic pages, and the 404 catch-all.
+
 ## [0.2.2] - 2026-07-02
 
 ### Fixed
@@ -62,6 +70,7 @@ stability sweep.
 - Segment-based `/db/tables` routing so tables literally named `schema` or `cell`
   resolve correctly.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.2.0...v0.2.1
