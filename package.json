@@ -1,7 +1,7 @@
 {
   "name": "bunqueue-dashboard",
   "private": true,
-  "version": "0.0.3",
+  "version": "0.0.4",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity).",
   "license": "MIT",

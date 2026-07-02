@@ -112,7 +112,9 @@ jobs:
         uses: actions/deploy-pages@v4
         timeout-minutes: 20
         with:
-          # deploy-pages polls until the deployment is live; its own default is
-          # 10 min (600000 ms) and would fail the step before the job cap. Raise
-          # it to 15 min so the ~8-10 min publish on this repo has headroom.
-          timeout: 900000
+          # deploy-pages polls until the deployment is live. Use its maximum
+          # (600000 ms = 10 min; higher values are clamped to this with a
+          # warning). The step's 20-min cap and the job's 30-min cap bound it
+          # further. Transient "Deployment failed, try again later" errors are a
+          # Pages-backend issue, not a timeout — re-run the failed job.
+          timeout: 600000
