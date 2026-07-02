@@ -77,7 +77,7 @@ export function QueueControl() {
           />
         )}
         {msg && (
-          <span className={msg.ok ? 'text-xs text-emerald-400' : 'text-xs text-red-400'}>
+          <span className={msg.ok ? 'text-xs text-success' : 'text-xs text-danger'}>
             {msg.text}
           </span>
         )}

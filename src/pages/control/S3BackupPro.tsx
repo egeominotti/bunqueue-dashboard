@@ -29,11 +29,7 @@ export function S3BackupPro() {
 
   return (
     <div>
-      <PageHeader
-        title="S3 Backup"
-        description="Automatic backups to S3-compatible storage."
-        live
-      />
+      <PageHeader title="S3 Backup" description="Automatic backups to S3-compatible storage." />
 
       <div className="mb-6 flex items-center justify-between rounded-xl border border-line bg-surface px-5 py-4">
         <div className="flex items-center gap-3">
@@ -52,8 +48,8 @@ export function S3BackupPro() {
         <span
           className={
             configured
-              ? 'rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-400'
-              : 'rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400'
+              ? 'rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-success'
+              : 'rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-warning'
           }
         >
           {configured ? 'Ready' : 'Configure'}
@@ -110,6 +106,9 @@ export function S3BackupPro() {
               placeholder="••••••••••••••••"
             />
           </Field>
+          <p className="-mt-2 text-xs text-faint md:col-span-2">
+            Keys are kept in memory only and cleared on reload.
+          </p>
           <div>
             <Label>Backup schedule</Label>
             <Select
@@ -131,7 +130,7 @@ export function S3BackupPro() {
             />
           </Field>
         </div>
-        <div className="mt-5 flex items-center gap-2">
+        <div className="mt-5 flex flex-wrap items-center gap-2">
           <Button
             variant="accent"
             onClick={() => {
@@ -145,9 +144,9 @@ export function S3BackupPro() {
           <Button disabled title="Trigger a manual backup — requires server-side S3 config">
             Backup Now
           </Button>
-          {saved && <span className="text-xs text-emerald-400">Saved locally</span>}
+          {saved && <span className="text-xs text-success">Saved locally (keys excluded)</span>}
           {test && (
-            <span className={test.ok ? 'text-xs text-emerald-400' : 'text-xs text-red-400'}>
+            <span className={test.ok ? 'text-xs text-success' : 'text-xs text-danger'}>
               {test.msg}
             </span>
           )}

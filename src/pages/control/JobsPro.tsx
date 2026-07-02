@@ -33,7 +33,7 @@ type StatusFilter = (typeof STATUS)[number];
 const PAGE_SIZE = 25;
 
 function priorityLabel(p = 0) {
-  if (p >= 10) return { t: 'HIGH', c: 'text-amber-400' };
+  if (p >= 10) return { t: 'HIGH', c: 'text-warning' };
   if (p >= 1) return { t: 'MEDIUM', c: 'text-blue-400' };
   return { t: 'LOW', c: 'text-faint' };
 }
@@ -253,6 +253,7 @@ export function JobsPro() {
         <div className="w-48">
           <Select
             value={queue}
+            aria-label="Queue"
             onChange={(e) => {
               setQueue(e.target.value);
               resetPage();
@@ -279,6 +280,7 @@ export function JobsPro() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter this page by ID…"
+            aria-label="Filter by job ID"
             className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
           />
         </div>
@@ -325,7 +327,7 @@ export function JobsPro() {
       )}
 
       {actionMsg && (
-        <div className={cn('mb-3 text-sm', actionMsg.ok ? 'text-emerald-400' : 'text-amber-400')}>
+        <div className={cn('mb-3 text-sm', actionMsg.ok ? 'text-success' : 'text-danger')}>
           {actionMsg.text}
         </div>
       )}
@@ -345,6 +347,7 @@ export function JobsPro() {
                       type="checkbox"
                       checked={allSelected}
                       onChange={toggleAll}
+                      aria-label="Select all jobs on page"
                       className="accent-accent"
                     />
                   </th>
@@ -360,7 +363,11 @@ export function JobsPro() {
                 {rows.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-5 py-12 text-center text-sm text-faint">
-                      {queue ? 'No jobs found.' : 'Select a queue.'}
+                      {search.trim()
+                        ? 'No jobs on this page match your ID filter.'
+                        : queue
+                          ? 'No jobs found.'
+                          : 'Select a queue.'}
                     </td>
                   </tr>
                 ) : (
@@ -378,11 +385,15 @@ export function JobsPro() {
                             type="checkbox"
                             checked={selected.has(j.id)}
                             onChange={() => toggle(j.id)}
+                            aria-label={`Select job ${j.id}`}
                             className="accent-accent"
                           />
                         </td>
-                        <td className="max-w-[16rem] px-5 py-3 font-mono text-xs text-accent/90">
-                          {j.id}
+                        <td className="px-5 py-3 font-mono text-xs text-accent/90">
+                          {/* max-w on the td is ignored in auto table layout — truncate a block span instead. */}
+                          <span className="block max-w-[16rem] truncate" title={j.id}>
+                            {j.id}
+                          </span>
                         </td>
                         <td className="px-5 py-3">
                           <StatusBadge status={String(j.state ?? 'waiting')} />

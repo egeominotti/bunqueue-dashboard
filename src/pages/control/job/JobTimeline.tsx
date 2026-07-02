@@ -35,7 +35,7 @@ export function JobTimeline({ timeline }: { timeline: JobFull['timeline'] }) {
               {(e.worker || e.error) && (
                 <div className="mt-1 pl-0.5">
                   {e.worker && <div className="font-mono text-[11px] text-faint">{e.worker}</div>}
-                  {e.error && <div className="mt-0.5 text-xs text-red-400/90">{e.error}</div>}
+                  {e.error && <div className="mt-0.5 text-xs text-danger/90">{e.error}</div>}
                 </div>
               )}
             </li>

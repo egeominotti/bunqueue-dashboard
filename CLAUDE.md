@@ -34,8 +34,10 @@ bunqueue-dashboard/
 │   └── pull_request_template.md
 ├── agent/                     # Bun control agent (process lifecycle) — NOT linted/typechecked with src
 │   ├── manager.ts             # ProcessManager: spawn/kill bunqueue, log ring buffer, dbStats()
+│   ├── db.ts                  # read-only SQLite inspector: tables/schema/rows/query (readonly conn, unit-tested)
 │   ├── server.ts              # fetch handler + origin/CORS/token policy (unit-tested)
-│   └── index.ts               # binds 127.0.0.1; Origin allowlist + locked CORS + optional AGENT_TOKEN
+│   └── index.ts               # binds 127.0.0.1; Origin allowlist + locked CORS + optional AGENT_TOKEN;
+│                               # SIGINT/SIGTERM stop the managed server (no orphans)
 ├── docker/nginx.conf          # SPA history fallback + gzip + immutable asset caching for the image
 ├── scripts/dev.ts             # one-command dev launcher (`bun start`) — NOT linted/typechecked with src
 ├── Dockerfile                 # multi-stage: Bun build → nginx serve
@@ -51,7 +53,7 @@ bunqueue-dashboard/
 │   │   ├── queue/              # QueueConfig (used by classic QueueDetail)
 │   │   └── control/           # Pro pages: OverviewPro, ServerControl, AddJob, JobInspector, JobsPro, DlqPro,
 │   │       │                   # DlqControl, MetricsPro, LogsPro, QueueControl, CronManager, Webhooks,
-│   │       │                   # Diagnostics, S3BackupPro
+│   │       │                   # Diagnostics, S3BackupPro, Database (SQLite inspector), UsagePro, WorkersPro
 │   │       ├── job/            # JobInspector subcomponents: JobTimeline, JobBackoff
 │   │       └── queue/          # QueueControl subcomponents: QueueActions, ConfigForms
 │   ├── App.tsx                # routes — see docs/pages.md for the verified route→page table

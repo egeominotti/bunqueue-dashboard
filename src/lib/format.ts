@@ -89,6 +89,21 @@ export function formatUptime(seconds: number | undefined | null): string {
   return parts.join(' ');
 }
 
+/** Compact count for tight readouts: 1200 → "1.2K", 3400000 → "3.4M". */
+export function formatCompact(n: number | undefined | null): string {
+  if (n == null || !Number.isFinite(n)) return '0';
+  if (n >= 1_000_000) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return String(Math.round(n));
+}
+
+/** Latency in ms → "3.4ms", "42ms", "1.25s" (sub-10ms keeps a decimal). */
+export function formatMs(v: number | undefined | null): string {
+  if (v == null || !Number.isFinite(v)) return '—';
+  if (v >= 1000) return `${(v / 1000).toFixed(2)}s`;
+  return `${v.toFixed(v < 10 ? 1 : 0)}ms`;
+}
+
 /** Bytes → "1.4 GB". */
 export function formatBytes(bytes: number | undefined | null): string {
   if (bytes == null || !Number.isFinite(bytes)) return '—';

@@ -3,6 +3,7 @@ import { useConnectionStore } from '@/components/dashboard/stores/connectionStor
 import { useThemeStore } from '@/components/dashboard/stores/themeStore';
 import {
   IconCron,
+  IconDatabase,
   IconDlq,
   IconEye,
   IconJobs,
@@ -52,7 +53,6 @@ const NAV: NavGroup[] = [
       { to: '/add-job', label: 'Add Job', icon: IconJobs },
       { to: '/job', label: 'Job Inspector', icon: IconEye },
       { to: '/queue-control', label: 'Queue Control', icon: IconQueues },
-      { to: '/cron-manager', label: 'Cron Manager', icon: IconCron },
       { to: '/dlq-control', label: 'DLQ Control', icon: IconDlq },
       { to: '/webhooks', label: 'Webhooks', icon: IconLightning },
       { to: '/diagnostics', label: 'Diagnostics', icon: IconMetrics },
@@ -62,6 +62,7 @@ const NAV: NavGroup[] = [
   {
     section: 'Management',
     items: [
+      { to: '/database', label: 'Database', icon: IconDatabase },
       { to: '/usage', label: 'Usage', icon: IconUsage },
       { to: '/s3', label: 'S3 Backup', icon: IconS3 },
       { to: '/settings', label: 'Settings', icon: IconSettings },
@@ -93,6 +94,7 @@ function ConnectionBadge() {
       <span className="truncate font-mono text-[11px] text-muted" title={baseUrl}>
         {host}
       </span>
+      <span className="sr-only">{loading ? 'connecting' : ok ? 'connected' : 'offline'}</span>
     </div>
   );
 }
@@ -105,7 +107,7 @@ function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      className="mx-3 mb-3 flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+      className="mx-3 mb-3 flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
     >
       {dark ? <IconSun className="size-4" /> : <IconMoon className="size-4" />}
       {dark ? 'Light Mode' : 'Dark Mode'}
@@ -128,9 +130,11 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
       <aside
         className={cn(
           'flex w-60 shrink-0 flex-col border-r border-line bg-sidebar',
-          // Off-canvas drawer below lg; static column at lg and up.
-          'fixed inset-y-0 left-0 z-50 transition-transform lg:static lg:z-auto lg:translate-x-0',
-          open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+          // Off-canvas drawer below lg; static column at lg and up. `invisible`
+          // (transitioned) keeps the closed drawer's ~20 links out of the tab
+          // order for keyboard/AT users while preserving the slide animation.
+          'fixed inset-y-0 left-0 z-50 transition-[transform,visibility] lg:static lg:z-auto lg:translate-x-0',
+          open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0 invisible lg:visible'
         )}
       >
         <div className="flex items-center gap-2 px-5 py-5">
@@ -140,7 +144,7 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
           </span>
           <span
             title="Beta — under active development"
-            className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400"
+            className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-warning"
           >
             beta
           </span>
@@ -163,6 +167,7 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
                     className={({ isActive }) =>
                       cn(
                         'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
                         isActive
                           ? 'bg-surface-2 text-fg'
                           : 'text-muted hover:bg-surface-2/60 hover:text-fg'

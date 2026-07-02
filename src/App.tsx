@@ -18,6 +18,9 @@ const Benchmark = lazy(() =>
 const CronManager = lazy(() =>
   import('./pages/control/CronManager').then((m) => ({ default: m.CronManager }))
 );
+const Database = lazy(() =>
+  import('./pages/control/Database').then((m) => ({ default: m.Database }))
+);
 const Diagnostics = lazy(() =>
   import('./pages/control/Diagnostics').then((m) => ({ default: m.Diagnostics }))
 );
@@ -45,8 +48,14 @@ const S3BackupPro = lazy(() =>
 const ServerControl = lazy(() =>
   import('./pages/control/ServerControl').then((m) => ({ default: m.ServerControl }))
 );
+const UsagePro = lazy(() =>
+  import('./pages/control/UsagePro').then((m) => ({ default: m.UsagePro }))
+);
 const Webhooks = lazy(() =>
   import('./pages/control/Webhooks').then((m) => ({ default: m.Webhooks }))
+);
+const WorkersPro = lazy(() =>
+  import('./pages/control/WorkersPro').then((m) => ({ default: m.WorkersPro }))
 );
 const Cron = lazy(() => import('./pages/Cron').then((m) => ({ default: m.Cron })));
 const Dlq = lazy(() => import('./pages/Dlq').then((m) => ({ default: m.Dlq })));
@@ -76,10 +85,12 @@ export function App() {
         <Route path="/jobs-classic" element={<Jobs />} />
         <Route path="/dlq" element={<DlqPro />} />
         <Route path="/dlq-classic" element={<Dlq />} />
-        <Route path="/cron" element={<Cron />} />
+        <Route path="/cron" element={<CronManager />} />
+        <Route path="/cron-classic" element={<Cron />} />
         <Route path="/metrics" element={<MetricsPro />} />
         <Route path="/metrics-classic" element={<Metrics />} />
-        <Route path="/workers" element={<Workers />} />
+        <Route path="/workers" element={<WorkersPro />} />
+        <Route path="/workers-classic" element={<Workers />} />
         <Route path="/logs" element={<LogsPro />} />
         <Route path="/logs-classic" element={<Logs />} />
         <Route path="/server" element={<ServerControl />} />
@@ -91,7 +102,9 @@ export function App() {
         <Route path="/webhooks" element={<Webhooks />} />
         <Route path="/diagnostics" element={<Diagnostics />} />
         <Route path="/benchmark" element={<Benchmark />} />
-        <Route path="/usage" element={<Usage />} />
+        <Route path="/database" element={<Database />} />
+        <Route path="/usage" element={<UsagePro />} />
+        <Route path="/usage-classic" element={<Usage />} />
         <Route path="/s3" element={<S3BackupPro />} />
         <Route path="/s3-classic" element={<S3Backup />} />
         <Route path="/settings" element={<Settings />} />

@@ -101,6 +101,13 @@ export const IconS3 = (p: IconProps) => (
     <path d="M4 11v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" />
   </Icon>
 );
+export const IconDatabase = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M3 10h18" />
+    <path d="M9 10v10" />
+  </Icon>
+);
 export const IconSettings = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="12" cy="12" r="3" />

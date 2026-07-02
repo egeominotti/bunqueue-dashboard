@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
@@ -20,7 +21,7 @@ export function DlqPro() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // The queue list (per-queue DLQ counts + grand total + dropdown) changes
   // slowly, so poll it on its own slow cadence instead of on the fast DLQ poll.
@@ -64,19 +65,20 @@ export function DlqPro() {
     if (page > 0 && page * PAGE_SIZE >= t) setPage(Math.max(0, Math.ceil(t / PAGE_SIZE) - 1));
   }, [data, page]);
 
-  const run = async (label: string, fn: () => Promise<{ count?: number }>) => {
-    if (!window.confirm(`${label} for "${queue}"?`)) return;
+  const run = async (confirmText: string, verb: string, fn: () => Promise<{ count?: number }>) => {
+    if (!window.confirm(confirmText)) return;
     setBusy(true);
     setMsg(null);
     try {
       const r = await fn();
-      setMsg(`${label}: ${r?.count ?? 'ok'}`);
+      const n = r?.count ?? 0;
+      setMsg({ ok: true, text: `${verb} ${formatNumber(n)} ${n === 1 ? 'entry' : 'entries'}` });
       // Refresh the selected queue's page AND the queue list (grand total /
       // "DLQ by queue" grid / dropdown counts) after a retry or purge.
       refetch();
       refetchQueues();
     } catch (e) {
-      setMsg((e as Error).message);
+      setMsg({ ok: false, text: (e as Error).message });
     } finally {
       setBusy(false);
     }
@@ -136,17 +138,14 @@ export function DlqPro() {
             <span
               className={cn(
                 'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                healthy ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
+                healthy ? 'bg-emerald-500/10 text-success' : 'bg-red-500/10 text-danger'
               )}
             >
               {healthy ? 'Healthy' : 'Attention'}
             </span>
           </div>
           <div
-            className={cn(
-              'mt-2 text-3xl font-bold tnum',
-              healthy ? 'text-emerald-400' : 'text-red-400'
-            )}
+            className={cn('mt-2 text-3xl font-bold tnum', healthy ? 'text-success' : 'text-danger')}
           >
             {formatNumber(total)}
           </div>
@@ -164,7 +163,7 @@ export function DlqPro() {
             Pending Retry
           </div>
           <div className="mt-2 text-3xl font-bold tnum text-fg">
-            {data?.stats?.pendingRetry ? formatNumber(data.stats.pendingRetry) : '—'}
+            {data?.stats ? formatNumber(data.stats.pendingRetry ?? 0) : '—'}
           </div>
           <div className="mt-1 text-xs text-faint">
             {queue ? 'in this queue' : 'awaiting retry'}
@@ -174,7 +173,9 @@ export function DlqPro() {
           <div className="text-[11px] font-medium uppercase tracking-wider text-faint">
             Failure Types
           </div>
-          <div className="mt-2 text-3xl font-bold tnum text-fg">{reasons.length || '—'}</div>
+          <div className="mt-2 text-3xl font-bold tnum text-fg">
+            {data?.stats ? formatNumber(reasons.length) : '—'}
+          </div>
           <div className="mt-1 text-xs text-faint">distinct reasons</div>
         </Card>
       </div>
@@ -198,7 +199,7 @@ export function DlqPro() {
                 )}
               >
                 <div className="truncate font-mono text-xs text-muted">{q.name}</div>
-                <div className="mt-1 text-xl font-bold tnum text-red-400">{q.dlq}</div>
+                <div className="mt-1 text-xl font-bold tnum text-danger">{q.dlq}</div>
               </button>
             ))}
           </div>
@@ -218,7 +219,11 @@ export function DlqPro() {
           </Select>
         </div>
         <div className="w-40">
-          <Select value={reason} onChange={(e) => setReason(e.target.value)}>
+          <Select
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            aria-label="Filter by reason"
+          >
             <option value="all">All Reasons</option>
             {reasons.map((r) => (
               <option key={r} value={r}>
@@ -241,12 +246,13 @@ export function DlqPro() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Filter this page by job ID…"
+          aria-label="Filter this page by job ID"
           className="h-9 min-w-40 flex-1 rounded-lg border border-line bg-surface px-3 text-sm text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
         />
         <Button
           size="sm"
           disabled={!queue || busy}
-          onClick={() => run('Retry all', () => bq.retryDlq(queue))}
+          onClick={() => run(`Retry all for "${queue}"?`, 'Retried', () => bq.retryDlq(queue))}
         >
           <IconRefresh className="size-3.5" /> Retry All
         </Button>
@@ -254,12 +260,16 @@ export function DlqPro() {
           variant="danger"
           size="sm"
           disabled={!queue || busy}
-          onClick={() => run('Purge all', () => bq.purgeDlq(queue))}
+          onClick={() => run(`Purge all for "${queue}"?`, 'Purged', () => bq.purgeDlq(queue))}
         >
           Purge All
         </Button>
       </div>
-      {msg && <div className="mb-3 text-xs text-muted">{msg}</div>}
+      {msg && (
+        <div className={cn('mb-3 text-sm', msg.ok ? 'text-success' : 'text-danger')}>
+          {msg.text}
+        </div>
+      )}
 
       {loading && !data && !error ? (
         <LoadingState label="Loading DLQ…" />
@@ -297,13 +307,20 @@ export function DlqPro() {
                   key={`${e.job.id}-${e.enteredAt}`}
                   className="border-b border-line last:border-0 align-top hover:bg-surface-2/40"
                 >
-                  <td className="px-5 py-3 font-mono text-xs text-muted">{e.job.id}</td>
                   <td className="px-5 py-3">
-                    <span className="rounded-md bg-red-500/10 px-2 py-0.5 text-xs text-red-400">
+                    <Link
+                      to={`/job?id=${encodeURIComponent(e.job.id)}`}
+                      className="font-mono text-xs text-accent hover:underline"
+                    >
+                      {e.job.id}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-3">
+                    <span className="rounded-md bg-red-500/10 px-2 py-0.5 text-xs text-danger">
                       {e.reason}
                     </span>
                   </td>
-                  <td className="max-w-md px-5 py-3 text-xs text-red-400/80">{e.error || '—'}</td>
+                  <td className="max-w-md px-5 py-3 text-xs text-danger/80">{e.error || '—'}</td>
                   <td className="px-5 py-3 text-right text-faint">
                     {formatRelativeTime(e.enteredAt)}
                   </td>
@@ -311,7 +328,11 @@ export function DlqPro() {
                     <IconButton
                       aria-label="Retry"
                       disabled={busy}
-                      onClick={() => run('Retry', () => bq.retryDlq(queue, e.job.id))}
+                      onClick={() =>
+                        run(`Retry job ${e.job.id.slice(0, 8)}… from "${queue}"?`, 'Retried', () =>
+                          bq.retryDlq(queue, e.job.id)
+                        )
+                      }
                     >
                       <IconRefresh className="size-3.5" />
                     </IconButton>

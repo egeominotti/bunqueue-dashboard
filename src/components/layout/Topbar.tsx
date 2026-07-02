@@ -19,9 +19,17 @@ const TITLES: Record<string, string> = {
   '/webhooks': 'Webhooks',
   '/diagnostics': 'Diagnostics',
   '/benchmark': 'Benchmark',
+  '/database': 'Database',
   '/usage': 'Usage',
   '/s3': 'S3 Backup',
   '/settings': 'Settings',
+  '/overview-classic': 'Overview (classic)',
+  '/queues-classic': 'Queues (classic)',
+  '/jobs-classic': 'Jobs (classic)',
+  '/dlq-classic': 'DLQ (classic)',
+  '/metrics-classic': 'Metrics (classic)',
+  '/logs-classic': 'Logs (classic)',
+  '/s3-classic': 'S3 Backup (classic)',
 };
 
 function titleFor(pathname: string): string {
@@ -47,7 +55,7 @@ export function Topbar({ onMenu }: { onMenu?: () => void }) {
           type="button"
           aria-label="Open navigation"
           onClick={onMenu}
-          className="-ml-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg lg:hidden"
+          className="-ml-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 lg:hidden"
         >
           <IconMenu className="size-5" />
         </button>
@@ -60,7 +68,8 @@ export function Topbar({ onMenu }: { onMenu?: () => void }) {
       <Link
         to="/settings"
         title="Settings"
-        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-fuchsia-600 text-xs font-bold text-white"
+        aria-label="Open settings"
+        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-fuchsia-600 text-xs font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
       >
         bq
       </Link>

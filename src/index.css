@@ -16,6 +16,10 @@
   --sidebar: #09090b;
   --accent: #ec4899;
   --accent-fg: #ffffff;
+  /* Semantic status colors — 400 shades read well on the dark surfaces. */
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
 }
 
 [data-theme="light"] {
@@ -30,6 +34,10 @@
   --sidebar: #ffffff;
   --accent: #db2777;
   --accent-fg: #ffffff;
+  /* Darker shades: the 400s used on dark fail WCAG AA on white surfaces. */
+  --success: #047857;
+  --warning: #b45309;
+  --danger: #dc2626;
 }
 
 /* Map runtime CSS variables into Tailwind tokens so utilities like `bg-surface`,
@@ -46,6 +54,9 @@
   --color-sidebar: var(--sidebar);
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
 
   --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;

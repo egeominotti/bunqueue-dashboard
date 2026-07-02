@@ -85,13 +85,13 @@ export function OverviewPro() {
       {/* Connection banner */}
       <div
         className={cn(
-          'mb-6 flex items-center justify-between rounded-xl border px-5 py-4',
+          'mb-6 flex flex-wrap items-center justify-between gap-y-2 rounded-xl border px-5 py-4',
           degraded
             ? 'border-amber-500/25 bg-amber-500/[0.06]'
             : 'border-emerald-500/25 bg-emerald-500/[0.06]'
         )}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <span className="relative flex size-2.5">
             {!degraded && (
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
@@ -103,11 +103,11 @@ export function OverviewPro() {
               )}
             />
           </span>
-          <div>
-            <div className={cn('font-semibold', degraded ? 'text-amber-400' : 'text-emerald-400')}>
+          <div className="min-w-0">
+            <div className={cn('font-semibold', degraded ? 'text-warning' : 'text-success')}>
               {degraded ? 'Connection lost — showing last known data' : 'bunqueue server connected'}
             </div>
-            <div className="font-mono text-xs text-muted">
+            <div className="truncate font-mono text-xs text-muted">
               {host} · uptime {uptime} · {ram} RAM
             </div>
           </div>
@@ -115,7 +115,7 @@ export function OverviewPro() {
         <span
           className={cn(
             'rounded-full px-3 py-1 text-xs font-medium',
-            degraded ? 'bg-amber-500/15 text-amber-400' : 'bg-emerald-500/15 text-emerald-400'
+            degraded ? 'bg-amber-500/15 text-warning' : 'bg-emerald-500/15 text-success'
           )}
         >
           {degraded ? 'Stale' : 'Online'}
@@ -192,17 +192,17 @@ export function OverviewPro() {
                       'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
                       qd.paused
                         ? 'bg-orange-500/10 text-orange-400'
-                        : 'bg-emerald-500/10 text-emerald-400'
+                        : 'bg-emerald-500/10 text-success'
                     )}
                   >
                     {qd.paused ? 'paused' : 'active'}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-faint">
-                  <Metric label="W" value={qd.counts?.waiting} tone="text-amber-400" />
+                  <Metric label="W" value={qd.counts?.waiting} tone="text-warning" />
                   <Metric label="A" value={qd.counts?.active} tone="text-blue-400" />
-                  <Metric label="C" value={qd.counts?.completed} tone="text-emerald-400" />
-                  <Metric label="F" value={qd.counts?.failed} tone="text-red-400" />
+                  <Metric label="C" value={qd.counts?.completed} tone="text-success" />
+                  <Metric label="F" value={qd.counts?.failed} tone="text-danger" />
                 </div>
               </Link>
             ))}
@@ -282,7 +282,8 @@ function dotFor(status: string): string {
     case 'active':
       return 'bg-blue-400';
     case 'waiting':
-      return 'bg-zinc-400';
+      // Amber, matching the amber Waiting stat cards.
+      return 'bg-amber-400';
     default:
       return 'bg-accent';
   }

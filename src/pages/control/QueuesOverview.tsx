@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { IconButton } from '@/components/ui/Button';
 import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconArrowRight, IconPause, IconPlay, IconQueues, IconSearch } from '@/components/ui/icons';
@@ -108,12 +108,13 @@ export function QueuesOverview() {
             setPage(0);
           }}
           placeholder="Search queues…"
+          aria-label="Filter queues"
           className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
         />
       </div>
 
       {msg && (
-        <div className={cn('mb-3 text-sm', msg.ok ? 'text-emerald-400' : 'text-red-400')}>
+        <div className={cn('mb-3 text-sm', msg.ok ? 'text-success' : 'text-danger')}>
           {msg.text}
         </div>
       )}
@@ -149,24 +150,29 @@ export function QueuesOverview() {
                     className="group cursor-pointer border-b border-line last:border-0 transition-colors hover:bg-surface-2/50"
                   >
                     <td className="px-5 py-3">
-                      <span className="flex items-center gap-2 font-medium text-fg">
+                      {/* Real link = keyboard/focus access; tr onClick stays as pointer convenience. */}
+                      <Link
+                        to={`/queues/${encodeURIComponent(q.name)}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2 rounded font-medium text-fg hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                      >
                         <IconQueues className="size-4 text-faint" />
                         {q.name}
-                      </span>
+                      </Link>
                     </td>
-                    <td className="px-5 py-3 text-right tnum text-amber-400">
+                    <td className="px-5 py-3 text-right tnum text-warning">
                       {formatNumber(q.counts.waiting)}
                     </td>
                     <td className="px-5 py-3 text-right tnum text-blue-400">
                       {formatNumber(q.counts.active)}
                     </td>
-                    <td className="px-5 py-3 text-right tnum text-emerald-400">
+                    <td className="px-5 py-3 text-right tnum text-success">
                       {formatNumber(q.counts.completed)}
                     </td>
                     <td
                       className={cn(
                         'px-5 py-3 text-right tnum',
-                        q.counts.failed ? 'text-red-400' : 'text-muted'
+                        q.counts.failed ? 'text-danger' : 'text-muted'
                       )}
                     >
                       {formatNumber(q.counts.failed)}
@@ -180,7 +186,7 @@ export function QueuesOverview() {
                           'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
                           q.paused
                             ? 'bg-orange-500/10 text-orange-400'
-                            : 'bg-emerald-500/10 text-emerald-400'
+                            : 'bg-emerald-500/10 text-success'
                         )}
                       >
                         <span className="size-1.5 rounded-full bg-current" />
@@ -198,9 +204,9 @@ export function QueuesOverview() {
                           }}
                         >
                           {q.paused ? (
-                            <IconPlay className="size-3.5 text-emerald-400" />
+                            <IconPlay className="size-3.5 text-success" />
                           ) : (
-                            <IconPause className="size-3.5 text-amber-400" />
+                            <IconPause className="size-3.5 text-warning" />
                           )}
                         </IconButton>
                         <IconArrowRight className="size-4 text-faint opacity-0 transition-opacity group-hover:opacity-100" />

@@ -42,7 +42,40 @@ A stability re-check resolved these — no longer present:
   SVG path builder, so one bad point degrades to a dip instead of corrupting
   every series' path data.
 
-## Stability sweep (adversarially verified, this change-set)
+## UI/UX pass (this change-set)
+
+A four-auditor UI/UX sweep (52 findings) was applied on top of the stability
+sweep. Highlights: theme-aware semantic status colors (`text-success/warning/
+danger` — the dark-palette 400 shades failed WCAG AA on the light theme),
+`Field` now wires label→input (`useId`), focus-visible rings across the shell
+and kit, standardized `{ok,text}` green/red action feedback on every mutating
+control, destructive confirms name their target and counts (Clean had NO
+confirm), Enter submits the create forms, honest empty states when a filter —
+not the data — is empty, `live={!error}` on Metrics/Diagnostics, DLQ job IDs
+link to the Job Inspector, `/usage` and `/workers` graduated to Pro pages
+(`/cron` now serves CronManager; classics remain at `*-classic`), Settings
+buffers the server URL (was retargeting all polling per keystroke), and a new
+**Database** section: read-only SQLite inspector (agent-side `readonly`
+connection — tables, schema/indexes/DDL, sortable grid, query runner with
+history/EXPLAIN/CSV/JSON export). `scripts/dev.ts` now spawns services
+directly instead of via `bun run` wrappers, which did not forward SIGTERM and
+were the root cause of the recurring orphaned vite/agent processes.
+
+## Database inspector — known limitation
+
+- **In the standalone compiled binaries** (`release.yml` / `scripts/serve.ts`
+  via `bun build --compile`), the `/db/query` runner has **no wall-clock
+  timeout**. The timeout runs the query in a disposable Worker, and
+  `bun build --compile` does not embed the worker module, so `queryWithTimeout`
+  degrades to a synchronous run there (still read-only, statement-allowlisted
+  and row-capped at 500, just not interruptible). A deliberately pathological
+  scan can therefore pin the agent's thread in a compiled binary until it
+  finishes. Under `bun start` / `bun run agent` (the normal path) the Worker
+  timeout is active and aborts runaway queries at 5s. `/db` reads are protected
+  by the Origin allowlist (not the optional `AGENT_TOKEN`, which gates only
+  state changes — the browser client sends no agent token).
+
+## Stability sweep (adversarially verified, earlier change-set)
 
 A multi-dimension bug hunt (every finding independently verified by refute /
 reproduce / impact passes before fixing) resolved the following — gate green,

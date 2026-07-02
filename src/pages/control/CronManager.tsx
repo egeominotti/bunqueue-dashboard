@@ -36,7 +36,7 @@ export function CronManager() {
       {error && <OfflineBanner onRetry={refetch} />}
       <PageHeader title="Cron Manager" description="Schedule and manage repeatable jobs." live />
       {actErr && (
-        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-red-400">
+        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-danger">
           {actErr}
         </div>
       )}
@@ -116,10 +116,12 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
   const [dataText, setDataText] = useState('{}');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [created, setCreated] = useState(false);
 
   const submit = async () => {
     if (busy) return; // double-click would create the cron twice
     setErr(null);
+    setCreated(false);
     if (!name.trim() || !queue.trim()) {
       setErr('Name and queue are required');
       return;
@@ -140,8 +142,8 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
       body.schedule = schedule.trim();
     } else {
       const ms = Number(every);
-      if (!ms) {
-        setErr('Interval (ms) required');
+      if (!Number.isInteger(ms) || ms <= 0) {
+        setErr('Interval must be a whole number of milliseconds greater than 0');
         return;
       }
       body.repeatEvery = ms;
@@ -152,6 +154,8 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
       setName('');
       setSchedule('');
       setEvery('');
+      setCreated(true);
+      setTimeout(() => setCreated(false), 3000);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -160,7 +164,13 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
       <div className="grid grid-cols-2 gap-3">
         <Field label="Name">
           <Input
@@ -206,11 +216,12 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
         />
       </Field>
       <div className="flex items-center gap-3">
-        <Button variant="accent" size="sm" onClick={submit} disabled={busy}>
+        <Button type="submit" variant="accent" size="sm" disabled={busy}>
           {busy ? 'Creating…' : 'Create'}
         </Button>
-        {err && <span className="text-xs text-red-400">{err}</span>}
+        {err && <span className="text-xs text-danger">{err}</span>}
+        {created && <span className="text-xs text-success">Cron created ✓</span>}
       </div>
-    </div>
+    </form>
   );
 }

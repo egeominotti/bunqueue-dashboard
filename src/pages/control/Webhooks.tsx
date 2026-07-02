@@ -37,7 +37,7 @@ export function Webhooks() {
 
       {error && <OfflineBanner onRetry={refetch} />}
       {actErr && (
-        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-red-400">
+        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-danger">
           {actErr}
         </div>
       )}
@@ -87,9 +87,9 @@ export function Webhooks() {
                     <td className="px-5 py-3 text-xs text-muted">{w.events.join(', ')}</td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">{w.queue ?? 'all'}</td>
                     <td className="px-5 py-3 text-right tnum text-muted">
-                      <span className="text-emerald-400">{formatNumber(w.successCount)}</span>
+                      <span className="text-success">{formatNumber(w.successCount)}</span>
                       {' / '}
-                      <span className={w.failureCount ? 'text-red-400' : ''}>
+                      <span className={w.failureCount ? 'text-danger' : ''}>
                         {formatNumber(w.failureCount)}
                       </span>
                     </td>
@@ -107,7 +107,8 @@ export function Webhooks() {
                       <IconButton
                         aria-label="Remove webhook"
                         onClick={() =>
-                          window.confirm('Remove webhook?') && act(() => bq.removeWebhook(w.id))
+                          window.confirm(`Remove webhook for ${w.url}?`) &&
+                          act(() => bq.removeWebhook(w.id))
                         }
                       >
                         <IconTrash className="size-3.5" />
@@ -167,7 +168,13 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="md:col-span-1">
           <Field label="URL">
@@ -187,6 +194,8 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
         </Field>
         <Field label="Secret (optional)">
           <Input
+            type="password"
+            autoComplete="new-password"
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
             placeholder="HMAC signing secret"
@@ -198,6 +207,7 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
           <button
             key={ev}
             type="button"
+            aria-pressed={events.includes(ev)}
             onClick={() => toggle(ev)}
             className={
               events.includes(ev)
@@ -210,11 +220,11 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
         ))}
       </div>
       <div className="flex items-center gap-3">
-        <Button variant="accent" size="sm" onClick={submit} disabled={busy}>
+        <Button type="submit" variant="accent" size="sm" disabled={busy}>
           {busy ? 'Adding…' : 'Add webhook'}
         </Button>
-        {err && <span className="text-xs text-red-400">{err}</span>}
+        {err && <span className="text-xs text-danger">{err}</span>}
       </div>
-    </div>
+    </form>
   );
 }

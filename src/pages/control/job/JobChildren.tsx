@@ -58,7 +58,7 @@ export function JobChildren({ jobId }: { jobId: string }) {
       ) : loading ? (
         <p className="text-xs text-faint">Loading child values…</p>
       ) : error ? (
-        <p className="text-xs text-red-400">{error}</p>
+        <p className="text-xs text-danger">{error}</p>
       ) : count === 0 ? (
         <p className="text-xs text-faint">No child values available.</p>
       ) : (

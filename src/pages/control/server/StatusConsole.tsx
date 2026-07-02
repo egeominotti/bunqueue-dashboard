@@ -12,6 +12,11 @@ interface Props {
   transitioning: boolean;
   /** Agent poll failing — `status` is the last known snapshot, not live truth. */
   stale?: boolean;
+  /** Live process vitals from the server's /health (null while stopped). */
+  vitals?: {
+    memory?: { rss?: number; heapUsed?: number; heapTotal?: number };
+    connections?: { tcp?: number; ws?: number; sse?: number };
+  } | null;
   busy: string | null;
   onStart: () => void;
   onStop: () => void;
@@ -19,10 +24,10 @@ interface Props {
 }
 
 const STATE_META: Record<string, { label: string; tone: string; dot: string }> = {
-  running: { label: 'Running', tone: 'text-emerald-400', dot: 'bg-emerald-400' },
-  starting: { label: 'Starting', tone: 'text-amber-400', dot: 'bg-amber-400' },
-  stopping: { label: 'Stopping', tone: 'text-amber-400', dot: 'bg-amber-400' },
-  stopped: { label: 'Stopped', tone: 'text-red-400', dot: 'bg-red-400' },
+  running: { label: 'Running', tone: 'text-success', dot: 'bg-emerald-400' },
+  starting: { label: 'Starting', tone: 'text-warning', dot: 'bg-amber-400' },
+  stopping: { label: 'Stopping', tone: 'text-warning', dot: 'bg-amber-400' },
+  stopped: { label: 'Stopped', tone: 'text-danger', dot: 'bg-red-400' },
 };
 
 /** Ticks once a second so the console reads live without re-rendering the page. */
@@ -61,6 +66,7 @@ export function StatusConsole({
   agentBase,
   transitioning,
   stale = false,
+  vitals = null,
   busy,
   onStart,
   onStop,
@@ -107,14 +113,14 @@ export function StatusConsole({
                 <span className="font-mono text-xs text-muted">bunqueue v{status.version}</span>
               )}
               {crashed && (
-                <span className="rounded-full bg-red-500/15 px-2 py-0.5 font-mono text-[11px] font-medium text-red-400">
+                <span className="rounded-full bg-red-500/15 px-2 py-0.5 font-mono text-[11px] font-medium text-danger">
                   crashed · exit {status?.exitCode}
                 </span>
               )}
             </div>
             <div className="mt-1 font-mono text-xs text-muted">
               {stale ? (
-                <span className="text-amber-400">
+                <span className="text-warning">
                   last known: pid {status?.pid ?? '—'} — agent unreachable, state may have changed
                 </span>
               ) : running ? (
@@ -144,7 +150,25 @@ export function StatusConsole({
       </div>
 
       {/* Instrument cluster */}
-      <div className="grid grid-cols-2 gap-4 border-t border-line bg-surface-2/30 px-5 py-4 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 border-t border-line bg-surface-2/30 px-5 py-4 md:grid-cols-3 xl:grid-cols-7">
+        <Vital label="Memory">
+          {vitals?.memory?.rss != null ? (
+            <span
+              title={`heap ${vitals.memory.heapUsed ?? '?'} / ${vitals.memory.heapTotal ?? '?'} MB`}
+            >
+              {vitals.memory.rss} MB rss
+            </span>
+          ) : (
+            <span className="text-faint">—</span>
+          )}
+        </Vital>
+        <Vital label="Connections">
+          {vitals?.connections ? (
+            `${vitals.connections.tcp ?? 0} tcp · ${vitals.connections.ws ?? 0} ws · ${vitals.connections.sse ?? 0} sse`
+          ) : (
+            <span className="text-faint">—</span>
+          )}
+        </Vital>
         <Vital label="API endpoint" title={serverBase}>
           {running ? (
             <span className="flex items-center gap-1.5">

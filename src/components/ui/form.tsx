@@ -1,4 +1,12 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react';
+import {
+  cloneElement,
+  type InputHTMLAttributes,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  useId,
+} from 'react';
 import { cn } from '@/lib/cn';
 
 export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: string }) {
@@ -21,10 +29,21 @@ export function Field({
   hint?: ReactNode;
   children: ReactNode;
 }) {
+  const autoId = useId();
+  // Wire label→control (htmlFor/id) when there's a single element child — the
+  // common case. An explicit id is respected; multi-node children (e.g. the
+  // env-vars editor) keep the visual label only, as before.
+  let control: ReactNode = children;
+  let htmlFor: string | undefined;
+  if (isValidElement(children)) {
+    const el = children as ReactElement<{ id?: string }>;
+    htmlFor = el.props.id ?? autoId;
+    control = el.props.id ? el : cloneElement(el, { id: autoId });
+  }
   return (
     <div className="flex flex-col gap-1.5">
-      <Label>{label}</Label>
-      {children}
+      <Label htmlFor={htmlFor}>{label}</Label>
+      {control}
       {hint && <p className="text-xs leading-relaxed text-faint">{hint}</p>}
     </div>
   );
@@ -71,6 +90,7 @@ export function Toggle({
       onClick={() => onChange(!checked)}
       className={cn(
         'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
         checked ? 'bg-accent' : 'bg-surface-2 border border-line',
         disabled && 'opacity-40'
       )}
@@ -107,6 +127,7 @@ export function SegmentedControl<T extends string>({
           onClick={() => onChange(opt)}
           className={cn(
             'rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
             value === opt ? 'bg-surface-2 text-fg' : 'text-muted hover:text-fg',
             disabled && 'opacity-40'
           )}

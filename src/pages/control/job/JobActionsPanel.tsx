@@ -151,6 +151,7 @@ function InlineNumber({
         value={v}
         onChange={(e) => setV(e.target.value)}
         placeholder={label}
+        aria-label={label}
         className="h-8 text-xs"
       />
       <Button size="sm" disabled={disabled || v.trim() === ''} onClick={() => onSubmit(Number(v))}>
@@ -180,6 +181,7 @@ function InlineText({
         value={v}
         onChange={(e) => setV(e.target.value)}
         placeholder={label}
+        aria-label={label}
         className="h-8 text-xs"
       />
       <Button

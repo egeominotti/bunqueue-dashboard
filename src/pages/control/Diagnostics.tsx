@@ -54,7 +54,7 @@ export function Diagnostics() {
       <PageHeader
         title="Diagnostics"
         description="Server health, storage, memory and connections."
-        live
+        live={!error}
       />
       {error && <OfflineBanner onRetry={refetch} />}
 

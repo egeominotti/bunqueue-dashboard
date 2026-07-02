@@ -8,9 +8,9 @@ const variants: Record<Variant, string> = {
   default: 'border border-line bg-surface-2 text-fg hover:bg-surface-2/70 hover:border-line-strong',
   ghost: 'text-muted hover:text-fg hover:bg-surface-2',
   accent: 'bg-accent text-accent-fg hover:opacity-90 border border-transparent',
-  danger: 'border border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50',
+  danger: 'border border-red-500/30 text-danger hover:bg-red-500/10 hover:border-red-500/50',
   warning:
-    'border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:border-amber-500/50',
+    'border border-amber-500/30 text-warning hover:bg-amber-500/10 hover:border-amber-500/50',
   success: 'bg-emerald-500 text-white hover:bg-emerald-500/90 border border-transparent',
 };
 

@@ -17,10 +17,12 @@ export function AreaChart({
   series,
   height = 180,
   xLabels,
+  ariaLabel = 'throughput chart',
 }: {
   series: ChartSeries[];
   height?: number;
   xLabels?: string[];
+  ariaLabel?: string;
 }) {
   const gid = useId().replace(/:/g, '');
   const W = 600;
@@ -40,9 +42,10 @@ export function AreaChart({
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
-        className="h-44 w-full"
+        className="w-full"
+        style={{ height }}
         role="img"
-        aria-label="throughput chart"
+        aria-label={ariaLabel}
       >
         <defs>
           {series.map((s, si) => (
@@ -59,8 +62,16 @@ export function AreaChart({
 
         {series.map((s, si) => {
           if (s.points.length === 0) return null;
-          const line = s.points.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(v)}`).join(' ');
-          const area = `${line} L${x(s.points.length - 1)},${H} L${x(0)},${H} Z`;
+          // One point has no extent — draw it as a flat line across the full
+          // width instead of an invisible zero-length path.
+          const line =
+            s.points.length === 1
+              ? `M0,${y(s.points[0])} L${W},${y(s.points[0])}`
+              : s.points.map((v, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(v)}`).join(' ');
+          const area =
+            s.points.length === 1
+              ? `${line} L${W},${H} L0,${H} Z`
+              : `${line} L${x(s.points.length - 1)},${H} L${x(0)},${H} Z`;
           return (
             <g key={s.label}>
               {s.area && <path d={area} fill={`url(#${gid}-g${si})`} />}

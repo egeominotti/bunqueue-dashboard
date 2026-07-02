@@ -3,6 +3,7 @@ import { OfflineBanner } from '@/components/ui/feedback';
 import { SegmentedControl, Select } from '@/components/ui/form';
 import { IconSearch } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
 import { StatCard } from '@/components/ui/StatCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { bq } from '@/lib/bq';
@@ -48,7 +49,6 @@ export function LogsPro() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on filter change
   useEffect(() => setPage(0), [queue, status, search]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE));
   const start = page * PAGE;
   const rows = filtered.slice(start, start + PAGE);
 
@@ -77,7 +77,11 @@ export function LogsPro() {
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="w-48">
-          <Select value={queue} onChange={(e) => setQueue(e.target.value)}>
+          <Select
+            aria-label="Filter by queue"
+            value={queue}
+            onChange={(e) => setQueue(e.target.value)}
+          >
             <option value={ALL}>All Queues</option>
             {(qs?.queues ?? []).map((q) => (
               <option key={q.name} value={q.name}>
@@ -90,6 +94,7 @@ export function LogsPro() {
         <div className="relative ml-auto min-w-56 flex-1 md:max-w-xs">
           <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
           <input
+            aria-label="Search by job ID or queue"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by job ID or queue…"
@@ -113,7 +118,11 @@ export function LogsPro() {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-5 py-12 text-center text-sm text-faint">
-                  {connected ? 'Waiting for activity…' : 'Connecting to the event stream…'}
+                  {!connected
+                    ? 'Connecting to the event stream…'
+                    : events.length > 0
+                      ? 'No events match the current filters.'
+                      : 'Waiting for activity…'}
                 </td>
               </tr>
             ) : (
@@ -144,34 +153,13 @@ export function LogsPro() {
         </table>
       </div>
 
-      <div className="mt-4 flex items-center justify-between text-sm text-faint">
-        <span>
-          {filtered.length === 0
-            ? 'No events'
-            : `Showing ${start + 1}–${Math.min(start + PAGE, filtered.length)} of ${filtered.length} events`}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={page === 0}
-            onClick={() => setPage((p) => p - 1)}
-            className="rounded-md px-3 py-1 text-xs hover:text-fg disabled:opacity-40"
-          >
-            Previous
-          </button>
-          <span className="rounded-md bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent">
-            {page + 1}
-          </span>
-          <button
-            type="button"
-            disabled={page >= pageCount - 1}
-            onClick={() => setPage((p) => p + 1)}
-            className="rounded-md px-3 py-1 text-xs hover:text-fg disabled:opacity-40"
-          >
-            Next
-          </button>
-        </div>
-      </div>
+      <Pagination
+        page={page}
+        pageSize={PAGE}
+        total={filtered.length}
+        onPageChange={setPage}
+        label="events"
+      />
     </div>
   );
 }

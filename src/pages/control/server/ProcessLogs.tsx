@@ -15,7 +15,7 @@ const clock = (ts: number): string =>
   `${new Date(ts).toLocaleTimeString([], { hour12: false })}.${String(ts % 1000).padStart(3, '0')}`;
 
 const toneFor = (stream: ServerLogLine['stream']): string =>
-  stream === 'stderr' ? 'text-red-400/90' : stream === 'sys' ? 'text-accent/80' : 'text-muted';
+  stream === 'stderr' ? 'text-danger/90' : stream === 'sys' ? 'text-accent/80' : 'text-muted';
 
 /**
  * Live tail of the managed bunqueue process's stdout/stderr + agent system
@@ -74,6 +74,7 @@ export function ProcessLogs() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            aria-label="Filter log lines"
             placeholder="Filter…"
             className="h-8 w-full rounded-lg border border-line bg-surface-2 pl-8 pr-2 text-xs text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
           />

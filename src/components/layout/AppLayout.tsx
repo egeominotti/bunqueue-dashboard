@@ -14,6 +14,16 @@ export function AppLayout() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: close on navigation
   useEffect(() => setNavOpen(false), [pathname]);
 
+  // Escape closes the mobile drawer (standard dismissal affordance).
+  useEffect(() => {
+    if (!navOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNavOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navOpen]);
+
   return (
     <ErrorBoundary>
       <div className="flex h-screen overflow-hidden bg-bg text-fg">

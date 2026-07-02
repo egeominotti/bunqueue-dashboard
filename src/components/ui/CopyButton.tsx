@@ -62,13 +62,14 @@ export function CopyButton({ value, className }: { value: string; className?: st
       title={state === 'failed' ? 'Copy failed' : 'Copy to clipboard'}
       className={cn(
         'inline-flex size-6 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:bg-surface-2 hover:text-fg',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
         className
       )}
     >
       {state === 'copied' ? (
-        <IconCheck className="size-3.5 text-emerald-400" />
+        <IconCheck className="size-3.5 text-success" />
       ) : state === 'failed' ? (
-        <IconClose className="size-3.5 text-red-400" />
+        <IconClose className="size-3.5 text-danger" />
       ) : (
         <IconCopy className="size-3.5" />
       )}

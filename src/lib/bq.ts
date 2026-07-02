@@ -23,6 +23,29 @@ import type {
 } from './bqTypes';
 import type { OverviewResponse, QueueDetailResponse, QueuesResponse, StatsResponse } from './types';
 
+/** Browse-grid filter (mirrors agent/db.ts DbFilter). */
+export interface DbFilter {
+  column: string;
+  op: 'contains' | 'eq' | 'ne';
+  value: string;
+}
+
+/** One page of table rows from the read-only inspector (mirrors agent/db.ts). */
+export interface DbRowsPage {
+  ok: boolean;
+  table: string;
+  columns: string[];
+  rows: unknown[][];
+  rowids: (number | null)[];
+  truncatedCells: boolean[][];
+  total: number;
+  limit: number;
+  offset: number;
+  orderBy: string | null;
+  dir: 'asc' | 'desc';
+  filter: DbFilter | null;
+}
+
 export class BqError extends Error {
   constructor(
     message: string,
@@ -269,6 +292,71 @@ export const bq = {
   unregisterWorker: (id: string) => srv(`/workers/${q(id)}`, { method: 'DELETE' }),
 
   eventsUrl: (queue?: string) => getBaseUrl() + (queue ? `/events/queues/${q(queue)}` : '/events'),
+
+  // ---- Database inspector (agent-side, read-only SQLite) ----
+  db: {
+    info: () =>
+      agent<{
+        ok: boolean;
+        sqliteVersion: string;
+        pageSize: number;
+        pageCount: number;
+        journalMode: string;
+        freelistPages: number;
+        tables: number;
+        indexes: number;
+        fileSize: number;
+        walSize: number;
+      }>('/db/info'),
+    tables: () =>
+      agent<{ ok: boolean; tables: { name: string; rows: number; columns: number }[] }>(
+        '/db/tables'
+      ),
+    schema: (table: string) =>
+      agent<{
+        ok: boolean;
+        table: string;
+        columns: {
+          name: string;
+          type: string;
+          notNull: boolean;
+          defaultValue: string | null;
+          primaryKey: boolean;
+        }[];
+        indexes: { name: string; unique: boolean; columns: string[] }[];
+        sql: string | null;
+        rowCount: number;
+      }>(`/db/tables/${q(table)}/schema`),
+    rows: (
+      table: string,
+      limit = 50,
+      offset = 0,
+      orderBy?: string,
+      dir: 'asc' | 'desc' = 'asc',
+      filter?: DbFilter
+    ) =>
+      agent<DbRowsPage>(
+        `/db/tables/${q(table)}?limit=${limit}&offset=${offset}` +
+          (orderBy ? `&orderBy=${q(orderBy)}&dir=${dir}` : '') +
+          (filter?.value
+            ? `&fcol=${q(filter.column)}&fop=${filter.op}&fval=${q(filter.value)}`
+            : '')
+      ),
+    /** Full, untruncated value of one cell, keyed by rowid (detail view). */
+    cell: (table: string, rowid: number, column: string) =>
+      agent<{ ok: boolean; value: unknown }>(
+        `/db/tables/${q(table)}/cell?rowid=${rowid}&column=${q(column)}`
+      ),
+    query: (sql: string) =>
+      agent<{
+        ok: boolean;
+        columns: string[];
+        rows: unknown[][];
+        rowCount: number;
+        truncated: boolean;
+        ms: number;
+      }>('/db/query', body('POST', { sql })),
+  },
 
   // ---- Control agent (process lifecycle) ----
   agentBase: AGENT,

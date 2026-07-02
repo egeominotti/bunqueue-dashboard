@@ -26,6 +26,36 @@ function useSyncedConfig<T>(config: T): [T, (v: T) => void] {
   return [c, setC];
 }
 
+/**
+ * Coerce a draft field to a number on save. Numeric inputs are kept as-typed
+ * (string allowed) so clearing a field mid-edit doesn't snap to 0; '' or a
+ * non-numeric value returns null so it can be rejected instead of saved as 0.
+ */
+function toNum(v: number | string): number | null {
+  const s = String(v).trim();
+  if (s === '') return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Editable copy of StallConfig where numeric fields may hold in-progress text. */
+type StallDraft = Omit<StallConfig, 'stallInterval' | 'maxStalls' | 'gracePeriod'> & {
+  stallInterval: number | string;
+  maxStalls: number | string;
+  gracePeriod: number | string;
+};
+
+/** Editable copy of DlqConfig where numeric fields may hold in-progress text. */
+type DlqDraft = Omit<
+  DlqConfig,
+  'autoRetryInterval' | 'maxAutoRetries' | 'maxAge' | 'maxEntries'
+> & {
+  autoRetryInterval: number | string;
+  maxAutoRetries: number | string;
+  maxAge: number | string | null;
+  maxEntries: number | string;
+};
+
 export function StallForm({
   queue,
   config,
@@ -35,8 +65,10 @@ export function StallForm({
   config: StallConfig;
   onSaved: () => void;
 }) {
-  const [c, setC] = useSyncedConfig(config);
+  const [c, setC] = useSyncedConfig<StallDraft>(config);
   const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   return (
     <Card>
       <CardHeader title="Stall detection" />
@@ -53,21 +85,21 @@ export function StallForm({
           <Input
             type="number"
             value={c.stallInterval}
-            onChange={(e) => setC({ ...c, stallInterval: Number(e.target.value) })}
+            onChange={(e) => setC({ ...c, stallInterval: e.target.value })}
           />
         </Field>
         <Field label="Max stalls">
           <Input
             type="number"
             value={c.maxStalls}
-            onChange={(e) => setC({ ...c, maxStalls: Number(e.target.value) })}
+            onChange={(e) => setC({ ...c, maxStalls: e.target.value })}
           />
         </Field>
         <Field label="Grace period (ms)">
           <Input
             type="number"
             value={c.gracePeriod}
-            onChange={(e) => setC({ ...c, gracePeriod: Number(e.target.value) })}
+            onChange={(e) => setC({ ...c, gracePeriod: e.target.value })}
           />
         </Field>
       </div>
@@ -75,19 +107,34 @@ export function StallForm({
         <Button
           variant="accent"
           size="sm"
+          disabled={saving}
           onClick={async () => {
+            const stallInterval = toNum(c.stallInterval);
+            const maxStalls = toNum(c.maxStalls);
+            const gracePeriod = toNum(c.gracePeriod);
+            if (stallInterval == null || maxStalls == null || gracePeriod == null) {
+              setErr('All numeric fields must be filled in');
+              return;
+            }
+            setSaving(true);
+            setSaved(false);
             try {
               setErr(null);
-              await bq.setStallConfig(queue, c);
+              await bq.setStallConfig(queue, { ...c, stallInterval, maxStalls, gracePeriod });
               onSaved();
+              setSaved(true);
+              window.setTimeout(() => setSaved(false), 2000);
             } catch (e) {
               setErr((e as Error).message);
+            } finally {
+              setSaving(false);
             }
           }}
         >
           Save
         </Button>
-        {err && <span className="text-xs text-red-400">{err}</span>}
+        {saved && <span className="text-xs text-success">Saved ✓</span>}
+        {err && <span className="text-xs text-danger">{err}</span>}
       </div>
     </Card>
   );
@@ -102,8 +149,10 @@ export function DlqConfigForm({
   config: DlqConfig;
   onSaved: () => void;
 }) {
-  const [c, setC] = useSyncedConfig(config);
+  const [c, setC] = useSyncedConfig<DlqDraft>(config);
   const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   return (
     <Card>
       <CardHeader title="DLQ policy" />
@@ -120,28 +169,28 @@ export function DlqConfigForm({
           <Input
             type="number"
             value={c.autoRetryInterval}
-            onChange={(e) => setC({ ...c, autoRetryInterval: Number(e.target.value) })}
+            onChange={(e) => setC({ ...c, autoRetryInterval: e.target.value })}
           />
         </Field>
         <Field label="Max auto-retries">
           <Input
             type="number"
             value={c.maxAutoRetries}
-            onChange={(e) => setC({ ...c, maxAutoRetries: Number(e.target.value) })}
+            onChange={(e) => setC({ ...c, maxAutoRetries: e.target.value })}
           />
         </Field>
         <Field label="Max age (ms)">
           <Input
             type="number"
             value={c.maxAge ?? ''}
-            onChange={(e) => setC({ ...c, maxAge: e.target.value ? Number(e.target.value) : null })}
+            onChange={(e) => setC({ ...c, maxAge: e.target.value })}
           />
         </Field>
         <Field label="Max entries">
           <Input
             type="number"
             value={c.maxEntries}
-            onChange={(e) => setC({ ...c, maxEntries: Number(e.target.value) })}
+            onChange={(e) => setC({ ...c, maxEntries: e.target.value })}
           />
         </Field>
       </div>
@@ -149,19 +198,42 @@ export function DlqConfigForm({
         <Button
           variant="accent"
           size="sm"
+          disabled={saving}
           onClick={async () => {
+            const autoRetryInterval = toNum(c.autoRetryInterval);
+            const maxAutoRetries = toNum(c.maxAutoRetries);
+            const maxEntries = toNum(c.maxEntries);
+            // maxAge is nullable — an empty field means "no max age", not invalid.
+            const maxAge = c.maxAge == null ? null : toNum(c.maxAge);
+            if (autoRetryInterval == null || maxAutoRetries == null || maxEntries == null) {
+              setErr('All numeric fields must be filled in');
+              return;
+            }
+            setSaving(true);
+            setSaved(false);
             try {
               setErr(null);
-              await bq.setDlqConfig(queue, c);
+              await bq.setDlqConfig(queue, {
+                ...c,
+                autoRetryInterval,
+                maxAutoRetries,
+                maxAge,
+                maxEntries,
+              });
               onSaved();
+              setSaved(true);
+              window.setTimeout(() => setSaved(false), 2000);
             } catch (e) {
               setErr((e as Error).message);
+            } finally {
+              setSaving(false);
             }
           }}
         >
           Save
         </Button>
-        {err && <span className="text-xs text-red-400">{err}</span>}
+        {saved && <span className="text-xs text-success">Saved ✓</span>}
+        {err && <span className="text-xs text-danger">{err}</span>}
       </div>
     </Card>
   );

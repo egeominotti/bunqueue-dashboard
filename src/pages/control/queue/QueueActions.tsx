@@ -108,8 +108,10 @@ export function LifecycleCard({
             size="sm"
             disabled={busy}
             onClick={() =>
-              run('Cleaned', () =>
-                bq.clean(queue, { grace: Number(cleanGrace), limit: Number(cleanLimit) })
+              run(
+                'Cleaned',
+                () => bq.clean(queue, { grace: Number(cleanGrace), limit: Number(cleanLimit) }),
+                `Permanently delete up to ${cleanLimit} completed/failed jobs older than ${cleanGrace}ms from "${queue}"?`
               )
             }
           >

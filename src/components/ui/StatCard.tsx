@@ -5,10 +5,10 @@ export type StatTone = 'default' | 'green' | 'red' | 'blue' | 'amber' | 'accent'
 
 const toneClass: Record<StatTone, string> = {
   default: 'text-fg',
-  green: 'text-emerald-400',
-  red: 'text-red-400',
+  green: 'text-success',
+  red: 'text-danger',
   blue: 'text-blue-400',
-  amber: 'text-amber-400',
+  amber: 'text-warning',
   accent: 'text-accent',
 };
 

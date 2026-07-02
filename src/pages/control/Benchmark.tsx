@@ -8,13 +8,11 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { bq } from '@/lib/bq';
 import { cn } from '@/lib/cn';
-import { formatNumber } from '@/lib/format';
+import { formatBytes, formatMs, formatNumber } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 import {
   clampInt,
   DEFAULT_CONFIG,
-  fmtBytes,
-  fmtMs,
   fmtRate,
   LIMITS,
   PRESETS,
@@ -103,30 +101,36 @@ export function Benchmark() {
 
   // Live server-side queue depth — proof the load lands and drains. Errors flow
   // to usePolledData, which keeps the last good counts (card stays mounted).
-  const { data: counts } = usePolledData(() => bq.counts(pollQueue), [pollQueue], {
-    intervalMs: 1000,
-  });
+  const { data: counts, error: countsError } = usePolledData(
+    () => bq.counts(pollQueue),
+    [pollQueue],
+    {
+      intervalMs: 1000,
+    }
+  );
   const c = counts?.counts ?? null;
 
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanResult, setCleanResult] = useState<{ remaining: number } | null>(null);
   const cleanup = async () => {
     const q = draft.queue.trim();
-    if (!q || !window.confirm(`Remove benchmark jobs from "${q}"?`)) return;
-    for (const state of ['waiting', 'completed', 'failed', 'delayed']) {
-      try {
-        await bq.clean(q, { state, limit: LIMITS.total });
-      } catch {
-        /* state not cleanable */
+    if (cleaning || !q || !window.confirm(`Remove benchmark jobs from "${q}"?`)) return;
+    setCleaning(true);
+    setCleanResult(null);
+    try {
+      for (const state of ['waiting', 'completed', 'failed', 'delayed']) {
+        try {
+          await bq.clean(q, { state, limit: LIMITS.total });
+        } catch {
+          /* state not cleanable */
+        }
       }
-    }
-    // Pulled-but-unacked jobs can't be cleaned; the server requeues them after
-    // its stall timeout — tell the user instead of silently under-cleaning.
-    const after = await bq.counts(q).catch(() => null);
-    const activeLeft = after?.counts?.active ?? 0;
-    if (activeLeft > 0) {
-      window.alert(
-        `${activeLeft} job(s) are still active (pulled but not acked) and cannot be cleaned. ` +
-          'The server requeues them as waiting after the stall timeout — run Clean queue again then.'
-      );
+      // Pulled-but-unacked jobs can't be cleaned; the server requeues them after
+      // its stall timeout — tell the user instead of silently under-cleaning.
+      const after = await bq.counts(q).catch(() => null);
+      setCleanResult({ remaining: after?.counts?.active ?? 0 });
+    } finally {
+      setCleaning(false);
     }
   };
 
@@ -169,7 +173,7 @@ export function Benchmark() {
   const etaText =
     (phase === 'running' || phase === 'draining') && live.etaMs != null
       ? live.etaMs > 0
-        ? `ETA ${fmtMs(live.etaMs)}`
+        ? `ETA ${formatMs(live.etaMs)}`
         : 'finishing…'
       : phase === 'stopped'
         ? 'stopped early'
@@ -200,7 +204,7 @@ export function Benchmark() {
       />
 
       {live.error && (
-        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-red-400">
+        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-danger">
           {live.error}
         </div>
       )}
@@ -344,29 +348,41 @@ export function Benchmark() {
               </Field>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: Toggle renders a native <button role="switch">, a labelable control the rule can't see through the component */}
+            <label className="flex cursor-pointer items-center gap-2">
               <Toggle
                 checked={draft.durable}
                 onChange={(v) => set('durable', v)}
-                label="Durable (fsync each job)"
                 disabled={active}
               />
               <span className="text-sm text-muted">Durable (fsync each job)</span>
-            </div>
-            <div className="flex items-center gap-2">
+            </label>
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: Toggle renders a native <button role="switch">, a labelable control the rule can't see through the component */}
+            <label className="flex cursor-pointer items-center gap-2">
               <Toggle
                 checked={draft.removeOnComplete}
                 onChange={(v) => set('removeOnComplete', v)}
-                label="Remove on complete"
                 disabled={active}
               />
               <span className="text-sm text-muted">Remove on complete</span>
-            </div>
+            </label>
 
-            <div className="pt-1">
-              <Button variant="ghost" size="sm" disabled={active} onClick={cleanup}>
-                Clean queue
+            <div className="flex items-center gap-3 pt-1">
+              <Button variant="ghost" size="sm" disabled={active || cleaning} onClick={cleanup}>
+                {cleaning ? 'Cleaning…' : 'Clean queue'}
               </Button>
+              {cleanResult && (
+                <span
+                  className={cn(
+                    'text-xs',
+                    cleanResult.remaining > 0 ? 'text-warning' : 'text-success'
+                  )}
+                >
+                  {cleanResult.remaining > 0
+                    ? `Cleaned — ${formatNumber(cleanResult.remaining)} active job(s) remain (requeued after the stall timeout)`
+                    : 'Cleaned — 0 jobs remain'}
+                </span>
+              )}
             </div>
           </div>
         </Card>
@@ -397,14 +413,14 @@ export function Benchmark() {
               />
               <StatCard label="Push/sec" value={fmtRate(live.pushPerSec)} compact />
               <StatCard label="Done/sec" value={fmtRate(live.donePerSec)} tone="green" compact />
-              <StatCard label="Elapsed" value={fmtMs(live.elapsedMs)} compact />
+              <StatCard label="Elapsed" value={formatMs(live.elapsedMs)} compact />
               <StatCard
                 label="Active workers"
                 value={`${live.activeWorkers}/${shownWorkers}`}
                 tone="blue"
                 compact
               />
-              <StatCard label="Data" value={fmtBytes(summary?.bytes ?? live.bytes)} compact />
+              <StatCard label="Data" value={formatBytes(summary?.bytes ?? live.bytes)} compact />
               <StatCard
                 label="Errors"
                 value={formatNumber(
@@ -446,7 +462,7 @@ export function Benchmark() {
               tone="green"
               compact
             />
-            <StatCard label="Duration" value={fmtMs(summary.durationMs)} compact />
+            <StatCard label="Duration" value={formatMs(summary.durationMs)} compact />
             <StatCard
               label="Avg push/s"
               value={fmtRate(summary.pushPerSec)}
@@ -454,22 +470,29 @@ export function Benchmark() {
               compact
             />
             <StatCard label="Avg done/s" value={fmtRate(summary.donePerSec)} tone="green" compact />
-            <StatCard label="Data rate" value={`${fmtBytes(summary.mbPerSec)}/s`} compact />
-            <StatCard label="Push p95" value={fmtMs(summary.p95)} compact />
-            <StatCard label="Push p99" value={fmtMs(summary.p99)} compact />
+            <StatCard label="Data rate" value={`${formatBytes(summary.mbPerSec)}/s`} compact />
+            <StatCard label="Push p95" value={formatMs(summary.p95)} compact />
+            <StatCard label="Push p99" value={formatMs(summary.p99)} compact />
           </div>
           <p className="mt-3 text-xs text-faint">
-            Push-batch latency avg {fmtMs(summary.avg)} · p50 {fmtMs(summary.p50)} · p95{' '}
-            {fmtMs(summary.p95)} · p99 {fmtMs(summary.p99)} · max {fmtMs(summary.max)}.
+            Push-batch latency avg {formatMs(summary.avg)} · p50 {formatMs(summary.p50)} · p95{' '}
+            {formatMs(summary.p95)} · p99 {formatMs(summary.p99)} · max {formatMs(summary.max)}.
             {summary.error ? ` First error: ${summary.error}` : ''}
           </p>
         </Card>
       )}
 
-      {c && (
-        <Card className="mt-6">
-          <CardHeader title={`Server queue: ${pollQueue}`} />
-          <p className="-mt-3 mb-4 text-xs text-faint">Live counts from the server (poll 1s).</p>
+      <Card className="mt-6">
+        <CardHeader
+          title={`Server queue: ${pollQueue}`}
+          action={
+            countsError ? (
+              <span className="text-xs font-medium text-warning">stale — server unreachable</span>
+            ) : undefined
+          }
+        />
+        <p className="-mt-3 mb-4 text-xs text-faint">Live counts from the server (poll 1s).</p>
+        {c ? (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
             <StatCard label="Waiting" value={formatNumber(c.waiting ?? 0)} tone="amber" compact />
             <StatCard label="Active" value={formatNumber(c.active ?? 0)} tone="blue" compact />
@@ -487,8 +510,12 @@ export function Benchmark() {
             />
             <StatCard label="Delayed" value={formatNumber(c.delayed ?? 0)} compact />
           </div>
-        </Card>
-      )}
+        ) : (
+          <p className="text-sm text-faint">
+            No counts yet — waiting for the server to answer for this queue.
+          </p>
+        )}
+      </Card>
 
       <RunHistory history={history} onClear={bench.clearHistory} />
     </div>

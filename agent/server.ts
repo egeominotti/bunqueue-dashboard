@@ -17,6 +17,7 @@
  *  3. Optional bearer token (AGENT_TOKEN): when set, state-changing requests
  *     must present it (`Authorization: Bearer <t>` or `x-agent-token: <t>`).
  */
+import { type DbFilter, dbCell, dbInfo, dbRows, dbSchema, dbTables, MissingDbError, queryWithTimeout } from './db';
 import type { ProcessManager, ServerConfig } from './manager';
 
 export interface AgentOptions {
@@ -111,6 +112,14 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
       return json({ ok: false, error: 'Origin not allowed' }, 403, origin);
     }
 
+    // The optional AGENT_TOKEN gates STATE-CHANGING requests only. Read-only
+    // GETs (including the /db/* inspector, which can expose job payloads) are
+    // protected by the Origin allowlist alone — a drive-by cross-origin page
+    // can't read the response (no ACAO for its origin), which is the real
+    // threat. Gating reads behind the token would break the dashboard itself:
+    // the browser client sends no agent token (see bq.ts `agent()`), so the
+    // whole point of loopback + allowlisted CORS is to make browser reads work
+    // without one. Non-browser local callers on loopback are trusted for reads.
     const mutating = method === 'POST' || method === 'PUT';
     if (mutating && !tokenOk(req, token)) {
       return json({ ok: false, error: 'Unauthorized' }, 401, origin);
@@ -139,9 +148,57 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
         return json(mgr.setConfig(patch), 200, origin);
       }
 
+      // Read-only SQLite inspector (agent/db.ts opens every connection
+      // readonly, so none of these can mutate the store). The POST query
+      // endpoint rides the same token gate as other mutating methods.
+      if (pathname === '/db/info' && method === 'GET') {
+        return json({ ok: true, ...dbInfo(mgr.getConfig().dataPath) }, 200, origin);
+      }
+      if (pathname === '/db/tables' && method === 'GET') {
+        return json({ ok: true, tables: dbTables(mgr.getConfig().dataPath) }, 200, origin);
+      }
+      if (pathname.startsWith('/db/tables/') && pathname.endsWith('/schema') && method === 'GET') {
+        const table = decodeURIComponent(pathname.slice('/db/tables/'.length, -'/schema'.length));
+        return json({ ok: true, ...dbSchema(mgr.getConfig().dataPath, table) }, 200, origin);
+      }
+      if (pathname.startsWith('/db/tables/') && pathname.endsWith('/cell') && method === 'GET') {
+        const table = decodeURIComponent(pathname.slice('/db/tables/'.length, -'/cell'.length));
+        const sp = new URL(req.url).searchParams;
+        const rowid = Number(sp.get('rowid'));
+        const column = sp.get('column') ?? '';
+        return json({ ok: true, ...dbCell(mgr.getConfig().dataPath, table, rowid, column) }, 200, origin);
+      }
+      if (pathname.startsWith('/db/tables/') && method === 'GET') {
+        const table = decodeURIComponent(pathname.slice('/db/tables/'.length));
+        const sp = new URL(req.url).searchParams;
+        const limit = Number(sp.get('limit')) || 50;
+        const offset = Number(sp.get('offset')) || 0;
+        const orderBy = sp.get('orderBy') || undefined;
+        const dir = sp.get('dir') === 'desc' ? 'desc' : 'asc';
+        const fCol = sp.get('fcol');
+        const fOp = sp.get('fop');
+        const fVal = sp.get('fval');
+        const filter: DbFilter | undefined =
+          fCol && fVal
+            ? { column: fCol, op: fOp === 'eq' ? 'eq' : fOp === 'ne' ? 'ne' : 'contains', value: fVal }
+            : undefined;
+        return json(
+          { ok: true, ...dbRows(mgr.getConfig().dataPath, table, limit, offset, orderBy, dir, filter) },
+          200,
+          origin
+        );
+      }
+      if (pathname === '/db/query' && method === 'POST') {
+        const { sql } = (await req.json()) as { sql?: string };
+        return json({ ok: true, ...(await queryWithTimeout(mgr.getConfig().dataPath, sql ?? '')) }, 200, origin);
+      }
+
       return json({ ok: false, error: 'Not found' }, 404, origin);
     } catch (e) {
-      return json({ ok: false, error: (e as Error).message ?? String(e) }, 400, origin);
+      // A missing database file is an expected pre-first-start condition — 404
+      // so the UI can show "no database yet" distinctly from a real read error.
+      const status = e instanceof MissingDbError ? 404 : 400;
+      return json({ ok: false, error: (e as Error).message ?? String(e) }, status, origin);
     }
   };
 }

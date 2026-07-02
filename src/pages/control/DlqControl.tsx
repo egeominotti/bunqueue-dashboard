@@ -17,7 +17,7 @@ export function DlqControl() {
   const [queue, setQueue] = useState('');
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const { data: qs } = usePolledData(() => bq.queues(), [], { intervalMs: 30000 });
 
@@ -45,16 +45,17 @@ export function DlqControl() {
     if (page > last) setPage(last);
   }, [data, page]);
 
-  const run = async (label: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
+  const run = async (verb: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
     setBusy(true);
     setMsg(null);
     try {
       const r = (await fn()) as { count?: number };
-      setMsg(`${label}: ${r?.count ?? 'ok'}`);
+      const n = r?.count ?? 0;
+      setMsg({ ok: true, text: `${verb} ${formatNumber(n)} ${n === 1 ? 'entry' : 'entries'}` });
       refetch();
     } catch (e) {
-      setMsg((e as Error).message);
+      setMsg({ ok: false, text: (e as Error).message });
     } finally {
       setBusy(false);
     }
@@ -73,7 +74,13 @@ export function DlqControl() {
             <Button
               size="sm"
               disabled={!queue || busy}
-              onClick={() => run('Retried', () => bq.retryDlq(queue))}
+              onClick={() =>
+                run(
+                  'Retried',
+                  () => bq.retryDlq(queue),
+                  `Retry all ${data?.total ?? 0} DLQ entries for "${queue}"?`
+                )
+              }
             >
               <IconRefresh className="size-3.5" /> Retry all
             </Button>
@@ -82,7 +89,11 @@ export function DlqControl() {
               size="sm"
               disabled={!queue || busy}
               onClick={() =>
-                run('Purged', () => bq.purgeDlq(queue), `Purge the DLQ for "${queue}"?`)
+                run(
+                  'Purged',
+                  () => bq.purgeDlq(queue),
+                  `Purge all ${data?.total ?? 0} DLQ entries for "${queue}"?`
+                )
               }
             >
               Purge
@@ -97,6 +108,7 @@ export function DlqControl() {
         <div className="w-56">
           <Select
             value={queue}
+            aria-label="Queue"
             onChange={(e) => {
               setQueue(e.target.value);
               setPage(0);
@@ -117,7 +129,11 @@ export function DlqControl() {
             compact
           />
         </div>
-        {msg && <span className="text-xs text-muted">{msg}</span>}
+        {msg && (
+          <span className={msg.ok ? 'text-sm text-success' : 'text-sm text-danger'}>
+            {msg.text}
+          </span>
+        )}
       </div>
 
       {loading && !data && !error ? (
@@ -149,11 +165,11 @@ export function DlqControl() {
                 >
                   <td className="px-5 py-3 font-mono text-xs text-muted">{e.job.id}</td>
                   <td className="px-5 py-3">
-                    <span className="rounded-md bg-red-500/10 px-2 py-0.5 text-xs text-red-400">
+                    <span className="rounded-md bg-red-500/10 px-2 py-0.5 text-xs text-danger">
                       {e.reason}
                     </span>
                   </td>
-                  <td className="max-w-md px-5 py-3 text-xs text-red-400/80">{e.error || '—'}</td>
+                  <td className="max-w-md px-5 py-3 text-xs text-danger/80">{e.error || '—'}</td>
                   <td className="px-5 py-3 text-right tnum text-muted">
                     {e.job.attempts ?? e.attempts?.length ?? '—'}
                   </td>

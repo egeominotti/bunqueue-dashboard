@@ -50,18 +50,23 @@ export function EmptyState({
  * so the page still renders its layout with empty data instead of a blocking
  * error screen. Not red, not full-page — just an amber hint that data is stale.
  */
-export function OfflineBanner({ onRetry }: { onRetry?: () => void }) {
+export function OfflineBanner({
+  onRetry,
+  message = 'Not connected to the bunqueue server — showing empty data.',
+}: {
+  onRetry?: () => void;
+  /** Override when the unreachable thing isn't the bunqueue server (e.g. the control agent). */
+  message?: string;
+}) {
   return (
-    <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-4 py-2.5 text-sm">
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-4 py-2.5 text-sm">
       <span className="size-2 shrink-0 rounded-full bg-amber-400" aria-hidden="true" />
-      <span className="text-amber-300/90">
-        Not connected to the bunqueue server — showing empty data.
-      </span>
+      <span className="text-amber-300/90 light:text-amber-700">{message}</span>
       {onRetry && (
         <button
           type="button"
           onClick={onRetry}
-          className="ml-auto shrink-0 rounded-md border border-amber-500/30 px-2.5 py-1 text-xs font-medium text-amber-200 hover:border-amber-400/50"
+          className="ml-auto shrink-0 rounded-md border border-amber-500/30 px-2.5 py-1 text-xs font-medium text-amber-200 light:text-amber-700 hover:border-amber-400/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
         >
           Retry
         </button>
@@ -73,7 +78,7 @@ export function OfflineBanner({ onRetry }: { onRetry?: () => void }) {
 export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 py-14 text-center">
-      <div className="text-sm font-medium text-red-400">Something went wrong</div>
+      <div className="text-sm font-medium text-danger">Something went wrong</div>
       <div className="max-w-md text-xs text-faint">{error.message}</div>
       {onRetry && (
         <button

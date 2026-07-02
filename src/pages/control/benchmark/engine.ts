@@ -156,18 +156,8 @@ export const sleepWhile = async (ms: number, keepWaiting: () => boolean): Promis
 
 export const errMsg = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-export const fmtMs = (v: number): string =>
-  v >= 1000 ? `${(v / 1000).toFixed(2)}s` : `${v.toFixed(v < 10 ? 1 : 0)}ms`;
-
 export const fmtRate = (v: number): string => {
   if (v >= 1_000_000) return `${(v / 1e6).toFixed(2)}M`;
   if (v >= 1000) return `${(v / 1000).toFixed(1)}K`;
   return `${Math.round(v)}`;
-};
-
-export const fmtBytes = (b: number): string => {
-  if (b >= 1e9) return `${(b / 1e9).toFixed(2)} GB`;
-  if (b >= 1e6) return `${(b / 1e6).toFixed(2)} MB`;
-  if (b >= 1e3) return `${(b / 1e3).toFixed(1)} KB`;
-  return `${Math.round(b)} B`;
 };

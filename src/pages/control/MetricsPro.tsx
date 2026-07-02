@@ -7,12 +7,9 @@ import { Pagination } from '@/components/ui/Pagination';
 import { StatCard } from '@/components/ui/StatCard';
 import { bq } from '@/lib/bq';
 import { cn } from '@/lib/cn';
-import { errorRate, formatNumber, formatPercent, formatUptime } from '@/lib/format';
+import { errorRate, formatCompact, formatNumber, formatPercent, formatUptime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 import { depthTrend, useThroughputSeries } from '@/lib/useThroughputSeries';
-
-const compact = (n: number): string =>
-  n >= 1_000_000 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
 
 const X_LABELS = ['-60s', '-45s', '-30s', '-15s', 'now'];
 const PAGE_SIZE = 15;
@@ -70,14 +67,14 @@ export function MetricsPro() {
       <PageHeader
         title="Metrics"
         description="Real-time performance telemetry for your queues."
-        live
+        live={!error}
       />
       {error && <OfflineBanner onRetry={refetch} />}
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           label="Total Completed"
-          value={compact(stats.totalCompleted)}
+          value={formatCompact(stats.totalCompleted)}
           tone="green"
           hint="all time"
         />
@@ -138,9 +135,9 @@ export function MetricsPro() {
               className={cn(
                 'text-xs font-medium',
                 trend.label === 'draining'
-                  ? 'text-emerald-400'
+                  ? 'text-success'
                   : trend.label === 'accumulating'
-                    ? 'text-red-400'
+                    ? 'text-danger'
                     : 'text-faint'
               )}
             >
@@ -152,6 +149,7 @@ export function MetricsPro() {
         </div>
         <AreaChart
           xLabels={X_LABELS}
+          ariaLabel="queue depth chart"
           series={[
             {
               label: 'Depth',
@@ -170,16 +168,14 @@ export function MetricsPro() {
           <div className="flex items-center justify-around">
             <div className="text-center">
               <div
-                className={cn('text-3xl font-bold tnum', rate > 0.05 ? 'text-red-400' : 'text-fg')}
+                className={cn('text-3xl font-bold tnum', rate > 0.05 ? 'text-danger' : 'text-fg')}
               >
                 {formatPercent(rate)}
               </div>
               <div className="text-xs text-faint">error rate</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold tnum text-emerald-400">
-                {formatPercent(1 - rate)}
-              </div>
+              <div className="text-3xl font-bold tnum text-success">{formatPercent(1 - rate)}</div>
               <div className="text-xs text-faint">success rate</div>
             </div>
           </div>
@@ -190,7 +186,7 @@ export function MetricsPro() {
             />
           </div>
           <div className="mt-2 flex justify-between font-mono text-[11px] text-faint">
-            <span>{compact(stats.totalCompleted)} completed</span>
+            <span>{formatCompact(stats.totalCompleted)} completed</span>
             <span>{formatNumber(stats.totalFailed)} failed</span>
           </div>
         </Card>
@@ -203,8 +199,16 @@ export function MetricsPro() {
             <SrvRow color="bg-accent" label="Processing" value={formatNumber(stats.active)} />
             <SrvRow color="bg-amber-400" label="Delayed" value={formatNumber(stats.delayed)} />
             <SrvRow color="bg-red-400" label="Dead Letter" value={formatNumber(stats.dlq)} />
-            <SrvRow color="bg-zinc-500" label="Total Pushed" value={compact(stats.totalPushed)} />
-            <SrvRow color="bg-zinc-500" label="Total Pulled" value={compact(stats.totalPulled)} />
+            <SrvRow
+              color="bg-zinc-500"
+              label="Total Pushed"
+              value={formatCompact(stats.totalPushed)}
+            />
+            <SrvRow
+              color="bg-zinc-500"
+              label="Total Pulled"
+              value={formatCompact(stats.totalPulled)}
+            />
             {/* stats.uptime is milliseconds; formatUptime expects seconds. */}
             <SrvRow
               color="bg-emerald-400"
@@ -243,7 +247,7 @@ export function MetricsPro() {
                     <td className="px-5 py-3 text-right tnum text-muted">{fmtMs(avg)}</td>
                     <td className="px-5 py-3 text-right tnum text-muted">{fmtMs(p?.p50)}</td>
                     <td className="px-5 py-3 text-right tnum text-muted">{fmtMs(p?.p95)}</td>
-                    <td className="px-5 py-3 text-right tnum text-amber-400">{fmtMs(p?.p99)}</td>
+                    <td className="px-5 py-3 text-right tnum text-warning">{fmtMs(p?.p99)}</td>
                   </tr>
                 );
               })}
@@ -289,22 +293,22 @@ export function MetricsPro() {
                           'rounded-full px-2 py-0.5 text-[11px] font-medium',
                           d.paused
                             ? 'bg-orange-500/10 text-orange-400'
-                            : 'bg-emerald-500/10 text-emerald-400'
+                            : 'bg-emerald-500/10 text-success'
                         )}
                       >
                         {d.paused ? 'paused' : 'active'}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right tnum text-amber-400">
+                    <td className="px-5 py-3 text-right tnum text-warning">
                       {formatNumber(d.counts.waiting)}
                     </td>
                     <td className="px-5 py-3 text-right tnum text-blue-400">
                       {formatNumber(d.counts.active)}
                     </td>
-                    <td className="px-5 py-3 text-right tnum text-emerald-400">
+                    <td className="px-5 py-3 text-right tnum text-success">
                       {formatNumber(d.counts.completed)}
                     </td>
-                    <td className="px-5 py-3 text-right tnum text-red-400">
+                    <td className="px-5 py-3 text-right tnum text-danger">
                       {formatNumber(d.counts.failed)}
                     </td>
                   </tr>

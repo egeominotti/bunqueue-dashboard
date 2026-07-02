@@ -50,13 +50,15 @@ export function JobInspector() {
   // without it the slower response would clobber the newer one.
   const lookupGen = useRef(0);
 
-  const lookup = async (raw: string, mode: LookupMode = lookupBy) => {
+  const lookup = async (raw: string, mode: LookupMode = lookupBy, keepMsg = false) => {
     const key = raw.trim();
     if (!key) return;
     const my = ++lookupGen.current;
     setLoading(true);
     setNotFound(false);
-    setMsg(null);
+    // After an action, act() has just set its success message — clearing it here
+    // would destroy it before it ever paints.
+    if (!keepMsg) setMsg(null);
     try {
       const jobRes = await (mode === 'custom' ? bq.jobByCustomId(key) : bq.job(key));
       const loaded = jobRes.job;
@@ -121,7 +123,7 @@ export function JobInspector() {
         // "Job not found".
         setParams({}, { replace: true });
       } else {
-        await lookup(job.id, 'id');
+        await lookup(job.id, 'id', true);
       }
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
@@ -171,7 +173,7 @@ export function JobInspector() {
       </div>
 
       {msg && (
-        <div className={msg.ok ? 'mb-4 text-sm text-emerald-400' : 'mb-4 text-sm text-red-400'}>
+        <div className={msg.ok ? 'mb-4 text-sm text-success' : 'mb-4 text-sm text-danger'}>
           {msg.text}
         </div>
       )}
@@ -246,7 +248,7 @@ export function JobInspector() {
                 <CardHeader title="Error" />
                 {err && (
                   <div className="mb-3">
-                    <p className="text-sm text-red-400">{err.message}</p>
+                    <p className="text-sm text-danger">{err.message}</p>
                     <p className="mt-1 text-[11px] text-faint">
                       {err.attempt != null ? `Attempt ${err.attempt} · ` : ''}
                       {formatDateTime(err.timestamp)}
@@ -254,7 +256,7 @@ export function JobInspector() {
                   </div>
                 )}
                 {hasStack && (
-                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-3 font-mono text-xs text-red-400/90">
+                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-3 font-mono text-xs text-danger/90">
                     {job.stacktrace?.join('\n')}
                   </pre>
                 )}

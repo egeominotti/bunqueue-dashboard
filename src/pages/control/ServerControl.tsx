@@ -14,10 +14,25 @@ import { ProcessLogs } from './server/ProcessLogs';
 import { StatusConsole } from './server/StatusConsole';
 import { StoragePanel } from './server/StoragePanel';
 
+/** Process vitals from GET /health (RAM in MB, live connection counts). */
+interface HealthVitals {
+  memory?: { rss?: number; heapUsed?: number; heapTotal?: number };
+  connections?: { tcp?: number; ws?: number; sse?: number };
+}
+
 export function ServerControl() {
   const { data, error, refetch } = usePolledData(() => bq.control.status(), []);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // RAM + connections come from the server's own /health, not the agent —
+  // only poll it while the process is running (it can't answer otherwise).
+  const serverUp = data?.status === 'running';
+  const { data: health } = usePolledData(
+    () => (serverUp ? bq.health() : Promise.resolve(null)),
+    [serverUp]
+  );
+  const vitals = serverUp ? ((health ?? null) as HealthVitals | null) : null;
 
   const run = async (label: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
@@ -37,7 +52,10 @@ export function ServerControl() {
     return (
       <div>
         <PageHeader title="Server" description="Start, stop and restart the bunqueue server." />
-        <OfflineBanner onRetry={refetch} />
+        <OfflineBanner
+          message="Control agent unreachable — server lifecycle controls are unavailable."
+          onRetry={refetch}
+        />
         <Card>
           <CardHeader title="Control agent not running" />
           <p className="text-sm text-muted">
@@ -46,8 +64,12 @@ export function ServerControl() {
             manages the bunqueue server process (start / stop / restart). Start it with:
           </p>
           <pre className="mt-3 overflow-x-auto rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs">
-            bun run agent/index.ts
+            bun start{'      '}# agent + dashboard together (recommended){'\n'}bun run agent
+            {'   '}# agent only, if the dashboard is already running
           </pre>
+          <p className="mt-3 text-xs text-faint">
+            This page reconnects automatically once the agent is up — no reload needed.
+          </p>
         </Card>
       </div>
     );
@@ -69,13 +91,13 @@ export function ServerControl() {
       />
 
       {actionError && (
-        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-red-400">
+        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-danger">
           {actionError}
         </div>
       )}
 
       {stale && (
-        <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-sm text-amber-400">
+        <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-sm text-warning">
           Control agent unreachable — showing last known state. Lifecycle actions are disabled until
           it responds again.
         </div>
@@ -85,6 +107,7 @@ export function ServerControl() {
         status={data}
         agentBase={bq.agentBase}
         stale={stale}
+        vitals={vitals}
         transitioning={transitioning}
         busy={busy}
         onStart={() => run('starting', () => bq.control.start())}
@@ -213,7 +236,7 @@ function ConfigCard({
   return (
     <Card>
       <CardHeader title="Configuration" />
-      <p className="mb-3 text-xs text-amber-400/80">
+      <p className="mb-3 text-xs text-muted">
         {running
           ? 'Ports and data path apply on the next restart — edit freely, then restart.'
           : 'Edit and save; the config is used the next time the server starts.'}
@@ -234,6 +257,8 @@ function ConfigCard({
           <Field label="HTTP port" hint="Dashboard API + SSE.">
             <Input
               type="number"
+              min={1}
+              max={65535}
               value={value.httpPort}
               disabled={busy}
               onChange={(e) => set({ httpPort: Number(e.target.value) })}
@@ -242,6 +267,8 @@ function ConfigCard({
           <Field label="TCP port" hint="Binary protocol. Must differ from HTTP.">
             <Input
               type="number"
+              min={1}
+              max={65535}
               value={value.tcpPort}
               disabled={busy}
               onChange={(e) => set({ tcpPort: Number(e.target.value) })}
@@ -278,10 +305,10 @@ function ConfigCard({
             </Button>
           )}
           {pending && !saved && (
-            <span className="text-xs text-amber-400">Restart to apply changes</span>
+            <span className="text-xs text-warning">Restart to apply changes</span>
           )}
-          {saved && <span className="text-xs text-emerald-400">Saved</span>}
-          {err && <span className="text-xs text-red-400">{err}</span>}
+          {saved && <span className="text-xs text-success">Saved</span>}
+          {err && <span className="text-xs text-danger">{err}</span>}
         </div>
       </div>
     </Card>

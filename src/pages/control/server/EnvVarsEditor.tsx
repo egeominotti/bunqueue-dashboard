@@ -84,7 +84,7 @@ export function EnvVarsEditor({
             aria-label={`Remove ${r.key || 'variable'}`}
             disabled={disabled}
             onClick={() => removeRow(r.id)}
-            className="shrink-0 rounded-md px-2 py-1 text-xs text-faint transition-colors hover:text-red-400 disabled:opacity-40"
+            className="shrink-0 rounded-md px-2 py-1 text-xs text-faint transition-colors hover:text-danger disabled:opacity-40"
           >
             ✕
           </button>
@@ -92,7 +92,7 @@ export function EnvVarsEditor({
       ))}
 
       {dupes.length > 0 && (
-        <p className="text-xs text-amber-400">
+        <p className="text-xs text-warning">
           Duplicate key{dupes.length > 1 ? 's' : ''} — the last value wins: {dupes.join(', ')}
         </p>
       )}

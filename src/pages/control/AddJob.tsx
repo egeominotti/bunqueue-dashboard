@@ -26,6 +26,7 @@ export function AddJob() {
 
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [jsonErr, setJsonErr] = useState<string | null>(null);
 
   const num = (s: string): number | undefined => {
     const n = Number(s);
@@ -34,6 +35,7 @@ export function AddJob() {
 
   const submit = async () => {
     setResult(null);
+    setJsonErr(null);
     if (!queue.trim()) {
       setResult({ ok: false, msg: 'Choose a queue' });
       return;
@@ -41,8 +43,8 @@ export function AddJob() {
     let parsed: unknown;
     try {
       parsed = JSON.parse(dataText);
-    } catch {
-      setResult({ ok: false, msg: 'Data is not valid JSON' });
+    } catch (e) {
+      setJsonErr(`Invalid JSON: ${(e as Error).message}`);
       return;
     }
     const body: AddJobBody = {
@@ -93,7 +95,13 @@ export function AddJob() {
     <div>
       <PageHeader title="Add Job" description="Enqueue a job with full options." />
 
-      <div className="grid max-w-3xl grid-cols-1 gap-6">
+      <form
+        className="grid max-w-3xl grid-cols-1 gap-6"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
         <Card>
           <CardHeader title="Job" />
           <div className="flex flex-col gap-4">
@@ -110,15 +118,18 @@ export function AddJob() {
                 ))}
               </datalist>
             </Field>
-            <Field label="Data (JSON)">
-              <textarea
-                value={dataText}
-                onChange={(e) => setDataText(e.target.value)}
-                spellCheck={false}
-                rows={7}
-                className="w-full rounded-lg border border-line bg-surface-2 p-3 font-mono text-sm text-fg focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
-              />
-            </Field>
+            <div>
+              <Field label="Data (JSON)">
+                <textarea
+                  value={dataText}
+                  onChange={(e) => setDataText(e.target.value)}
+                  spellCheck={false}
+                  rows={7}
+                  className="w-full rounded-lg border border-line bg-surface-2 p-3 font-mono text-sm text-fg focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
+                />
+              </Field>
+              {jsonErr && <p className="mt-2 text-xs text-danger">{jsonErr}</p>}
+            </div>
           </div>
         </Card>
 
@@ -136,6 +147,7 @@ export function AddJob() {
             <Field label="Delay (ms)">
               <Input
                 type="number"
+                min={0}
                 value={delay}
                 onChange={(e) => setDelay(e.target.value)}
                 placeholder="0"
@@ -144,6 +156,7 @@ export function AddJob() {
             <Field label="Max attempts">
               <Input
                 type="number"
+                min={1}
                 value={maxAttempts}
                 onChange={(e) => setMaxAttempts(e.target.value)}
                 placeholder="3"
@@ -152,6 +165,7 @@ export function AddJob() {
             <Field label="Backoff (ms)">
               <Input
                 type="number"
+                min={0}
                 value={backoff}
                 onChange={(e) => setBackoff(e.target.value)}
                 placeholder="1000"
@@ -160,6 +174,7 @@ export function AddJob() {
             <Field label="Timeout (ms)">
               <Input
                 type="number"
+                min={0}
                 value={timeout}
                 onChange={(e) => setTimeout(e.target.value)}
                 placeholder="—"
@@ -185,24 +200,27 @@ export function AddJob() {
           </div>
         </Card>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-end gap-3">
           <div className="w-28">
             <Field label="Count">
-              <Input type="number" value={count} onChange={(e) => setCount(e.target.value)} />
+              <Input
+                type="number"
+                min={1}
+                value={count}
+                onChange={(e) => setCount(e.target.value)}
+              />
             </Field>
           </div>
-          <Button variant="accent" disabled={busy} onClick={submit} className="mt-5">
+          <Button type="submit" variant="accent" disabled={busy}>
             {busy ? 'Adding…' : 'Add job'}
           </Button>
           {result && (
-            <span
-              className={result.ok ? 'mt-5 text-sm text-emerald-400' : 'mt-5 text-sm text-red-400'}
-            >
+            <span className={result.ok ? 'text-sm text-success' : 'text-sm text-danger'}>
               {result.msg}
             </span>
           )}
         </div>
-      </div>
+      </form>
     </div>
   );
 }

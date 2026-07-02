@@ -86,7 +86,7 @@ export function JobLogs({ jobId }: { jobId: string }) {
           </div>
         }
       />
-      {error && <p className="mb-2 text-xs text-red-400">{error}</p>}
+      {error && <p className="mb-2 text-xs text-danger">{error}</p>}
       {logs.length === 0 ? (
         <p className="text-xs text-faint">No log lines recorded for this job.</p>
       ) : (

@@ -63,7 +63,7 @@ export function JobDataEditor({
         rows={8}
         className="w-full resize-y rounded-lg border border-line bg-surface-2 p-3 font-mono text-xs text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
       />
-      {parseError && <p className="mt-2 text-xs text-red-400">{parseError}</p>}
+      {parseError && <p className="mt-2 text-xs text-danger">{parseError}</p>}
     </Card>
   );
 }
