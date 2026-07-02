@@ -26,12 +26,16 @@ export function DlqControl() {
     setQueue((qs.queues.find((x) => x.dlq > 0) ?? qs.queues[0]).name);
   }, [qs, queue]);
 
+  // Tagged with queue+page (QueueControl pattern): a queue switch must not
+  // leave the old queue's entries rendered — their per-row Retry would fire
+  // bq.retryDlq(newQueue, oldEntry.job.id) against the wrong queue.
   const fetcher = useCallback(async () => {
-    if (!queue) return { entries: [] as DlqEntryFull[], total: 0 };
+    if (!queue) return { queue, page, entries: [] as DlqEntryFull[], total: 0 };
     const list = await bq.dlq(queue, PAGE_SIZE, page * PAGE_SIZE);
-    return { entries: list.entries ?? [], total: list.total ?? 0 };
+    return { queue, page, entries: list.entries ?? [], total: list.total ?? 0 };
   }, [queue, page]);
-  const { data, error, loading, refetch } = usePolledData(fetcher, [queue, page]);
+  const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue, page]);
+  const data = raw && raw.queue === queue && raw.page === page ? raw : null;
 
   // Clamp the page when the DLQ shrinks (retry-all/purge here, or external
   // retries) so a stale offset can't render "empty" while entries remain.

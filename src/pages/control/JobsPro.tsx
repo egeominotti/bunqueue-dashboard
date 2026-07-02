@@ -70,13 +70,18 @@ export function JobsPro() {
     if (!queue && summary?.length) setQueue(summary[0].name);
   }, [summary, queue]);
 
+  // Tagged with the view it was fetched for (queue|status|page), so switching
+  // any of them can't leave the previous view's rows rendered — with live
+  // action buttons — under the new selection for one round-trip.
+  const view = `${queue}|${status}|${page}`;
   const fetcher = useCallback(async () => {
-    if (!queue) return [] as JobFull[];
+    if (!queue) return { view, jobs: [] as JobFull[] };
     const states = status === 'all' ? undefined : [status];
     const r = await bq.jobsList(queue, states, PAGE_SIZE, page * PAGE_SIZE);
-    return (r.jobs ?? []).map((j) => ({ ...j, queue: j.queue ?? queue }));
-  }, [queue, status, page]);
-  const { data: jobs, error, loading, refetch } = usePolledData(fetcher, [queue, status, page]);
+    return { view, jobs: (r.jobs ?? []).map((j) => ({ ...j, queue: j.queue ?? queue })) };
+  }, [queue, status, page, view]);
+  const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue, status, page]);
+  const jobs = raw && raw.view === view ? raw.jobs : null;
 
   // No `total` from jobs/list — a full page means there may be a next one.
   const hasNext = (jobs?.length ?? 0) === PAGE_SIZE;

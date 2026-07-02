@@ -31,24 +31,36 @@ export function DlqPro() {
   const total = queues.reduce((a, q) => a + q.dlq, 0);
 
   // Fast poll: only the selected queue's paginated /dlq page + /dlq/stats.
+  // Tagged with queue+page (QueueControl pattern): after a queue switch the old
+  // queue's entries must not stay rendered — their per-row Retry would fire
+  // bq.retryDlq(newQueue, oldEntry.job.id), an action against the wrong entity.
   const fetcher = useCallback(async () => {
-    if (!queue) return { entries: [], entriesTotal: 0, stats: null };
+    if (!queue) return { queue, page, entries: [], entriesTotal: 0, stats: null };
     const [list, statsRes] = await Promise.all([
       bq.dlq(queue, PAGE_SIZE, page * PAGE_SIZE),
       bq.dlqStats(queue).catch(() => null),
     ]);
     return {
+      queue,
+      page,
       entries: list.entries ?? [],
       entriesTotal: list.total ?? 0,
       stats: statsRes?.stats ?? null,
     };
   }, [queue, page]);
-  const { data, error, loading, refetch } = usePolledData(fetcher, [queue, page]);
+  const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue, page]);
+  const data = raw && raw.queue === queue && raw.page === page ? raw : null;
 
   // Clamp the page when the DLQ shrinks (retries/purges here or elsewhere) so a
   // stale offset can't render "empty" while entries remain.
   useEffect(() => {
-    const t = data?.entriesTotal ?? 0;
+    // Guard the transient null window: after a page/queue switch `data` is null
+    // for one round-trip (the tag no longer matches the new selection). Without
+    // this, `t` reads 0 and the clamp fires setPage(0) BEFORE the new page's
+    // fetch resolves — snapping every "Next" click back to page 0 (forward
+    // pagination becomes impossible). Only clamp against a real, matching total.
+    if (!data) return;
+    const t = data.entriesTotal ?? 0;
     if (page > 0 && page * PAGE_SIZE >= t) setPage(Math.max(0, Math.ceil(t / PAGE_SIZE) - 1));
   }, [data, page]);
 

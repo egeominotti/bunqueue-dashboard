@@ -10,6 +10,8 @@ interface Props {
   status: ServerStatus | null;
   agentBase: string;
   transitioning: boolean;
+  /** Agent poll failing — `status` is the last known snapshot, not live truth. */
+  stale?: boolean;
   busy: string | null;
   onStart: () => void;
   onStop: () => void;
@@ -58,6 +60,7 @@ export function StatusConsole({
   status,
   agentBase,
   transitioning,
+  stale = false,
   busy,
   onStart,
   onStop,
@@ -66,7 +69,7 @@ export function StatusConsole({
   const state = status?.status ?? 'stopped';
   const running = state === 'running';
   const meta = STATE_META[state] ?? STATE_META.stopped;
-  const healthy = !!status?.healthy;
+  const healthy = !!status?.healthy && !stale;
   const crashed = !running && status?.exitCode != null && status.exitCode !== 0;
 
   const cfg = status?.runningConfig ?? status?.config ?? null;
@@ -110,7 +113,11 @@ export function StatusConsole({
               )}
             </div>
             <div className="mt-1 font-mono text-xs text-muted">
-              {running ? (
+              {stale ? (
+                <span className="text-amber-400">
+                  last known: pid {status?.pid ?? '—'} — agent unreachable, state may have changed
+                </span>
+              ) : running ? (
                 <>
                   {healthy ? 'healthy' : 'waiting for health…'} · pid {status?.pid ?? '—'} · up{' '}
                   {status?.startedAt ? <UptimeTicker startedAt={status.startedAt} /> : '—'}
@@ -124,13 +131,13 @@ export function StatusConsole({
 
         {/* Power controls */}
         <div className="flex shrink-0 items-center gap-2">
-          <Button variant="success" disabled={running || transitioning} onClick={onStart}>
+          <Button variant="success" disabled={running || transitioning || stale} onClick={onStart}>
             <IconPlay className="size-4" /> Start
           </Button>
-          <Button variant="warning" disabled={!running || transitioning} onClick={onStop}>
+          <Button variant="warning" disabled={!running || transitioning || stale} onClick={onStop}>
             <IconPause className="size-4" /> Stop
           </Button>
-          <Button disabled={transitioning} onClick={onRestart}>
+          <Button disabled={transitioning || stale} onClick={onRestart}>
             <IconRefresh className="size-4" /> Restart
           </Button>
         </div>

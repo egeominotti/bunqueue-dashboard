@@ -179,6 +179,12 @@ export class ProcessManager {
       });
     } catch (e) {
       this.status = 'stopped';
+      // Leave a consistent stopped snapshot: without this, a spawn failure
+      // racing an in-flight stop() (whose token is already stale, so its
+      // finalizer returns early) leaves getStatus() reporting the previous
+      // generation's dead pid and a non-null runningConfig.
+      this.proc = null;
+      this.runningConfig = null;
       throw new Error(`Failed to spawn "${cmd}": ${(e as Error).message}`);
     }
 
@@ -210,6 +216,11 @@ export class ProcessManager {
     } catch {
       /* stream closed */
     }
+    // Flush the final chunk when the stream ends without a trailing newline
+    // (e.g. a crash cause written via a bare write()) — otherwise the last,
+    // often most important, line never reaches the log buffer.
+    const tail = buffer + decoder.decode();
+    if (tail.trim()) this.push(name, tail);
   }
 
   async stop(): Promise<StatusSnapshot> {

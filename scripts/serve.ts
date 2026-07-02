@@ -46,17 +46,31 @@ Bun.serve({
     // Same-origin proxy to the bunqueue server (mirrors the Vite dev proxy).
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
       const target = API + (url.pathname.slice(4) || '/') + url.search;
-      return fetch(target, {
+      const res = await fetch(target, {
         method: req.method,
         headers: req.headers,
         body: req.body,
         redirect: 'manual',
       });
+      // Bun's fetch advertises accept-encoding upstream and transparently
+      // DECOMPRESSES the body, but leaves the upstream headers intact. If the
+      // bunqueue server sits behind any gzip-compressing proxy, forwarding
+      // those headers labels plaintext as gzip and the browser fails to decode
+      // every /api response (ERR_CONTENT_DECODING_FAILED) — strip them.
+      const headers = new Headers(res.headers);
+      headers.delete('content-encoding');
+      headers.delete('content-length');
+      headers.delete('transfer-encoding');
+      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
     }
 
-    // Embedded static assets with SPA history fallback.
+    // Embedded static assets with SPA history fallback. A missing fingerprinted
+    // /assets/* file must 404 (as docker/nginx.conf does) — falling back to
+    // index.html would feed HTML to a stale chunk import() and mask the miss.
     const key = url.pathname === '/' ? '/index.html' : url.pathname;
-    const asset = ASSETS[key] ?? ASSETS['/index.html'];
+    const asset =
+      ASSETS[key] ?? (url.pathname.startsWith('/assets/') ? undefined : ASSETS['/index.html']);
+    if (!asset) return new Response('Not found', { status: 404 });
     return new Response(Bun.file(asset));
   },
 });

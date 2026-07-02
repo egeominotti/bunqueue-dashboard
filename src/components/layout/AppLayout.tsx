@@ -8,7 +8,7 @@ export function AppLayout() {
   // Mobile nav drawer state. On lg+ the sidebar is always visible and this is
   // ignored; below lg it slides the sidebar in as an overlay.
   const [navOpen, setNavOpen] = useState(false);
-  const { pathname } = useLocation();
+  const { pathname, key: locationKey } = useLocation();
 
   // Close the drawer whenever the route changes (tapping a nav item navigates).
   // biome-ignore lint/correctness/useExhaustiveDependencies: close on navigation
@@ -23,8 +23,10 @@ export function AppLayout() {
           <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
             <Suspense fallback={<div className="p-2 text-sm text-muted">Loading…</div>}>
               {/* Page-scoped boundary: a crashing page keeps the shell alive and
-                  the error clears on navigation (resetKey = pathname). */}
-              <ErrorBoundary resetKey={pathname}>
+                  the error clears on ANY navigation (resetKey = location.key —
+                  pathname alone would miss re-clicking the same nav item and
+                  search-param-only routes like /job?id=X). */}
+              <ErrorBoundary resetKey={locationKey}>
                 <Outlet />
               </ErrorBoundary>
             </Suspense>

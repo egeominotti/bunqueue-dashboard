@@ -19,12 +19,14 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Split the React runtime (react, react-dom, react-router-dom) into its
-        // own chunk so app-only changes don't bust the ~190KB vendor cache on
-        // returning visitors. Function form is required — Vite 8 / Rolldown
+        // Split the React runtime (react, react-dom, react-router[-dom]) into
+        // its own chunk so app-only changes don't bust the vendor cache on
+        // returning visitors. `react-router` must match too: in React Router 7
+        // it holds the entire router implementation (react-router-dom is a
+        // tiny re-export shim). Function form is required — Vite 8 / Rolldown
         // rejects the object form of manualChunks.
         manualChunks(id) {
-          if (id.includes('node_modules') && /[\\/]react(-dom|-router-dom)?[\\/]/.test(id)) {
+          if (id.includes('node_modules') && /[\\/]react(-dom|-router(-dom)?)?[\\/]/.test(id)) {
             return 'react-vendor';
           }
         },
@@ -33,6 +35,10 @@ export default defineConfig({
   },
   server: {
     port: 5273,
+    // Fail fast when 5273 is taken (a leftover dev server) instead of silently
+    // serving on 5274 while scripts/dev.ts announces :5273 — that banner would
+    // point the user at the stale instance and edits would "have no effect".
+    strictPort: true,
     // The control agent runs a bunqueue server whose SQLite database lives in
     // ./data (and its -wal/-shm sidecars are written on every DB operation).
     // Without this, each write trips Vite's file watcher and reloads the whole

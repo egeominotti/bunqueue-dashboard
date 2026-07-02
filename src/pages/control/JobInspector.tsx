@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/form';
 import { IconSearch } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { bq } from '@/lib/bq';
+import { BqError, bq } from '@/lib/bq';
 import type { JobFull } from '@/lib/bqTypes';
 import { formatDateTime, formatDuration } from '@/lib/format';
 import { JobActionsPanel } from './job/JobActionsPanel';
@@ -75,11 +75,24 @@ export function JobInspector() {
           ? { fetched: true, value: resultRes.result }
           : { fetched: false, value: undefined }
       );
-    } catch {
+    } catch (e) {
       if (my !== lookupGen.current) return;
-      setJob(null);
-      setResult({ fetched: false, value: undefined });
-      setNotFound(true);
+      // A missing job is a real 404 or an HTTP-200 `{ok:false, error:"...not
+      // found..."}` (bq.call throws BqError for both — status 200 for the
+      // latter); everything else is a connection/server problem.
+      if (e instanceof BqError && (e.status === 404 || /not found/i.test(e.message))) {
+        setJob(null);
+        setResult({ fetched: false, value: undefined });
+        setNotFound(true);
+        // Clear the stale URL param too — otherwise the deep-link effect sees
+        // idParam !== job?.id and silently re-fetches the PREVIOUS job,
+        // replacing "Job not found" (and the user's typed input) with old data.
+        setParams({}, { replace: true });
+      } else {
+        // Network error / 5xx: the server being unreachable is not "job
+        // removed" — keep whatever is loaded and surface the real error.
+        setMsg({ ok: false, text: (e as Error).message });
+      }
     } finally {
       if (my === lookupGen.current) setLoading(false);
     }

@@ -75,6 +75,31 @@ describe('ProcessManager', () => {
     await m.stop();
   });
 
+  // The last thing a crashing process writes (its crash cause) often has no
+  // trailing newline — the pipe reader must flush the residual buffer on
+  // stream end, or that line never reaches the log ring buffer.
+  test('captures a final output chunk not terminated by a newline', async () => {
+    const m = new ProcessManager();
+    m.setConfig({ command: 'printf LASTLINE_NO_NEWLINE' });
+    await m.start();
+    await Bun.sleep(300);
+    expect(m.getLogs().some((l) => l.line.includes('LASTLINE_NO_NEWLINE'))).toBe(true);
+    await m.stop();
+  });
+
+  // A spawn failure racing an in-flight stop() (whose token is stale, so its
+  // finalizer returns early) must still leave a consistent stopped snapshot —
+  // not the previous generation's dead pid + non-null runningConfig.
+  test('failed spawn leaves no stale pid or runningConfig', async () => {
+    const m = new ProcessManager();
+    m.setConfig({ command: `/nonexistent-binary-${process.pid} start` });
+    await expect(m.start()).rejects.toThrow('Failed to spawn');
+    const s = m.getStatus();
+    expect(s.status).toBe('stopped');
+    expect(s.pid).toBeNull();
+    expect(s.runningConfig).toBeNull();
+  });
+
   test('exposes the port/data-path config it will pass through', () => {
     const m = new ProcessManager();
     const cfg = m.setConfig({ httpPort: 7000, tcpPort: 7001, dataPath: '/tmp/x.db' });

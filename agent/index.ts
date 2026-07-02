@@ -27,6 +27,19 @@ Bun.serve({
   fetch: handle,
 });
 
+// Stop the managed server before exiting — without this, Ctrl-C / SIGTERM on
+// the agent orphans the spawned bunqueue child (it reparents to PID 1 and keeps
+// holding the ports and the SQLite db, so the next start fails EADDRINUSE).
+let shuttingDown = false;
+const shutdown = (signal: string) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received — stopping managed server…`);
+  void mgr.stop().finally(() => process.exit(0));
+};
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+
 console.log(`bunqueue dashboard control agent → http://127.0.0.1:${PORT}/control`);
 console.log(`  allowed origins: ${allowedOrigins.join(', ')}`);
 console.log(`  token auth: ${token ? 'on' : 'off'}`);

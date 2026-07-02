@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import type { JobFull } from '@/lib/bqTypes';
@@ -21,9 +21,16 @@ export function JobDataEditor({
 }) {
   const [text, setText] = useState(() => JSON.stringify(data ?? null, null, 2));
   const [parseError, setParseError] = useState<string | null>(null);
+  const lastSeed = useRef(text);
 
   useEffect(() => {
-    setText(JSON.stringify(data ?? null, null, 2));
+    const seed = JSON.stringify(data ?? null, null, 2);
+    // Re-seed by CONTENT, not object identity: every act() (Set priority,
+    // Retry, Promote…) reloads the job and produces a new `data` reference
+    // with the same payload — that must not wipe unsaved edits.
+    if (seed === lastSeed.current) return;
+    lastSeed.current = seed;
+    setText(seed);
     setParseError(null);
   }, [data]);
 

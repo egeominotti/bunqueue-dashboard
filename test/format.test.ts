@@ -51,6 +51,14 @@ describe('formatDuration', () => {
   test('minutes', () => {
     expect(formatDuration(123000)).toBe('2m 3s');
   });
+  test('rounding never yields "60.0s" or "Nm 60s"', () => {
+    // 59.95–59.999s would render "60.0s" via toFixed(1) — must tip into minutes.
+    expect(formatDuration(59949)).toBe('59.9s');
+    expect(formatDuration(59950)).toBe('1m 0s');
+    // 119.5–119.999s: independent rounding of the remainder gave "1m 60s".
+    expect(formatDuration(119700)).toBe('2m 0s');
+    expect(formatDuration(119400)).toBe('1m 59s');
+  });
   test('unknown → "—"', () => {
     expect(formatDuration(undefined)).toBe('—');
     expect(formatDuration(-5)).toBe('—');

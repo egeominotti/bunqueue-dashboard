@@ -139,7 +139,11 @@ export function useActivityStream(queue?: string) {
       if (pendingEvents.current.length) {
         const batch = pendingEvents.current;
         pendingEvents.current = [];
-        setEvents((prev) => [...batch.reverse(), ...prev].slice(0, MAX_EVENTS));
+        // Reverse OUTSIDE the updater: React can invoke an updater more than
+        // once (StrictMode double-invoke), and an in-updater reverse() would
+        // mutate `batch` and flip the order back on the second call.
+        batch.reverse();
+        setEvents((prev) => [...batch, ...prev].slice(0, MAX_EVENTS));
       }
       const pc = pendingCounters.current;
       if (pc.total) {

@@ -17,7 +17,11 @@ const services = [
   { name: 'dashboard', cmd: ['bun', 'run', 'dev'] },
 ] as const;
 
-const FORCE_KILL_AFTER_MS = 2000;
+// Must exceed the agent's own SIGTERM→SIGKILL escalation window (8s in
+// agent/manager.ts): on Ctrl-C the agent first stops the bunqueue server it
+// spawned, and force-killing the agent mid-stop would orphan that child.
+// No cost in the normal case — the race resolves as soon as children exit.
+const FORCE_KILL_AFTER_MS = 10_000;
 
 let closing = false;
 let exitCode = 0;

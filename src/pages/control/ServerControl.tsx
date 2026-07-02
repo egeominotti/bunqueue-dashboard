@@ -56,6 +56,10 @@ export function ServerControl() {
   const status = data?.status ?? 'stopped';
   const running = status === 'running';
   const transitioning = status === 'starting' || status === 'stopping' || busy != null;
+  // Agent was reachable once (data cached) but the poll now fails — without
+  // this the console keeps asserting "Running / healthy" with a live-ticking
+  // uptime for an agent (and possibly server) that is dead.
+  const stale = error != null && data != null;
 
   return (
     <div>
@@ -70,9 +74,17 @@ export function ServerControl() {
         </div>
       )}
 
+      {stale && (
+        <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-sm text-amber-400">
+          Control agent unreachable — showing last known state. Lifecycle actions are disabled until
+          it responds again.
+        </div>
+      )}
+
       <StatusConsole
         status={data}
         agentBase={bq.agentBase}
+        stale={stale}
         transitioning={transitioning}
         busy={busy}
         onStart={() => run('starting', () => bq.control.start())}

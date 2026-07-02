@@ -22,10 +22,39 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  BUN_VERSION: 1.3.14
 
 jobs:
+  # The same gate ci.yml enforces — without it a commit whose tests fail would
+  # still ship publicly as `edge` (the Dockerfile only runs `bun run build`).
+  gate:
+    name: Gate (check + build + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint & format (biome)
+        run: bun run check
+
+      - name: Typecheck & build
+        run: bun run build
+
+      - name: Test
+        run: bun test
+
   build-push:
     name: Build & push image
+    needs: gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

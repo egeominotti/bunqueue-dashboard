@@ -59,10 +59,13 @@ export function formatDuration(ms: number | undefined | null): string {
   if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
   if (ms < 1000) return `${Math.round(ms)}ms`;
   const s = ms / 1000;
-  if (s < 60) return `${s.toFixed(1)}s`;
-  const m = Math.floor(s / 60);
-  const rem = Math.round(s % 60);
-  return `${m}m ${rem}s`;
+  // toFixed(1) renders anything ≥ 59.95 as "60.0" — hand those to the minutes branch.
+  if (s < 59.95) return `${s.toFixed(1)}s`;
+  // Round once and derive both parts from the same total, so the remainder
+  // can never round up to 60 ("1m 60s").
+  const totalS = Math.round(s);
+  const m = Math.floor(totalS / 60);
+  return `${m}m ${totalS % 60}s`;
 }
 
 /** Compute a job's duration from its timestamps, if both are present. */

@@ -42,7 +42,69 @@ A stability re-check resolved these — no longer present:
   SVG path builder, so one bad point degrades to a dip instead of corrupting
   every series' path data.
 
-## Audit fix pass (this change-set)
+## Stability sweep (adversarially verified, this change-set)
+
+A multi-dimension bug hunt (every finding independently verified by refute /
+reproduce / impact passes before fixing) resolved the following — gate green,
+with regression tests where practical (`test/format.test.ts`,
+`test/manager.test.ts`):
+
+- **Live activity feed no longer misorders bursts under StrictMode.** The
+  `setEvents` updater in `useActivityStream` mutated its captured batch via
+  `.reverse()` — an impure updater React invokes twice in dev — flipping a
+  multi-event flush back to the wrong order. The reverse now happens once,
+  outside the updater.
+- **`formatDuration` can no longer render "1m 60s" / "60.0s"** — the remainder
+  is derived from a single up-front rounding (119,700 ms → "2m 0s").
+- **JobInspector**: a failed lookup now distinguishes 404 ("Job not found",
+  URL param cleared so the deep-link effect can't silently re-load the previous
+  job over the failure) from network/5xx errors (real message shown; a valid
+  job is no longer reported as "removed" when the server is merely down).
+- **JobsPro / DlqPro / DlqControl stale-view race fixed** (QueueControl's
+  tagging pattern): after switching queue/filter/page, the previous view's rows
+  can no longer stay rendered — with live action buttons — under the new
+  selection, so Retry/Cancel can't fire against the wrong entity.
+- **JobDataEditor no longer wipes unsaved edits** on every action-driven job
+  reload — it re-seeds by content, not object identity.
+- **ServerControl shows an amber "agent unreachable" banner** (and disables
+  lifecycle buttons, freezes the uptime ticker) when the status poll fails
+  after a successful one — it used to keep asserting "Running / healthy" with
+  a live-ticking uptime for a dead agent.
+- **Agent orphan fix**: `agent/index.ts` now handles SIGINT/SIGTERM and stops
+  the managed bunqueue server before exiting (Ctrl-C on `bun start` used to
+  leave it running, holding :6790 and the SQLite db). `scripts/dev.ts` waits
+  10s (was 2s) so the agent's SIGTERM→SIGKILL escalation can complete.
+- **Agent log pipe flushes the final unterminated chunk** — a crash cause
+  written without a trailing newline used to vanish from Process Logs.
+- **Agent spawn-failure race**: a `start()` whose spawn throws while a stale
+  `stop()` is finalizing now clears `proc`/`runningConfig` (status no longer
+  reports a dead pid + launch config for a stopped server).
+- **ErrorBoundary resets on ANY navigation** (`location.key`, was pathname
+  only) — re-clicking the crashed section's nav item or navigating between
+  `/job?id=X` variants now recovers instead of appearing permanently broken.
+- **CopyButton**: falls back to `execCommand('copy')` on insecure (plain-HTTP)
+  origins — the documented Docker deployment — and flashes a red ✕ on failure
+  instead of silently doing nothing.
+- **Theme flash fixed**: an inline pre-paint script in `index.html` applies the
+  persisted light theme before the bundle loads (was a dark→light flash on
+  every visit).
+- **`react-router` joined the `react-vendor` chunk** (the manualChunks regex
+  missed it — in React Router 7 it holds the whole router; `react-router-dom`
+  is a shim), so app-only deploys no longer re-download the router.
+- **Standalone binary proxy fixed**: `scripts/serve.ts` now strips
+  `content-encoding`/`content-length`/`transfer-encoding` from proxied
+  responses (Bun's fetch decompresses bodies but kept the headers — behind any
+  gzip proxy every `/api` response failed with `ERR_CONTENT_DECODING_FAILED`),
+  and missing `/assets/*` files 404 (matching nginx) instead of returning
+  index.html to a stale chunk import.
+- **`strictPort: true`**: Vite now fails fast when :5273 is taken instead of
+  silently serving on :5274 while `bun start`'s banner points at the stale
+  instance.
+- **docker.yml / pages.yml now run the full gate** (biome + build + test)
+  before publishing — a commit rejected by CI could previously still ship as
+  `edge` / to the public Pages site.
+
+## Audit fix pass (earlier change-set)
 
 A full-component adversarial audit fixed the following. Each was verified, then
 fixed with the gate (build + biome + `bun test`) green; the agent + store fixes
