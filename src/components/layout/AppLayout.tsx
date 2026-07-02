@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { AuthGate } from '@/components/AuthGate';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Sidebar } from './Sidebar';
@@ -56,6 +57,7 @@ export function AppLayout() {
           </main>
         </div>
         <CommandPalette />
+        <AuthGate />
       </div>
     </ErrorBoundary>
   );

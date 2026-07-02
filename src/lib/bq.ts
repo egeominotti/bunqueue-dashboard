@@ -75,6 +75,12 @@ async function call<T>(
     } catch {
       /* non-JSON */
     }
+    // A 401 means the server runs with AUTH_TOKENS and our bearer token is
+    // missing or wrong. Signal the UI (AuthGate) to prompt for it, then still
+    // throw so callers see the failure. Guarded for non-browser contexts (tests).
+    if (res.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('auth:required'));
+    }
     throw new BqError(message, res.status);
   }
   if (res.status === 204) return undefined as T;

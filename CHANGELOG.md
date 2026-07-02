@@ -15,6 +15,16 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-07-03
+
+### Added
+- **Token lock screen.** When the bunqueue server runs with `AUTH_TOKENS` and a
+  request comes back `401`, a lock overlay prompts for the bearer token, stores
+  it for the session (never persisted to disk, same as before), and dismisses. If
+  the token is still rejected, the next poll re-locks. Includes an "Open Settings
+  instead" escape. To wire it up, `bq.ts` now emits an `auth:required` event on a
+  `401` (and still throws), so the UI can prompt for credentials.
+
 ## [0.0.5] - 2026-07-03
 
 ### Added
@@ -119,7 +129,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.5...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.6...HEAD
+[0.0.6]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.3...v0.0.4
 [0.0.3]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.2...v0.0.3
