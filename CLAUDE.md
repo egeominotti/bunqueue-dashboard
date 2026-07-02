@@ -118,10 +118,28 @@ GitHub Actions under `.github/workflows/` (Bun pinned to the same version as loc
 - **release.yml** — on EVERY push to `main` and on manual tags `v*`: re-runs the gate, zips
   `dist/`, cross-compiles **standalone executables for 5 platforms** (linux x64/arm64, macOS
   x64/arm64, windows x64 — `scripts/serve.ts` via `bun build --compile`: embedded SPA + `/api`
-  proxy + control agent in one binary), and publishes a GitHub Release with generated notes.
+  proxy + control agent in one binary), and publishes a GitHub Release whose body is the
+  **`CHANGELOG.md` section for the released version** (auto-generated commit notes appended after).
   Auto-versioning bumps from the latest `v*` tag with decimal rollover (patch 0–9, then minor:
   `v0.1.9 → v0.2.0`). Auto-created tags use `GITHUB_TOKEN`, so they don't re-trigger docker.yml —
   semver/`latest` images still come from manually pushed `v*` tags (`edge` tracks every main push).
+
+## Changelog rule — MANDATORY on every push / for every version
+
+`CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/) format) is the source of the
+GitHub Release notes. It is not optional bookkeeping — the release body is extracted from it.
+
+- **Before every push to `main`:** add the changes under `## [Unreleased]`, grouped into
+  `### Added` / `### Changed` / `### Fixed` / `### Removed`. Write it for a human reading the
+  release, not a commit dump.
+- **For every version:** rename `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD` — where `x.y.z`
+  is the tag `release.yml` will create (decimal rollover from the latest `v*` tag) and the date is
+  today — then start a fresh empty `## [Unreleased]` above it, and add the two reference links at
+  the bottom.
+- `release.yml`'s "Extract changelog notes" step publishes the section matching the released tag,
+  falling back to `[Unreleased]`, then to auto-generated notes if both are empty. So a version that
+  ships without its `CHANGELOG.md` section still releases — but with a generic note instead of the
+  curated one. Keep the changelog current so every release reads well.
 
 **The lockfile (`bun.lock`) is committed on purpose** — every workflow installs with
 `bun install --frozen-lockfile`. Do not re-add it to `.gitignore`.

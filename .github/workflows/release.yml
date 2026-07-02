@@ -93,6 +93,32 @@ jobs:
           fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
+      - name: Extract changelog notes
+        id: notes
+        if: steps.ver.outputs.publish == 'true'
+        run: |
+          # Publish the CHANGELOG.md section for this version as the release body.
+          # Prefer an exact "## [x.y.z]" section; fall back to "## [Unreleased]";
+          # if neither has content, leave it empty and let generate_release_notes
+          # produce the auto commit list.
+          VER="${{ steps.ver.outputs.tag }}"; VER="${VER#v}"
+          extract() {
+            awk -v h="$1" '
+              /^## /{ if (p) exit; if (index($0, h)) { p=1; next } }
+              p { print }
+            ' CHANGELOG.md
+          }
+          : > notes.md
+          if [ -f CHANGELOG.md ]; then
+            extract "[$VER]" > notes.md
+            [ -s notes.md ] || extract "[Unreleased]" > notes.md
+          fi
+          # Drop trailing link-reference definitions (e.g. "[0.1.0]: https://…")
+          # that the last section runs into, then trim leading blank lines.
+          sed -i -E '/^\[[^]]+\]: https?:\/\//d' notes.md
+          sed -i -e '/./,$!d' notes.md
+          if [ -s notes.md ]; then echo "Using CHANGELOG.md section for ${VER}"; else echo "No changelog section — falling back to generated notes"; fi
+
       - name: Package bundle
         if: steps.ver.outputs.publish == 'true'
         run: |
@@ -120,6 +146,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
+          # Curated CHANGELOG.md section as the body; generated notes (the auto
+          # commit/PR list) are appended after it. An empty notes.md → notes only.
+          body_path: notes.md
           generate_release_notes: true
           files: |
             bunqueue-dashboard-*.zip
