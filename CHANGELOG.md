@@ -15,6 +15,17 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+### Changed
+- **DLQ Control redesign.** The single-queue DLQ page is now a proper triage
+  surface: a 4-card summary (entries + top failure reason, distinct failure
+  types, pending auto-retries, oldest entry age), a page-scoped reason filter and
+  job-ID search, clickable + copyable job IDs, one-click CSV export, toast
+  feedback on retry/purge, and **expandable rows** that reveal each entry's full
+  error and per-attempt failure history. (Distinct from the cross-queue `/dlq`
+  dashboard, which stays the fleet-wide view.)
+
+## [0.0.19] - 2026-07-03
+
 ### Added
 - **Pro queue drill-in.** Clicking a queue in the Overview / Queues list now opens
   a route-param-driven Pro page (`/queues/:name` → `QueueDetailPro`) with live
