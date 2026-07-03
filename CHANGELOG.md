@@ -15,6 +15,31 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.8] - 2026-07-03
+
+### Added
+- **SEO: JSON-LD structured data** (schema.org) on every docs page, a
+  `SoftwareApplication` node on the home and a `TechArticle` + `BreadcrumbList`
+  on each content page, all linked to a shared `WebSite` + `Person` graph, so the
+  docs are eligible for rich results. Plus `og:locale`, `og:image:alt` /
+  `twitter:image:alt`, and explicit `robots` directives (`index, follow,
+  max-image-preview:large, max-snippet:-1`).
+- **Enterprise, fluid docs typography.** The docs now use the same variable fonts
+  as the app (Inter for text, JetBrains Mono for code), self-hosted with no CDN,
+  and a fluid (viewport-scaled) type scale for headings and body copy, with
+  optical sizing, Inter stylistic sets, and tabular figures in code and tables.
+
+### Fixed
+- **Demo mode: the Database page no longer crashes** (`Cannot read properties of
+  undefined (reading 'toUpperCase')`). The SQLite inspector's `/db/*` endpoints
+  now return proper demo fixtures (info, table list, per-table schema and rows,
+  and a read-only query result), so the inspector is fully explorable in the demo
+  instead of erroring.
+- **Demo mode:** `GET /queues/:q/dlq/stats` now returns a stats-shaped body (it
+  was mis-routed to the DLQ-entries fixture, leaving the demo DLQ stat cards
+  empty), and the base/`/api` path stripping is anchored to a segment boundary so
+  a path like `/apihealth` can't be mis-stripped.
+
 ## [0.0.7] - 2026-07-03
 
 ### Added
@@ -146,7 +171,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.7...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.8...HEAD
+[0.0.8]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.4...v0.0.5

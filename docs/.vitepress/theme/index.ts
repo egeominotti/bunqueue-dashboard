@@ -6,6 +6,11 @@ import TwoslashFloatingVue from '@shikijs/vitepress-twoslash/client';
 // dev, renders an empty <div class="mermaid"> in `vitepress build`). Register the
 // component explicitly here so it hydrates and runs its onMounted render in prod.
 import Mermaid from 'vitepress-plugin-mermaid/Mermaid.vue';
+// Self-host the same variable fonts the app uses (Inter for text, JetBrains Mono
+// for code) so the docs match the product, render identically offline, and never
+// depend on a font CDN. custom.css wires them into VitePress's font tokens.
+import '@fontsource-variable/inter';
+import '@fontsource-variable/jetbrains-mono';
 import '@shikijs/vitepress-twoslash/style.css';
 import './custom.css';
 

@@ -23,6 +23,69 @@
   --vp-c-brand-3: #db2777;
 }
 
+/* ── Typography: enterprise-grade, fluid ───────────────────────────────────
+   The docs use the same variable fonts as the app (Inter for text, JetBrains
+   Mono for code, imported in theme/index.ts) and a fluid type scale: the vw
+   term in each clamp() lets headings and body copy breathe on wide screens and
+   stay compact on phones, without touching VitePress's rem baseline (so the
+   layout grid is unaffected). */
+:root {
+  --vp-font-family-base:
+    'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  --vp-font-family-mono:
+    'JetBrains Mono Variable', ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+}
+
+html {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-optical-sizing: auto;
+  /* Inter stylistic sets: nicer a/g, disambiguated l/I/1, calmer punctuation. */
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+  letter-spacing: -0.003em;
+}
+
+/* Fluid body copy for readable, viewport-aware line length. */
+.vp-doc {
+  font-size: clamp(15.5px, 15px + 0.16vw, 17px);
+}
+.vp-doc p,
+.vp-doc li {
+  line-height: 1.72;
+}
+
+/* Fluid, tightened headings. */
+.vp-doc h1 {
+  font-size: clamp(1.85rem, 1.35rem + 2.2vw, 2.55rem);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+.vp-doc h2 {
+  font-size: clamp(1.4rem, 1.15rem + 1.1vw, 1.85rem);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+.vp-doc h3 {
+  font-size: clamp(1.15rem, 1.05rem + 0.5vw, 1.4rem);
+  letter-spacing: -0.014em;
+}
+.VPHero .name,
+.VPHero .text {
+  letter-spacing: -0.03em;
+}
+
+/* Tabular figures where numbers should line up (code and tables). */
+.vp-doc code,
+.vp-doc pre,
+.vp-doc table {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Framed, elevated screenshots. */
 .vp-doc img:not(.VPImage):not([src$='.svg']) {
   border: 1px solid var(--vp-c-divider);
