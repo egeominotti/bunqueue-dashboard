@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { bq } from './bq';
+import { createPollGate } from './usePolledData';
 
 export interface ThroughputSeries {
   push: number[];
@@ -34,13 +35,17 @@ export function useThroughputSeries(windowSize = 60): ThroughputData {
 
   useEffect(() => {
     mounted.current = true;
+    const gate = createPollGate(() => typeof document !== 'undefined' && document.hidden);
     const tick = async () => {
-      // Skip the sample while the tab is hidden — the chart isn't visible and
-      // there's no reason to poll the server for a backgrounded page.
-      if (typeof document !== 'undefined' && document.hidden) return;
       // Skip if the previous request hasn't returned yet — a slow /dashboard
-      // (>1s) would otherwise overlap requests and produce out-of-order samples.
+      // (>1s) would otherwise overlap requests and produce out-of-order
+      // samples. Checked BEFORE the gate so an in-flight skip can't consume
+      // the gate's one always-run first tick.
       if (inFlight.current) return;
+      // The gate skips recurring samples while the tab is hidden — the chart
+      // isn't visible — but lets the FIRST sample run so `latest` (Server
+      // Overview, totals) isn't a zeroed placeholder in a background tab.
+      if (!gate()) return;
       inFlight.current = true;
       try {
         const o = await bq.overview();

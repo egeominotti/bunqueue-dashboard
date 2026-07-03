@@ -8,6 +8,7 @@ import {
   formatRelativeTime,
   formatUptime,
   jobDuration,
+  stripAnsi,
 } from '../src/lib/format';
 
 describe('formatNumber', () => {
@@ -36,8 +37,8 @@ describe('errorRate', () => {
   test('computes failed / total', () => {
     expect(errorRate(90, 10)).toBeCloseTo(0.1);
   });
-  test('zero total → 0', () => {
-    expect(errorRate(0, 0)).toBe(0);
+  test('zero total → null (no data is not “0% errors”)', () => {
+    expect(errorRate(0, 0)).toBeNull();
   });
 });
 
@@ -95,5 +96,17 @@ describe('formatBytes / formatUptime', () => {
   test('uptime', () => {
     expect(formatUptime(3 * 86400 + 4 * 3600 + 12 * 60)).toBe('3d 4h 12m');
     expect(formatUptime(undefined)).toBe('—');
+  });
+});
+
+describe('stripAnsi', () => {
+  test('strips CSI color codes', () => {
+    expect(stripAnsi('\u001b[1mbold\u001b[0m plain \u001b[2mdim\u001b[0m')).toBe('bold plain dim');
+  });
+  test('leaves legitimate bracketed text alone', () => {
+    expect(stripAnsi('[Stats] Queue statistics')).toBe('[Stats] Queue statistics');
+  });
+  test('strips single-character escapes', () => {
+    expect(stripAnsi('a\u001bMb\u001b\\c')).toBe('abc');
   });
 });

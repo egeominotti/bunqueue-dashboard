@@ -104,7 +104,9 @@ export function Diagnostics() {
 
       {st && (
         <Card className="mt-6">
-          <CardHeader title="Lifetime totals" />
+          {/* totalPushed/… are in-memory session counters — they zero on every
+              server restart, so calling them "lifetime" was a lie. */}
+          <CardHeader title="Totals since restart" />
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <Mini k="Pushed" v={formatNumber(st.totalPushed)} />
             <Mini k="Pulled" v={formatNumber(st.totalPulled)} />

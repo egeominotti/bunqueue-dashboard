@@ -38,7 +38,7 @@ export function Overview() {
   if (loading && !data && !error) return <LoadingState label="Loading overview…" />;
 
   const { stats, throughput, memory, workers, crons, storage } = data ?? EMPTY;
-  const rate = errorRate(stats.totalCompleted, stats.totalFailed);
+  const rate = errorRate(stats.totalCompleted, stats.totalFailed) ?? 0;
 
   return (
     <div>

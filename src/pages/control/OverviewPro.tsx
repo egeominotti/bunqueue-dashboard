@@ -46,6 +46,7 @@ const EMPTY = {
   },
   queuesTotal: 0,
   details: [] as QueueHealth[],
+  failedTotal: 0,
 };
 
 export function OverviewPro() {
@@ -60,15 +61,20 @@ export function OverviewPro() {
     const details: QueueHealth[] = summary
       .slice(0, 6)
       .map((q) => ({ name: q.name, paused: q.paused, counts: q.counts }));
-    return { overview, queuesTotal: summary.length, details };
+    // Failed jobs summed across queues — unlike stats.totalFailed (a session
+    // counter that resets on every server restart), these are recorded jobs.
+    const failedTotal = summary.reduce((a, q) => a + (q.counts?.failed ?? 0), 0);
+    return { overview, queuesTotal: summary.length, details, failedTotal };
   }, []);
 
   if (loading && !data && !error) return <LoadingState label="Loading overview…" />;
 
   const d = data ?? EMPTY;
-  const { overview, queuesTotal, details } = d;
+  const { overview, queuesTotal, details, failedTotal } = d;
   const { stats, throughput, memory, crons } = overview;
-  const rate = errorRate(stats.totalCompleted, stats.totalFailed);
+  // Recorded counts (stats.completed + per-queue failed sums), not the
+  // totalCompleted/totalFailed session counters that zero on server restart.
+  const rate = errorRate(stats.completed, failedTotal);
   const host = baseUrl === '/api' ? 'localhost:6790' : baseUrl.replace(/^https?:\/\//, '');
   // stats.uptime from /dashboard is milliseconds; formatUptime expects seconds.
   const uptime = stats.uptime ? formatUptime(stats.uptime / 1000) : '—';
@@ -124,18 +130,18 @@ export function OverviewPro() {
 
       {/* Row 1 */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Completed" value={formatNumber(stats.totalCompleted)} tone="green" />
+        <StatCard label="Completed" value={formatNumber(stats.completed)} tone="green" />
         <StatCard
           label="Failed"
-          value={formatNumber(stats.totalFailed)}
-          tone={stats.totalFailed ? 'red' : 'default'}
+          value={formatNumber(failedTotal)}
+          tone={failedTotal ? 'red' : 'default'}
         />
         <StatCard label="Waiting" value={formatNumber(stats.waiting)} tone="amber" />
         <StatCard label="Active" value={formatNumber(stats.active)} tone="blue" />
         <StatCard
           label="Error Rate"
-          value={formatPercent(rate)}
-          tone={rate > 0.05 ? 'red' : 'green'}
+          value={rate == null ? '—' : formatPercent(rate)}
+          tone={rate == null ? 'default' : rate > 0.05 ? 'red' : 'green'}
         />
         <StatCard
           label="DLQ"
@@ -163,7 +169,11 @@ export function OverviewPro() {
           value={formatNumber(queuesTotal)}
           hint={`${crons.total} cron active`}
         />
-        <StatCard label="Total Pushed" value={formatNumber(stats.totalPushed)} />
+        <StatCard
+          label="Total Pushed"
+          value={formatNumber(stats.totalPushed)}
+          hint="since restart"
+        />
         <StatCard label="API Keys" value={token ? 1 : 0} hint={token ? 'token set' : 'no auth'} />
         <StatCard label="Uptime" value={uptime} hint={`${ram} RAM`} />
       </div>

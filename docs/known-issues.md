@@ -18,7 +18,10 @@ A performance + pagination pass resolved these, no longer present:
   (was 22), DlqPro (was N+2) now issue 2 to 3 requests per poll via
   `GET /queues/summary`; JobsPro is single-queue server-paginated (was up to 25
   `jobs/list` per poll). `usePolledData` is now self-scheduling (at most one
-  fetch in flight, no pile-ups) and **pauses while the tab is hidden**.
+  fetch in flight, no pile-ups) and **pauses while the tab is hidden** — except
+  the **first** fetch, which always runs (same for `useThroughputSeries`'s first
+  sample): a page opened in a background tab used to sit on "Loading…" (and the
+  sidebar on "connecting") until focused.
 - **Every list is paginated**, see the `Pagination` component in
   [components.md](components.md). Server-paginated where the API supports it
   (queues, DLQ via offset/limit/total; jobs via offset/limit + `hasNext`), client-paginated for full-list endpoints (crons, webhooks, workers, activity).

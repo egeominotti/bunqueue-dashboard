@@ -34,22 +34,30 @@ const EMPTY = {
     crons: { total: 0 },
   },
   storage: {} as StorageStatusFlat,
+  failedTotal: 0,
 };
 
 export function UsagePro() {
   const { data, error, loading, refetch } = usePolledData(async () => {
     // /storage is the honest disk-health source ({ ok, data: { diskFull, … } });
     // the /dashboard storage blob is what the classic page misread.
-    const [overview, storage] = await Promise.all([bq.overview(), bq.storage()]);
-    return { overview, storage: storage.data ?? ({} as StorageStatusFlat) };
+    const [overview, storage, summary] = await Promise.all([
+      bq.overview(),
+      bq.storage(),
+      bq.queuesSummary(),
+    ]);
+    // Failed jobs summed across queues — stats.totalFailed is a session counter
+    // that zeroes on server restart, useless for a "cumulative usage" page.
+    const failedTotal = summary.reduce((a, q) => a + (q.counts?.failed ?? 0), 0);
+    return { overview, storage: storage.data ?? ({} as StorageStatusFlat), failedTotal };
   }, []);
 
   if (loading && !data && !error) return <LoadingState label="Loading usage…" />;
 
   const d = data ?? EMPTY;
   const { stats, memory, crons } = d.overview;
-  const { storage } = d;
-  const rate = errorRate(stats.totalCompleted, stats.totalFailed);
+  const { storage, failedTotal } = d;
+  const rate = errorRate(stats.completed, failedTotal);
   // stats.uptime from /dashboard is milliseconds; formatUptime expects seconds.
   const uptime = stats.uptime ? formatUptime(stats.uptime / 1000) : '—';
 
@@ -63,18 +71,18 @@ export function UsagePro() {
       {error && <OfflineBanner onRetry={refetch} />}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Completed" value={formatNumber(stats.totalCompleted)} tone="green" />
+        <StatCard label="Completed" value={formatNumber(stats.completed)} tone="green" />
         <StatCard
           label="Failed"
-          value={formatNumber(stats.totalFailed)}
-          tone={stats.totalFailed ? 'red' : 'default'}
+          value={formatNumber(failedTotal)}
+          tone={failedTotal ? 'red' : 'default'}
         />
         <StatCard label="Waiting" value={formatNumber(stats.waiting)} tone="amber" />
         <StatCard label="Active" value={formatNumber(stats.active)} tone="blue" />
         <StatCard
           label="Error Rate"
-          value={formatPercent(rate)}
-          tone={rate > 0.05 ? 'red' : 'green'}
+          value={rate == null ? '—' : formatPercent(rate)}
+          tone={rate == null ? 'default' : rate > 0.05 ? 'red' : 'green'}
         />
         <StatCard label="Uptime" value={uptime} />
       </div>
@@ -83,8 +91,8 @@ export function UsagePro() {
         <Card>
           <CardHeader title="Runtime" />
           <dl className="divide-y divide-line text-sm">
-            <Row label="Jobs pushed" value={formatNumber(stats.totalPushed)} />
-            <Row label="Jobs pulled" value={formatNumber(stats.totalPulled)} />
+            <Row label="Jobs pushed (since restart)" value={formatNumber(stats.totalPushed)} />
+            <Row label="Jobs pulled (since restart)" value={formatNumber(stats.totalPulled)} />
             <Row label="Heap used" value={formatBytes(memory.heapUsed * 1024 * 1024)} />
             <Row label="RSS" value={formatBytes(memory.rss * 1024 * 1024)} />
             <Row label="Cron jobs" value={String(crons.total)} />

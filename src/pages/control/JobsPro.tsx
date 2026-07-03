@@ -93,7 +93,16 @@ export function JobsPro() {
   }, [jobs, search]);
 
   const stats = overview?.stats;
-  const rate = stats ? errorRate(stats.totalCompleted, stats.totalFailed) : 0;
+  // Recorded counts (stats.completed + per-queue failed sums) — the
+  // totalCompleted/totalFailed session counters zero on every server restart.
+  const failedTotal = useMemo(
+    () => (summary ?? []).reduce((a, q) => a + (q.counts?.failed ?? 0), 0),
+    [summary]
+  );
+  const rate = stats ? errorRate(stats.completed, failedTotal) : null;
+  // While the overview poll is still in flight the cards would render hard
+  // zeros — a "0" that looks like data. Show placeholders until it arrives.
+  const stat = (n: number | undefined) => (stats ? formatNumber(n) : '—');
 
   const resetPage = () => setPage(0);
 
@@ -219,32 +228,29 @@ export function JobsPro() {
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Total"
-          value={formatNumber(
-            (stats?.totalCompleted ?? 0) +
-              (stats?.totalFailed ?? 0) +
+          value={stat(
+            (stats?.completed ?? 0) +
+              failedTotal +
               (stats?.waiting ?? 0) +
-              (stats?.active ?? 0)
+              (stats?.active ?? 0) +
+              (stats?.delayed ?? 0)
           )}
+          hint="all queues"
           compact
         />
-        <StatCard label="Waiting" value={formatNumber(stats?.waiting)} tone="amber" compact />
-        <StatCard label="Active" value={formatNumber(stats?.active)} tone="blue" compact />
-        <StatCard
-          label="Completed"
-          value={formatNumber(stats?.totalCompleted)}
-          tone="green"
-          compact
-        />
+        <StatCard label="Waiting" value={stat(stats?.waiting)} tone="amber" compact />
+        <StatCard label="Active" value={stat(stats?.active)} tone="blue" compact />
+        <StatCard label="Completed" value={stat(stats?.completed)} tone="green" compact />
         <StatCard
           label="Failed"
-          value={formatNumber(stats?.totalFailed)}
-          tone={stats?.totalFailed ? 'red' : 'default'}
+          value={stat(failedTotal)}
+          tone={failedTotal ? 'red' : 'default'}
           compact
         />
         <StatCard
           label="Error Rate"
-          value={formatPercent(rate)}
-          tone={rate > 0.05 ? 'red' : 'green'}
+          value={rate == null ? '—' : formatPercent(rate)}
+          tone={rate == null ? 'default' : rate > 0.05 ? 'red' : 'green'}
           compact
         />
       </div>

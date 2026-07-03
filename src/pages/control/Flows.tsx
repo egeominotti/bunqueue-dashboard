@@ -38,6 +38,42 @@ const stateStyle = (s?: string) => (s && STATE_STYLE[s]) || 'border-line bg-surf
 
 const shortId = (id: string) => (id.length > 12 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id);
 
+// bunqueue has no "list flows" endpoint, so the empty state offers the flows
+// this browser has already viewed (persisted locally) instead of a dead end.
+const RECENT_KEY = 'bq-dash-recent-flows';
+const RECENT_MAX = 8;
+
+interface RecentFlow {
+  root: string;
+  nodes: number;
+  at: number;
+}
+
+function readRecentFlows(): RecentFlow[] {
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(
+      (r): r is RecentFlow =>
+        typeof (r as RecentFlow)?.root === 'string' &&
+        typeof (r as RecentFlow)?.nodes === 'number' &&
+        typeof (r as RecentFlow)?.at === 'number'
+    );
+  } catch {
+    return [];
+  }
+}
+
+function pushRecentFlow(list: RecentFlow[], entry: RecentFlow): RecentFlow[] {
+  const next = [entry, ...list.filter((r) => r.root !== entry.root)].slice(0, RECENT_MAX);
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    /* storage full/blocked — the in-memory list still works this session */
+  }
+  return next;
+}
+
 interface Graph {
   jobs: Map<string, JobFull>;
   edges: FlowEdge[];
@@ -111,6 +147,7 @@ export function Flows() {
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [recent, setRecent] = useState<RecentFlow[]>(readRecentFlows);
   const reqId = useRef(0);
 
   const load = useCallback(async (seed: string) => {
@@ -128,6 +165,10 @@ export function Flows() {
       if (mine !== reqId.current) return;
       setGraph(g);
       setSelected(root);
+      // Remember real flows (2+ nodes) so the empty state can offer them later.
+      if (g.jobs.size > 1) {
+        setRecent((list) => pushRecentFlow(list, { root, nodes: g.jobs.size, at: Date.now() }));
+      }
     } catch (e) {
       if (mine !== reqId.current) return;
       setError((e as Error).message || 'Failed to load flow');
@@ -203,6 +244,29 @@ export function Flows() {
             <p className="mt-1 text-xs text-faint">
               Enter a job ID above, or open a job that is part of a flow and choose “View flow”.
             </p>
+            {recent.length > 0 && (
+              <div className="mt-6">
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-faint">
+                  Recently viewed
+                </p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {recent.map((r) => (
+                    <button
+                      key={r.root}
+                      type="button"
+                      onClick={() => {
+                        setInput(r.root);
+                        setParams({ root: r.root }, { replace: true });
+                      }}
+                      className="rounded-lg border border-line bg-surface-2 px-3 py-1.5 font-mono text-xs text-muted transition-colors hover:border-line-strong hover:text-fg"
+                    >
+                      {shortId(r.root)}
+                      <span className="ml-2 text-faint">{r.nodes} nodes</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </Card>
       )}

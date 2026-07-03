@@ -54,11 +54,19 @@ export function MetricsPro() {
     () => details.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
     [details, safePage]
   );
+  // Failed jobs summed across queues — unlike stats.totalFailed, which is a
+  // session counter that zeroes on every server restart ("all time" lied).
+  // Completed comes from stats.completed below: the server-wide recorded count
+  // (a queue can drop out of /queues/summary while its jobs stay counted).
+  const failedTotal = useMemo(
+    () => details.reduce((a, q) => a + (q.counts?.failed ?? 0), 0),
+    [details]
+  );
 
   if (loading && !data && !error) return <LoadingState label="Loading metrics…" />;
 
   const { stats, throughput, latency } = series.latest ?? EMPTY_OVERVIEW;
-  const rate = errorRate(stats.totalCompleted, stats.totalFailed);
+  const rate = errorRate(stats.completed, failedTotal);
   const trend = depthTrend(series.depth);
   const depthNow = series.depth.length ? series.depth[series.depth.length - 1] : 0;
 
@@ -74,15 +82,15 @@ export function MetricsPro() {
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           label="Total Completed"
-          value={formatCompact(stats.totalCompleted)}
+          value={formatCompact(stats.completed)}
           tone="green"
-          hint="all time"
+          hint="recorded jobs"
         />
         <StatCard
           label="Total Failed"
-          value={formatNumber(stats.totalFailed)}
-          tone="red"
-          hint="all time"
+          value={formatNumber(failedTotal)}
+          tone={failedTotal ? 'red' : 'default'}
+          hint="recorded jobs"
         />
         <StatCard
           label="Push/sec"
@@ -168,26 +176,38 @@ export function MetricsPro() {
           <div className="flex items-center justify-around">
             <div className="text-center">
               <div
-                className={cn('text-3xl font-bold tnum', rate > 0.05 ? 'text-danger' : 'text-fg')}
+                className={cn(
+                  'text-3xl font-bold tnum',
+                  rate != null && rate > 0.05 ? 'text-danger' : 'text-fg'
+                )}
               >
-                {formatPercent(rate)}
+                {rate == null ? '—' : formatPercent(rate)}
               </div>
               <div className="text-xs text-faint">error rate</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold tnum text-success">{formatPercent(1 - rate)}</div>
+              <div
+                className={cn('text-3xl font-bold tnum', rate == null ? 'text-fg' : 'text-success')}
+              >
+                {rate == null ? '—' : formatPercent(1 - rate)}
+              </div>
               <div className="text-xs text-faint">success rate</div>
             </div>
           </div>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-red-500/40">
-            <div
-              className="h-full rounded-full bg-emerald-500"
-              style={{ width: `${(1 - rate) * 100}%` }}
-            />
-          </div>
+          {/* No bar when nothing was processed — a full green bar over zero jobs is a claim, not a measurement. */}
+          {rate == null ? (
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-surface-2" />
+          ) : (
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-red-500/40">
+              <div
+                className="h-full rounded-full bg-emerald-500"
+                style={{ width: `${(1 - rate) * 100}%` }}
+              />
+            </div>
+          )}
           <div className="mt-2 flex justify-between font-mono text-[11px] text-faint">
-            <span>{formatCompact(stats.totalCompleted)} completed</span>
-            <span>{formatNumber(stats.totalFailed)} failed</span>
+            <span>{formatCompact(stats.completed)} completed</span>
+            <span>{formatNumber(failedTotal)} failed</span>
           </div>
         </Card>
 
@@ -201,12 +221,12 @@ export function MetricsPro() {
             <SrvRow color="bg-red-400" label="Dead Letter" value={formatNumber(stats.dlq)} />
             <SrvRow
               color="bg-zinc-500"
-              label="Total Pushed"
+              label="Pushed (since restart)"
               value={formatCompact(stats.totalPushed)}
             />
             <SrvRow
               color="bg-zinc-500"
-              label="Total Pulled"
+              label="Pulled (since restart)"
               value={formatCompact(stats.totalPulled)}
             />
             {/* stats.uptime is milliseconds; formatUptime expects seconds. */}

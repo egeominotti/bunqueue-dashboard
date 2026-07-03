@@ -60,7 +60,7 @@ export function Jobs() {
   }, [jobs, search]);
 
   const stats = overview?.stats;
-  const rate = stats ? errorRate(stats.totalCompleted, stats.totalFailed) : 0;
+  const rate = stats ? (errorRate(stats.totalCompleted, stats.totalFailed) ?? 0) : 0;
 
   const cancel = async (id: string) => {
     if (!window.confirm(`Cancel job ${id}?`)) return;

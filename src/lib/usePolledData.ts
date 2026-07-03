@@ -10,6 +10,25 @@ export interface PolledData<T> {
   refetch: () => void;
 }
 
+/**
+ * Gate for a poll loop's visibility rule: the FIRST tick always fetches — a
+ * view opened in a background tab (cmd-click) must not sit on "Loading…"
+ * until focused — while later ticks fetch only when visible. `first` is
+ * consumed only when the gate answers, so callers must ask it *after* any
+ * other skip conditions (e.g. an in-flight guard) or the first tick is lost.
+ * Pure factory, exported for tests.
+ */
+export function createPollGate(isHidden: () => boolean): () => boolean {
+  let first = true;
+  return () => {
+    if (first) {
+      first = false;
+      return true;
+    }
+    return !isHidden();
+  };
+}
+
 export interface PollOptions {
   /**
    * Override the global refresh interval for this hook. Use a large value for
@@ -108,12 +127,15 @@ export function usePolledData<T>(
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
     const hidden = () => typeof document !== 'undefined' && document.hidden;
+    const gate = createPollGate(hidden);
 
     // Recursive self-scheduling loop: the next tick is armed only once the
-    // current fetch has settled, so overlapping polls can't accumulate.
+    // current fetch has settled, so overlapping polls can't accumulate. The
+    // gate lets the FIRST fetch run even while the tab is hidden; only the
+    // recurring refreshes pause with the Page Visibility API.
     const tick = async () => {
       if (stopped) return;
-      if (!hidden()) await load();
+      if (gate()) await load();
       if (stopped) return;
       timer = setTimeout(tick, refreshMs);
     };

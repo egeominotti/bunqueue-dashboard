@@ -64,21 +64,29 @@ export function EnvVarsEditor({
       )}
       {rows.map((r) => (
         <div key={r.id} className="flex items-center gap-2">
-          <Input
-            className="w-2/5 font-mono"
-            placeholder="KEY"
-            value={r.key}
-            disabled={disabled}
-            onChange={(e) => setRow(r.id, { key: e.target.value })}
-          />
+          {/* Widths live on wrappers: Input always carries `w-full`, and cn()
+              is a plain joiner (no Tailwind conflict resolution), so a width
+              class passed to Input loses to it — the KEY field swallowed the
+              row and the value field collapsed to a sliver. */}
+          <div className="w-2/5 shrink-0">
+            <Input
+              className="font-mono"
+              placeholder="KEY"
+              value={r.key}
+              disabled={disabled}
+              onChange={(e) => setRow(r.id, { key: e.target.value })}
+            />
+          </div>
           <span className="text-faint">=</span>
-          <Input
-            className="flex-1 font-mono"
-            placeholder="value"
-            value={r.value}
-            disabled={disabled}
-            onChange={(e) => setRow(r.id, { value: e.target.value })}
-          />
+          <div className="min-w-0 flex-1">
+            <Input
+              className="font-mono"
+              placeholder="value"
+              value={r.value}
+              disabled={disabled}
+              onChange={(e) => setRow(r.id, { value: e.target.value })}
+            />
+          </div>
           <button
             type="button"
             aria-label={`Remove ${r.key || 'variable'}`}

@@ -23,10 +23,14 @@ export function formatPercent(fraction: number | undefined | null, digits = 2): 
   return `${(fraction * 100).toFixed(digits)}%`;
 }
 
-/** Error rate from completed/failed totals, as a fraction (0..1). */
-export function errorRate(completed: number, failed: number): number {
+/**
+ * Error rate from completed/failed totals, as a fraction (0..1) — or `null`
+ * when nothing has been processed yet. Callers render null as "—": deriving
+ * "0% errors / 100% success" from zero data is a claim, not a measurement.
+ */
+export function errorRate(completed: number, failed: number): number | null {
   const total = completed + failed;
-  return total > 0 ? failed / total : 0;
+  return total > 0 ? failed / total : null;
 }
 
 /** "14/03/2026, 17:31:25" */
@@ -102,6 +106,19 @@ export function formatMs(v: number | undefined | null): string {
   if (v == null || !Number.isFinite(v)) return '—';
   if (v >= 1000) return `${(v / 1000).toFixed(2)}s`;
   return `${v.toFixed(v < 10 ? 1 : 0)}ms`;
+}
+
+// ESC-led CSI sequences (colors, cursor moves) plus stray single-char
+// escapes. The bunqueue banner logs bold/dim color codes; rendered as plain
+// text they read as "[1m…[0m" noise, so log viewers strip them before
+// display/copy/download. Only sequences introduced by the real ESC byte
+// (\u001b) match — legitimate bracketed text like "[Stats]" is untouched.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes requires the ESC control character
+const ANSI_RE = /(?:\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b[@-Z\\^_])/g;
+
+/** Strip ANSI escape sequences from a log line. */
+export function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, '');
 }
 
 /** Bytes → "1.4 GB". */

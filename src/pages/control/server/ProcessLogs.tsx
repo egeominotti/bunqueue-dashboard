@@ -6,6 +6,7 @@ import { IconSearch } from '@/components/ui/icons';
 import { bq } from '@/lib/bq';
 import type { ServerLogLine } from '@/lib/bqTypes';
 import { cn } from '@/lib/cn';
+import { stripAnsi } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 
 const STREAMS = ['all', 'stdout', 'stderr', 'sys'] as const;
@@ -34,10 +35,15 @@ export function ProcessLogs() {
 
   const shown = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return lines.filter(
-      (l) =>
-        (stream === 'all' || l.stream === stream) && (!term || l.line.toLowerCase().includes(term))
-    );
+    // bunqueue's banner writes ANSI color codes; rendered as text they're
+    // "[1m…[0m" noise. Strip before filtering so search matches what's shown.
+    return lines
+      .map((l) => (l.line.includes('\u001b') ? { ...l, line: stripAnsi(l.line) } : l))
+      .filter(
+        (l) =>
+          (stream === 'all' || l.stream === stream) &&
+          (!term || l.line.toLowerCase().includes(term))
+      );
   }, [lines, stream, search]);
 
   // Follow the tail only while enabled, so scrolling up to read isn't yanked back.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -85,6 +85,10 @@ export function DlqPro() {
   };
 
   const selectQueue = (name: string) => {
+    // Any manual choice — including a reset to "Select a queue…" — disarms
+    // the one-shot auto-pick below, so it can never override user intent
+    // (even a reset made before the queue list first arrives).
+    autoPicked.current = true;
     setQueue(name);
     setPage(0);
     setReason('all');
@@ -100,6 +104,18 @@ export function DlqPro() {
     () => queues.filter((q) => q.dlq > 0).sort((a, b) => b.dlq - a.dlq),
     [queues]
   );
+
+  // First load: jump straight to the biggest non-empty DLQ instead of parking
+  // the user on a "Select a queue" prompt (DlqControl already does this).
+  // Once per mount, so a deliberate reset back to "Select a queue…" sticks.
+  const autoPicked = useRef(false);
+  useEffect(() => {
+    if (autoPicked.current || queue || dlqQueues.length === 0) return;
+    autoPicked.current = true;
+    setQueue(dlqQueues[0].name);
+    setPage(0);
+    setReason('all');
+  }, [queue, dlqQueues]);
 
   // Reason/search filter the currently-loaded page (the server paginates but has
   // no reason/id filter). Sort within the page too.

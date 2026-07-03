@@ -15,6 +15,45 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.13] - 2026-07-03
+
+### Fixed
+- **A page opened in a background tab no longer sits on "Loading…" forever.**
+  `usePolledData` paused polling while the tab was hidden — including the very
+  first fetch, so a cmd-clicked tab showed a permanent spinner (and the sidebar
+  a permanent "connecting") until focused. The first fetch now always runs;
+  only the recurring refreshes pause with the Page Visibility API.
+- **Overview / Metrics / Usage / Jobs no longer report 0 completed jobs after a
+  server restart.** Their Completed / Failed cards and error rates read the
+  `totalCompleted`/`totalFailed` session counters (zeroed on every restart,
+  labeled "all time") while the queues visibly held thousands of completed
+  jobs. They now read the recorded counts (`stats.completed` + per-queue failed
+  sums from `/queues/summary`); the counters that really are per-session
+  (pushed/pulled) are now labeled "since restart", and Diagnostics' "Lifetime
+  totals" card is renamed "Totals since restart".
+- **"100.00% success rate" is no longer claimed over zero processed jobs.**
+  Error/success rates render an em dash until at least one job has completed
+  or failed (`errorRate` now returns `null` for an empty denominator).
+- **Jobs Explorer stat cards no longer flash hard zeros while loading** — they
+  show placeholders until the overview poll arrives, and the Total card is
+  labeled "all queues" so the global numbers aren't read as the selected
+  queue's.
+- **Process logs (Server page) no longer show raw ANSI escape codes** — the
+  bunqueue banner's `[1m…[0m` color noise is stripped from display, search,
+  copy, and download (new `stripAnsi` in `lib/format.ts`).
+- **Environment-variable rows (Server page) get a usable value field.** The
+  KEY input swallowed the whole row and the value input collapsed to a sliver:
+  `Input` always carries `w-full` and `cn()` does no Tailwind conflict
+  resolution, so the `w-2/5`/`flex-1` passed by the editor lost to it. Widths
+  now live on wrapper divs.
+
+### Changed
+- **Dead Letter Queue auto-selects the biggest non-empty queue** on first load
+  (like DLQ Control) instead of parking on a "Select a queue" prompt.
+- **Flows remembers the flows you've viewed** (locally, up to 8) and offers
+  them as one-click chips in the empty state — bunqueue has no "list flows"
+  endpoint, so this replaces a dead end with a way back in.
+
 ## [0.0.12] - 2026-07-03
 
 ### Added
@@ -244,7 +283,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.12...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.13...HEAD
+[0.0.13]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.9...v0.0.10

@@ -79,7 +79,7 @@ export function QueueDetail() {
   const d = data ?? EMPTY;
   const { detail } = d;
   const c = detail.counts;
-  const rate = errorRate(c.completed ?? 0, c.failed ?? 0);
+  const rate = errorRate(c.completed ?? 0, c.failed ?? 0) ?? 0;
   const recent = [...d.jobs].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 
   return (
