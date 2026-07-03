@@ -93,8 +93,10 @@ features:
 
 ## See it in action
 
-A real control surface, not a read-only viewer, every screenshot below is a
-live page you can drive.
+A real control surface, not a read-only viewer, every screen below is a live
+page you can drive.
+
+<video src="/tour.mp4" autoplay muted loop playsinline preload="metadata" aria-label="A guided tour of the bunqueue dashboard: overview, queues, jobs, DLQ, flows, the SQLite inspector, and the AI Copilot" style="display:block;width:100%;max-width:1000px;margin:0.5rem auto 1.75rem;border-radius:14px;border:1px solid var(--vp-c-divider);box-shadow:0 12px 40px -12px rgba(0,0,0,.35)"></video>
 
 <div class="home-shots">
 

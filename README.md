@@ -28,6 +28,12 @@ The full dashboard running on sample data, no server needed.
 
 <br />
 
+<img src="docs/public/tour.gif" alt="A guided tour of the bunqueue dashboard, clicking through the overview, queues, jobs, the dead-letter queue, flows, the SQLite inspector, and the AI Copilot" width="900" />
+
+<sub>A quick tour. <a href="https://egeominotti.github.io/bunqueue-dashboard/">Try it live →</a></sub>
+
+<br /><br />
+
 <img src="docs/screenshots/overview.png" alt="bunqueue dashboard, real-time overview: health, throughput, per-queue status, and a live activity feed" width="900" />
 
 <sub>The Overview page. <a href="https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide">See every screen in the illustrated guide →</a></sub>

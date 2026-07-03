@@ -15,6 +15,15 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.12] - 2026-07-03
+
+### Added
+- **Animated product tour.** A roughly 50-second guided tour on the README (an
+  optimized GIF) and on the docs home (an autoplaying, muted, looping MP4, a far
+  lighter video so it does not slow the home page), clicking through the
+  overview, queues, jobs, the dead-letter queue, flows, the SQLite inspector,
+  and the AI Copilot.
+
 ## [0.0.11] - 2026-07-03
 
 ### Added
@@ -235,7 +244,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.11...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.12...HEAD
+[0.0.12]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.8...v0.0.9
