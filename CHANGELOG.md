@@ -15,6 +15,14 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.18] - 2026-07-03
+
+### Fixed
+- **Docs:** clarified the agent's Host-allowlist note — `BIND_ADDR` disables the
+  DNS-rebinding Host check only on the **standalone binary** (`scripts/serve.ts`);
+  the plain `bun run agent` always binds `127.0.0.1` with the gate on, so
+  `AGENT_ALLOWED_HOSTS` is its only lever.
+
 ## [0.0.17] - 2026-07-03
 
 ### Security
@@ -385,7 +393,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.17...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.18...HEAD
+[0.0.18]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.17...v0.0.18
 [0.0.17]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.16...v0.0.17
 [0.0.16]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.14...v0.0.15

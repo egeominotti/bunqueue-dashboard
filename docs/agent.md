@@ -62,8 +62,11 @@ Env: `AGENT_ALLOWED_ORIGINS` (comma-separated; merged with dev defaults
 > agent (or the standalone binary) via a `/etc/hosts` alias or a same-host
 > reverse proxy that forwards `Host: <your-domain>`, add that hostname to
 > `AGENT_ALLOWED_HOSTS` (comma-separated, bracket IPv6 literals) — otherwise the
-> request is `403`ed as a rebinding attempt. A non-loopback `BIND_ADDR` (e.g.
-> `0.0.0.0`) turns the Host check off (you've opted into network exposure).
+> request is `403`ed as a rebinding attempt. The plain `bun run agent`
+> (`agent/index.ts`) always binds `127.0.0.1` with the Host gate on, so
+> `AGENT_ALLOWED_HOSTS` is its only lever. Only the **standalone binary**
+> (`scripts/serve.ts`) reads `BIND_ADDR`: a non-loopback value (e.g. `0.0.0.0`)
+> turns the Host check off there (you've opted into network exposure).
 
 ## Endpoints (`http://127.0.0.1:6800`)
 
