@@ -281,6 +281,7 @@ export default withMermaid({
         text: 'Guide · Management',
         items: [
           { text: 'Database', link: '/guide/database' },
+          { text: 'MCP Server', link: '/guide/mcp' },
           { text: 'Usage', link: '/guide/usage' },
           { text: 'S3 Backup', link: '/guide/s3' },
           { text: 'Settings', link: '/guide/settings' },

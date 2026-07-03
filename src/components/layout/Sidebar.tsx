@@ -65,6 +65,7 @@ export const NAV: NavGroup[] = [
     section: 'Management',
     items: [
       { to: '/database', label: 'Database', icon: IconDatabase },
+      { to: '/mcp', label: 'MCP', icon: IconLightning },
       { to: '/usage', label: 'Usage', icon: IconUsage },
       { to: '/s3', label: 'S3 Backup', icon: IconS3 },
       { to: '/settings', label: 'Settings', icon: IconSettings },

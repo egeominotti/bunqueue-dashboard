@@ -15,6 +15,18 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.9] - 2026-07-03
+
+### Added
+- **MCP Server page + docs.** A setup and reference for bunqueue's Model Context
+  Protocol server (`bunqueue-mcp`), which lets AI agents (Claude Desktop, Claude
+  Code) drive the queue. Copy-able configs for both connection modes (embedded
+  via `DATA_PATH`, and TCP via `BUNQUEUE_MODE`/`HOST`/`PORT`/`TOKEN`), plus the
+  full capability inventory: 73 tools across 12 categories, 5 resources, and 3
+  prompts. New "MCP" item in the Management nav and a `docs/guide/mcp` page.
+  Because `bunqueue-mcp` is a separate stdio process launched by the MCP client,
+  the page is a guide, not a live monitor.
+
 ## [0.0.8] - 2026-07-03
 
 ### Added
@@ -171,7 +183,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.8...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.9...HEAD
+[0.0.9]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.6...v0.0.7
 [0.0.6]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.5...v0.0.6

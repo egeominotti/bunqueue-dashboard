@@ -33,6 +33,9 @@ const JobInspector = lazy(() =>
 );
 const JobsPro = lazy(() => import('./pages/control/JobsPro').then((m) => ({ default: m.JobsPro })));
 const LogsPro = lazy(() => import('./pages/control/LogsPro').then((m) => ({ default: m.LogsPro })));
+const McpServer = lazy(() =>
+  import('./pages/control/McpServer').then((m) => ({ default: m.McpServer }))
+);
 const MetricsPro = lazy(() =>
   import('./pages/control/MetricsPro').then((m) => ({ default: m.MetricsPro }))
 );
@@ -103,6 +106,7 @@ export function App() {
         <Route path="/diagnostics" element={<Diagnostics />} />
         <Route path="/benchmark" element={<Benchmark />} />
         <Route path="/database" element={<Database />} />
+        <Route path="/mcp" element={<McpServer />} />
         <Route path="/usage" element={<UsagePro />} />
         <Route path="/usage-classic" element={<Usage />} />
         <Route path="/s3" element={<S3BackupPro />} />
