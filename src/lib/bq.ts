@@ -109,10 +109,18 @@ async function call<T>(
 const srv = <T>(path: string, init?: RequestInit, strict = true): Promise<T> =>
   call<T>(getBaseUrl(), path, getAuthHeaders(), init, strict);
 
-const AGENT = (import.meta.env.VITE_BUNQUEUE_AGENT_URL || 'http://localhost:6800').replace(
-  /\/$/,
-  ''
-);
+// Agent base resolution, in priority order:
+//   1. Runtime injection — the all-in-one server (scripts/serve.ts) injects
+//      `window.__BUNQUEUE_AGENT_URL__ = '/agent'` into index.html and proxies
+//      that path to its own agent, so a custom AGENT_PORT (or remote access,
+//      where loopback :6800 is unreachable) works with the prebuilt SPA.
+//   2. VITE_BUNQUEUE_AGENT_URL baked at build time.
+//   3. The dev default, the local agent on :6800.
+const AGENT = (
+  (globalThis as { __BUNQUEUE_AGENT_URL__?: string }).__BUNQUEUE_AGENT_URL__ ||
+  import.meta.env.VITE_BUNQUEUE_AGENT_URL ||
+  'http://localhost:6800'
+).replace(/\/$/, '');
 const agent = <T>(path: string, init?: RequestInit): Promise<T> => call<T>(AGENT, path, {}, init);
 
 const q = (s: string) => encodeURIComponent(s);

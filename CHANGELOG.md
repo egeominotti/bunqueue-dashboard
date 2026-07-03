@@ -15,6 +15,23 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.16] - 2026-07-03
+
+### Fixed
+- **Server Control now works with a custom `AGENT_PORT` (npm package /
+  standalone binaries) — and from a remote browser.** The SPA's agent URL was
+  baked at build time (`VITE_BUNQUEUE_AGENT_URL`, default `localhost:6800`),
+  so overriding `AGENT_PORT` left the Server page on "Control agent
+  unreachable", and a remote browser could never reach the loopback-only
+  agent at all. The all-in-one server now bridges the agent **same-origin at
+  `/agent/*`** (in-process, no loopback hop) and injects
+  `window.__BUNQUEUE_AGENT_URL__ = '/agent'` into the served index.html;
+  `lib/bq.ts` reads the runtime value before the baked-in one. The agent's
+  Origin allowlist and optional `AGENT_TOKEN` still apply unchanged — this
+  changes reachability, not authorization: for remote (non-localhost) access
+  you must still opt the browser-facing origin in via
+  `AGENT_ALLOWED_ORIGINS=http://myhost:8080`. Dev (`bun start`) is untouched.
+
 ## [0.0.15] - 2026-07-03
 
 ### Changed
@@ -319,7 +336,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.15...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.16...HEAD
+[0.0.16]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.12...v0.0.13
