@@ -17,6 +17,10 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   build: {
+    // Emit dist/.vite/manifest.json so scripts/check-bundle.ts can budget the
+    // INITIAL load (entry chunk + its static imports) rather than every chunk —
+    // lazy routes/features (demo shim, AI copilot) must not count against it.
+    manifest: true,
     rollupOptions: {
       output: {
         // Split the React runtime (react, react-dom, react-router[-dom]) into

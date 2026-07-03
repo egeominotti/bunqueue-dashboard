@@ -15,6 +15,29 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.11] - 2026-07-03
+
+### Added
+- **Copilot (experimental): an in-dashboard AI assistant.** A chat panel (the
+  button in the bottom right) that reads your live queue state and can propose
+  actions you confirm before they run. Bring your own model via the Vercel AI
+  SDK: Claude (Anthropic), ChatGPT (OpenAI), Gemini (Google), GLM (Z.ai),
+  OpenRouter (one key for every model), or any OpenAI-compatible endpoint
+  (Groq, Together, a local Ollama or LM Studio). Your API key stays in memory
+  for the session only and is never written to disk; the provider and model are
+  remembered. Read tools (queues, jobs, DLQ, workers, crons, health) run
+  immediately; mutating tools (retry, promote, remove, pause/resume, retry/purge
+  DLQ) are gated behind an explicit in-chat confirmation. The whole panel plus
+  the AI SDK (~165 KB gz) is lazy-loaded, so it adds nothing to the initial
+  bundle. New `docs/guide/copilot` page.
+
+### Changed
+- **Bundle budget now measures the INITIAL load, not every chunk.** The
+  `bun run size` gate reads Vite's build manifest and sums the entry chunk plus
+  its static imports (currently ~91 KB gz, budget 230 KB), so lazily-loaded
+  features (the demo shim, the Copilot) no longer count against it. A separate,
+  generous cap on the grand total still guards against a runaway dependency.
+
 ## [0.0.10] - 2026-07-03
 
 ### Added
@@ -212,7 +235,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.10...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.11...HEAD
+[0.0.11]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.10...v0.0.11
 [0.0.10]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.7...v0.0.8

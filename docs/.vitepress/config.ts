@@ -283,6 +283,7 @@ export default withMermaid({
         items: [
           { text: 'Database', link: '/guide/database' },
           { text: 'MCP Server', link: '/guide/mcp' },
+          { text: 'Copilot', link: '/guide/copilot' },
           { text: 'Usage', link: '/guide/usage' },
           { text: 'S3 Backup', link: '/guide/s3' },
           { text: 'Settings', link: '/guide/settings' },

@@ -2,6 +2,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { AuthGate } from '@/components/AuthGate';
 import { CommandPalette } from '@/components/CommandPalette';
+import { Copilot } from '@/components/copilot/Copilot';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
@@ -58,6 +59,7 @@ export function AppLayout() {
         </div>
         <CommandPalette />
         <AuthGate />
+        <Copilot />
       </div>
     </ErrorBoundary>
   );
