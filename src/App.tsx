@@ -28,6 +28,7 @@ const DlqControl = lazy(() =>
   import('./pages/control/DlqControl').then((m) => ({ default: m.DlqControl }))
 );
 const DlqPro = lazy(() => import('./pages/control/DlqPro').then((m) => ({ default: m.DlqPro })));
+const Flows = lazy(() => import('./pages/control/Flows').then((m) => ({ default: m.Flows })));
 const JobInspector = lazy(() =>
   import('./pages/control/JobInspector').then((m) => ({ default: m.JobInspector }))
 );
@@ -90,6 +91,7 @@ export function App() {
         <Route path="/dlq-classic" element={<Dlq />} />
         <Route path="/cron" element={<CronManager />} />
         <Route path="/cron-classic" element={<Cron />} />
+        <Route path="/flows" element={<Flows />} />
         <Route path="/metrics" element={<MetricsPro />} />
         <Route path="/metrics-classic" element={<Metrics />} />
         <Route path="/workers" element={<WorkersPro />} />

@@ -10,6 +10,7 @@ const TITLES: Record<string, string> = {
   '/jobs': 'Jobs',
   '/dlq': 'Dead Letter Queue',
   '/cron': 'Cron Jobs',
+  '/flows': 'Flows',
   '/metrics': 'Metrics',
   '/workers': 'Workers',
   '/logs': 'Logs',

@@ -254,6 +254,7 @@ export default withMermaid({
           { text: 'Jobs Explorer', link: '/guide/jobs' },
           { text: 'Dead Letter Queue', link: '/guide/dlq' },
           { text: 'Cron Jobs', link: '/guide/cron' },
+          { text: 'Flows', link: '/guide/flows' },
         ],
       },
       {

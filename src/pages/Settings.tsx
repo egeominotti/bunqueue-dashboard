@@ -75,7 +75,7 @@ export function Settings() {
     <div>
       <PageHeader title="Settings" description="Connection and appearance." />
 
-      <div className="grid max-w-2xl grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Connection" />
           <div className="flex flex-col gap-4">

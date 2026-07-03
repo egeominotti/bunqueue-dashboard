@@ -91,6 +91,57 @@ function dbSchema(table: string): Json {
   };
 }
 
+// A sample job flow so the Flows page (DAG view) is populated in the demo:
+// an order fans out to charge / ship / notify; ship has a child label job, and
+// notify depends on charge. Keyed by job id; served from GET /jobs/:id.
+const DEMO_FLOW: Record<string, Json> = {
+  'flow-order-9a3f': {
+    id: 'flow-order-9a3f',
+    queue: 'orders',
+    state: 'active',
+    priority: 1,
+    parentId: null,
+    childrenIds: ['flow-charge-1', 'flow-ship-2', 'flow-notify-3'],
+    dependsOn: [],
+  },
+  'flow-charge-1': {
+    id: 'flow-charge-1',
+    queue: 'payments',
+    state: 'completed',
+    priority: 2,
+    parentId: 'flow-order-9a3f',
+    childrenIds: [],
+    dependsOn: [],
+  },
+  'flow-ship-2': {
+    id: 'flow-ship-2',
+    queue: 'shipping',
+    state: 'active',
+    priority: 1,
+    parentId: 'flow-order-9a3f',
+    childrenIds: ['flow-label-4'],
+    dependsOn: [],
+  },
+  'flow-label-4': {
+    id: 'flow-label-4',
+    queue: 'shipping',
+    state: 'waiting',
+    priority: 0,
+    parentId: 'flow-ship-2',
+    childrenIds: [],
+    dependsOn: [],
+  },
+  'flow-notify-3': {
+    id: 'flow-notify-3',
+    queue: 'emails',
+    state: 'delayed',
+    priority: 0,
+    parentId: 'flow-order-9a3f',
+    childrenIds: [],
+    dependsOn: ['flow-charge-1'],
+  },
+};
+
 function dbRows(table: string, search: string): Json {
   const t = DB_DATA[table];
   const columns = t?.columns ?? ['id', 'data'];
@@ -192,9 +243,12 @@ function resolve(path: string, method: string, search: string): Json {
 
   // /jobs/:id and subresources
   if (seg[0] === 'jobs' && seg[1]) {
+    const jid = decodeURIComponent(seg[1]);
+    // /jobs/custom/:customId — resolve a custom/idempotency id to a job.
+    if (seg[1] === 'custom' && seg[2]) return F.oneJob;
     if (seg[2] === 'result') return { ok: true, result: { sent: true, provider: 'demo' } };
     if (seg[2] === 'logs') return { ok: true, logs: [] };
-    if (!seg[2]) return F.oneJob;
+    if (!seg[2]) return DEMO_FLOW[jid] ? { ok: true, job: DEMO_FLOW[jid] } : F.oneJob;
   }
 
   // /db/* — the read-only SQLite inspector (served by the agent, faked here).

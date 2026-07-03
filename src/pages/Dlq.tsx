@@ -128,17 +128,19 @@ export function Dlq() {
               </tr>
             </thead>
             <tbody>
-              {entries.map((e) => (
+              {entries.map((e, i) => (
                 <tr
-                  key={e.id}
+                  key={e.jobId ?? e.id ?? i}
                   className="border-b border-line last:border-0 align-top hover:bg-surface-2/40"
                 >
                   <td className="px-5 py-3 font-mono text-xs text-muted">{e.jobId ?? e.id}</td>
                   <td className="px-5 py-3 text-fg">{e.name || 'unknown'}</td>
                   <td className="max-w-md px-5 py-3 text-xs text-red-400/90">
-                    {e.reason || e.error || '—'}
+                    {String(e.reason || e.error || '—')}
                   </td>
-                  <td className="px-5 py-3 text-right tnum text-muted">{e.attempts ?? '—'}</td>
+                  <td className="px-5 py-3 text-right tnum text-muted">
+                    {Array.isArray(e.attempts) ? e.attempts.length : (e.attempts ?? '—')}
+                  </td>
                   <td className="px-5 py-3 text-right text-faint">
                     {formatRelativeTime(e.failedAt ?? e.enteredAt)}
                   </td>

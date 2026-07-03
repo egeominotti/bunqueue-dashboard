@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { CopyButton } from '@/components/ui/CopyButton';
@@ -62,6 +62,16 @@ export function JobInspector() {
     try {
       const jobRes = await (mode === 'custom' ? bq.jobByCustomId(key) : bq.job(key));
       const loaded = jobRes.job;
+      // A 200 with no `job` (e.g. a custom id that resolves to nothing) is a
+      // not-found, not a crash: without this guard `loaded.state` below throws.
+      if (!loaded) {
+        if (my !== lookupGen.current) return;
+        setJob(null);
+        setResult({ fetched: false, value: undefined });
+        setNotFound(true);
+        setParams({}, { replace: true });
+        return;
+      }
       // Result is keyed by the resolved internal id — for a custom-id lookup we
       // only learn it once the job comes back — so fetch it after, best-effort.
       // Only completed jobs have a stored result (the Result card renders only for
@@ -142,9 +152,19 @@ export function JobInspector() {
       <PageHeader
         title="Job Inspector"
         description="Look up any job by ID and drive its full lifecycle."
+        actions={
+          job && (hasChildren || job.parentId) ? (
+            <Link
+              to={`/flows?root=${encodeURIComponent(job.id)}`}
+              className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+            >
+              View flow
+            </Link>
+          ) : undefined
+        }
       />
 
-      <div className="mb-6 flex max-w-2xl flex-wrap items-center gap-2">
+      <div className="mb-6 flex flex-wrap items-center gap-2">
         <Select
           value={lookupBy}
           onChange={(e) => setLookupBy(e.target.value as LookupMode)}

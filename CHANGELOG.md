@@ -15,6 +15,35 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.10] - 2026-07-03
+
+### Added
+- **Flows: an interactive job-flow DAG.** A new page that draws a job flow as a
+  graph, parent to children (solid edges) and dependency edges (dashed), with
+  every node coloured by state. Paste any job ID (or use the new **View flow**
+  link in the Job Inspector); the page climbs `parentId` to the flow's root, then
+  walks `childrenIds` and `dependsOn` client-side (bunqueue has no single
+  "get whole flow" endpoint), lays it out with a pure, unit-tested layered-layout
+  engine, and lets you click any node to inspect it. 100% frontend, no graph
+  library. Demo mode ships a sample flow so the page is populated out of the box.
+  New "Flows" nav item (Queues) and a `docs/guide/flows` page.
+
+### Changed
+- **Full-width pages.** Add Job and Settings now fill the content width with a
+  two-column layout instead of a narrow centred column, and the Job Inspector
+  lookup bar spans the width.
+
+### Fixed
+- **Classic DLQ page no longer crashes.** It rendered the job's `attempts` field
+  directly, but the verified DLQ-entry shape makes `attempts` an array, so React
+  threw "Objects are not valid as a React child" (a white screen) against both a
+  real server and the demo. It now shows the attempt count, and the row key no
+  longer relies on a missing `id`.
+- **Job Inspector custom-ID lookup.** A `200` with no `job` (a custom id that
+  resolves to nothing) is now treated as "not found" instead of throwing
+  `Cannot read properties of undefined (reading 'state')`. Demo mode also answers
+  `GET /jobs/custom/:id`, so custom-id lookups work there too.
+
 ## [0.0.9] - 2026-07-03
 
 ### Added
@@ -183,7 +212,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.9...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.10...HEAD
+[0.0.10]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.9...v0.0.10
 [0.0.9]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.8...v0.0.9
 [0.0.8]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.7...v0.0.8
 [0.0.7]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.6...v0.0.7

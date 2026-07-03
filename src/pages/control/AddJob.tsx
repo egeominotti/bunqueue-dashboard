@@ -96,7 +96,7 @@ export function AddJob() {
       <PageHeader title="Add Job" description="Enqueue a job with full options." />
 
       <form
-        className="grid max-w-3xl grid-cols-1 gap-6"
+        className="grid grid-cols-1 gap-6 lg:grid-cols-2"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
@@ -200,7 +200,7 @@ export function AddJob() {
           </div>
         </Card>
 
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3 lg:col-span-2">
           <div className="w-28">
             <Field label="Count">
               <Input
