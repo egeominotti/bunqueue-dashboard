@@ -22,10 +22,18 @@ behind your own proxy, Kubernetes.
 
 ### 2. All-in-one server (SPA + API proxy + control agent)
 
-A single self-contained binary (built from `scripts/serve.ts`) that serves the
-SPA, proxies `/api/*` to your bunqueue server **same-origin** (no CORS), and
-runs the **control agent** so you can start / stop / restart the bunqueue
-process from the UI.
+One process (`scripts/serve.ts`) that serves the SPA, proxies `/api/*` to your
+bunqueue server **same-origin** (no CORS), and runs the **control agent** so
+you can start / stop / restart the bunqueue process from the UI. Three ways to
+get it:
+
+```bash
+bunx bunqueue-dashboard   # from npm — zero dependencies, needs Bun
+```
+
+or download a **standalone binary** from the
+[GitHub Releases](https://github.com/egeominotti/bunqueue-dashboard/releases)
+(no runtime needed at all), or run it from a source checkout.
 
 Good for: a VM or box where you run bunqueue itself and want full process
 control. Run it under **[PM2](/deploy/pm2)**, systemd, or Docker.

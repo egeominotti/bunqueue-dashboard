@@ -20,16 +20,21 @@ The all-in-one server (`scripts/serve.ts`) does three jobs in one process:
 Pick one:
 
 ```bash
-# A) Download a standalone binary from the GitHub Releases (no runtime needed).
+# A) Install from npm (needs Bun) — zero-dependency package.
+bun add -g bunqueue-dashboard        # then: bunqueue-dashboard
+# one-off, no install:  bunx bunqueue-dashboard
+
+# B) Download a standalone binary from the GitHub Releases (no runtime needed).
 #    Assets: bunqueue-dashboard-<tag>-<os>-<arch>  (linux/macos x64+arm64, windows x64)
+#    Replace <tag> with the latest release tag, e.g. v0.0.15:
 curl -L -o bunqueue-dashboard \
-  https://github.com/egeominotti/bunqueue-dashboard/releases/latest/download/bunqueue-dashboard-v0.2.5-linux-x64
+  https://github.com/egeominotti/bunqueue-dashboard/releases/latest/download/bunqueue-dashboard-<tag>-linux-x64
 chmod +x bunqueue-dashboard
 
-# B) Build the binary yourself (needs Bun).
+# C) Build the binary yourself (needs Bun).
 bun run build:bin      # → ./bunqueue-dashboard
 
-# C) Run from source (needs Bun).
+# D) Run from source (needs Bun).
 bun run scripts/serve.ts
 ```
 
@@ -75,10 +80,12 @@ module.exports = {
 };
 ```
 
-Running from source instead of the binary? Use Bun as the interpreter:
+Running from source or from the npm global install instead of the binary? Use
+Bun as the interpreter:
 
 ```js
-// script: 'scripts/serve.ts', interpreter: 'bun',
+// from source:      script: 'scripts/serve.ts', interpreter: 'bun',
+// from npm global:  script: 'bunqueue-dashboard', interpreter: 'bun',
 ```
 
 ## Start, persist, boot

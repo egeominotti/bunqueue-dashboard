@@ -15,7 +15,36 @@ dashboard running on sample data with no server needed.
 - [Bun](https://bun.sh) 1.3 or newer.
 - A bunqueue server to drive, or let the control agent start one for you (step 3).
 
-## 1. Install
+## The one-liner: run from npm
+
+No clone, no build — the
+[`bunqueue-dashboard` npm package](https://www.npmjs.com/package/bunqueue-dashboard)
+ships the prebuilt dashboard with **zero dependencies**:
+
+```bash
+bunx bunqueue-dashboard
+```
+
+Open **`http://127.0.0.1:8080`**. One process serves the UI, proxies `/api/*`
+to your bunqueue server (`BUNQUEUE_URL`, default `http://localhost:6790`), and
+runs the [control agent](/agent) on `127.0.0.1:6800` so the **Server** page can
+start / stop / restart bunqueue for you.
+
+Configure with env vars: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` · `AGENT_PORT` ·
+`AGENT_ALLOWED_ORIGINS` · `AGENT_TOKEN` · `BUNQUEUE_START_CMD`. To install it
+permanently instead of running via `bunx`:
+
+```bash
+bun add -g bunqueue-dashboard   # or: npm i -g bunqueue-dashboard (still runs on Bun)
+bunqueue-dashboard
+```
+
+Then jump to [step 3](#_3-connect-a-server). Prefer to hack on it or run the
+dev setup? Take the source route:
+
+## From source
+
+### 1. Install
 
 ```bash
 git clone https://github.com/egeominotti/bunqueue-dashboard.git
@@ -23,7 +52,7 @@ cd bunqueue-dashboard
 bun install
 ```
 
-## 2. Run
+### 2. Run
 
 ```bash
 bun start

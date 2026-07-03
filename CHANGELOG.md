@@ -15,6 +15,27 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.15] - 2026-07-03
+
+### Changed
+- **Zero-dependency npm package.** `agent/logger.ts` is now a dependency-free
+  console logger with the same pino call signature and NDJSON output shape
+  (numeric `level`, `time`, merged fields, an `Error` first-arg lifted to
+  `err.message`/`err.stack`) plus colorized pretty lines on a TTY — pino and
+  pino-pretty were the package's only runtime dependencies, so
+  `bunx bunqueue-dashboard` now installs the dashboard tarball and nothing
+  else (29 packages / ~5.2 MB → 1 package / ~1.8 MB on disk).
+- **Slimmer assets: latin + latin-ext font subsets only.** The fontsource
+  index imports pulled cyrillic/greek/vietnamese woff2 the UI never renders;
+  a hand-picked `src/fonts.css` keeps the same font-family names and
+  unicode-ranges with 4 files instead of 12. Together with dropping
+  CHANGELOG.md from the tarball, the npm package goes 667 kB → 543 kB
+  (1.7 MB → 1.6 MB unpacked). Non-latin text falls back to the system font.
+- **Docs now cover the npm package.** Quickstart, docs home, Deployment, and
+  PM2 all lead with `bunx bunqueue-dashboard` (env knobs, global install,
+  PM2 interpreter line); the PM2 release-download example no longer hardcodes
+  a stale tag.
+
 ## [0.0.14] - 2026-07-03
 
 ### Added
@@ -298,7 +319,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.14...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.15...HEAD
+[0.0.15]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.11...v0.0.12

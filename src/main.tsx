@@ -1,5 +1,6 @@
-import '@fontsource-variable/inter';
-import '@fontsource-variable/jetbrains-mono';
+// Latin + latin-ext subsets only (see fonts.css) — the fontsource index
+// imports pull cyrillic/greek/vietnamese woff2 the UI never renders.
+import './fonts.css';
 import './index.css';
 
 import { StrictMode } from 'react';

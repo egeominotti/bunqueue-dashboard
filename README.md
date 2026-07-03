@@ -12,6 +12,7 @@ control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and 
 
 The full dashboard running on sample data, no server needed.
 
+[![npm](https://img.shields.io/npm/v/bunqueue-dashboard?logo=npm&color=cb3837)](https://www.npmjs.com/package/bunqueue-dashboard)
 [![CI](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml)
 [![Deploy to GitHub Pages](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml)
 [![Docker](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml)
@@ -119,10 +120,18 @@ agent start one for you from the **Server** page).
 bunx bunqueue-dashboard
 ```
 
-One command: serves the prebuilt dashboard on http://127.0.0.1:8080, proxies `/api/*` to your
-bunqueue server (`BUNQUEUE_URL`, default `http://localhost:6790`), and runs the control agent on
-`127.0.0.1:6800`. Same env knobs as the standalone binaries: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` ·
-`AGENT_PORT` · `AGENT_ALLOWED_ORIGINS` · `AGENT_TOKEN` · `BUNQUEUE_START_CMD`.
+One command, **zero dependencies** (a 543 kB download): serves the prebuilt dashboard on
+http://127.0.0.1:8080, proxies `/api/*` to your bunqueue server (`BUNQUEUE_URL`, default
+`http://localhost:6790`), and runs the control agent on `127.0.0.1:6800`. Same env knobs as the
+standalone binaries: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` · `AGENT_PORT` ·
+`AGENT_ALLOWED_ORIGINS` · `AGENT_TOKEN` · `BUNQUEUE_START_CMD`.
+
+Install it permanently instead of running via `bunx`:
+
+```bash
+bun add -g bunqueue-dashboard   # or: npm i -g bunqueue-dashboard (still runs on Bun)
+bunqueue-dashboard
+```
 
 ### Run from source
 

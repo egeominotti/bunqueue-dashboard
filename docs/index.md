@@ -115,6 +115,14 @@ page you can drive.
 ## Quick start
 
 ```bash
+bunx bunqueue-dashboard   # from npm — zero dependencies, everything in one process
+```
+
+Serves the dashboard on `http://127.0.0.1:8080`, proxies `/api/*` to your
+bunqueue server, and runs the control agent — nothing to clone or build.
+Working from a source checkout instead?
+
+```bash
 bun install
 bun start          # control agent + dashboard together, Ctrl-C stops both
 ```
