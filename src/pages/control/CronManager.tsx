@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
-import { Field, Input, SegmentedControl } from '@/components/ui/form';
+import { Field, Input, SegmentedControl, Toggle } from '@/components/ui/form';
 import { IconCron, IconTrash } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { bq, type CreateCronBody } from '@/lib/bq';
+import { nextCronRuns } from '@/lib/cronPreview';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 
@@ -24,10 +26,12 @@ export function CronManager() {
     setActErr(null);
     try {
       await bq.deleteCron(name);
+      toast.success('Cron deleted', name);
       refetch();
     } catch (e) {
       // A confirmed delete that silently no-ops reads as "it worked" — say why.
       setActErr((e as Error).message);
+      toast.error('Delete cron failed', (e as Error).message);
     }
   };
 
@@ -46,6 +50,7 @@ export function CronManager() {
         <CronForm
           onCreate={async (b) => {
             await bq.createCron(b);
+            toast.success('Cron created', b.name);
             refetch();
           }}
         />
@@ -114,9 +119,22 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
   const [schedule, setSchedule] = useState('');
   const [every, setEvery] = useState('');
   const [dataText, setDataText] = useState('{}');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [timezone, setTimezone] = useState('');
+  const [priority, setPriority] = useState('');
+  const [preventOverlap, setPreventOverlap] = useState(false);
+  const [skipIfNoWorker, setSkipIfNoWorker] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
+
+  // Live preview of the next fire times so a typo (9 0 * * * vs 0 9 * * *) is
+  // caught before the schedule is created. Computed in the browser's local
+  // timezone; a server-side timezone is noted separately.
+  const preview = useMemo(() => {
+    if (mode !== 'cron' || !schedule.trim()) return null;
+    return nextCronRuns(schedule.trim(), 3, Date.now());
+  }, [mode, schedule]);
 
   const submit = async () => {
     if (busy) return; // double-click would create the cron twice
@@ -139,6 +157,10 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
         setErr('Cron expression required');
         return;
       }
+      if (preview && !preview.valid) {
+        setErr(preview.error ?? 'Invalid cron expression');
+        return;
+      }
       body.schedule = schedule.trim();
     } else {
       const ms = Number(every);
@@ -148,6 +170,11 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
       }
       body.repeatEvery = ms;
     }
+    if (timezone.trim()) body.timezone = timezone.trim();
+    const prio = Number(priority);
+    if (priority.trim() !== '' && Number.isFinite(prio)) body.priority = prio;
+    if (preventOverlap) body.preventOverlap = true;
+    if (skipIfNoWorker) body.skipIfNoWorker = true;
     setBusy(true);
     try {
       await onCreate(body);
@@ -208,6 +235,29 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
           </div>
         )}
       </div>
+      {mode === 'cron' && schedule.trim() && preview && (
+        <div className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs">
+          {preview.valid ? (
+            preview.runs.length ? (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-faint">Next runs{timezone.trim() ? ' (local)' : ''}:</span>
+                {preview.runs.map((r) => (
+                  <span key={r} className="font-mono text-muted">
+                    {formatDateTime(r)}
+                  </span>
+                ))}
+                {timezone.trim() && (
+                  <span className="text-faint">— server evaluates in {timezone.trim()}</span>
+                )}
+              </div>
+            ) : (
+              <span className="text-warning">Valid, but no runs in the next few years.</span>
+            )
+          ) : (
+            <span className="text-danger">{preview.error}</span>
+          )}
+        </div>
+      )}
       <Field label="Data (JSON)">
         <Input
           value={dataText}
@@ -215,6 +265,52 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
           className="font-mono"
         />
       </Field>
+      <div>
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="text-xs font-medium text-muted hover:text-fg"
+        >
+          {showAdvanced ? '− Hide advanced' : '+ Advanced options'}
+        </button>
+        {showAdvanced && (
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <Field label="Timezone (IANA)" hint="e.g. Europe/Rome. Default: server timezone.">
+              <Input
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                placeholder="Europe/Rome"
+              />
+            </Field>
+            <Field label="Priority">
+              <Input
+                type="number"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                placeholder="0"
+              />
+            </Field>
+            <div className="col-span-2 flex flex-wrap gap-6">
+              <div className="flex items-center gap-2">
+                <Toggle
+                  checked={preventOverlap}
+                  onChange={setPreventOverlap}
+                  label="prevent overlap"
+                />
+                <span className="text-sm text-muted">prevent overlap</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Toggle
+                  checked={skipIfNoWorker}
+                  onChange={setSkipIfNoWorker}
+                  label="skip if no worker"
+                />
+                <span className="text-sm text-muted">skip if no worker</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="flex items-center gap-3">
         <Button type="submit" variant="accent" size="sm" disabled={busy}>
           {busy ? 'Creating…' : 'Create'}

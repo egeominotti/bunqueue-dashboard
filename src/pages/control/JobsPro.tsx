@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button, IconButton } from '@/components/ui/Button';
 import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { SegmentedControl, Select } from '@/components/ui/form';
 import {
   IconClose,
+  IconDownload,
   IconEye,
   IconPlay,
   IconRefresh,
@@ -18,6 +20,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { bq } from '@/lib/bq';
 import type { JobFull } from '@/lib/bqTypes';
 import { cn } from '@/lib/cn';
+import { downloadCsv } from '@/lib/exportFile';
 import {
   errorRate,
   formatDateTime,
@@ -185,6 +188,33 @@ export function JobsPro() {
     cancel: selectedRows.some((r) => actionGates(r.state).cancel),
   };
 
+  const exportRows = () => {
+    if (rows.length === 0) {
+      toast.info('No jobs to export on this page');
+      return;
+    }
+    const out = rows.map((j) => ({
+      id: j.id,
+      queue: j.queue ?? queue,
+      state: j.state ?? '',
+      priority: j.priority ?? 0,
+      attempts: j.attempts ?? 0,
+      maxAttempts: j.maxAttempts ?? '',
+      createdAt: j.createdAt ? new Date(j.createdAt).toISOString() : '',
+      durationMs: j.startedAt && j.completedAt ? j.completedAt - j.startedAt : '',
+    }));
+    downloadCsv(`jobs-${queue}-${status}`, out, [
+      'id',
+      'queue',
+      'state',
+      'priority',
+      'attempts',
+      'maxAttempts',
+      'createdAt',
+      'durationMs',
+    ]);
+  };
+
   const bulkRetry = () => runBulk('Retry', retryJobByState);
   const bulkPromote = () =>
     runBulk('Promote', (j) =>
@@ -223,6 +253,11 @@ export function JobsPro() {
         title="Jobs Explorer"
         description="Browse, inspect, and manage individual jobs."
         live
+        actions={
+          <Button size="sm" disabled={!jobs || rows.length === 0} onClick={exportRows}>
+            <IconDownload className="size-3.5" /> Export CSV
+          </Button>
+        }
       />
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">

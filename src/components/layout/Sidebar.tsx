@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
 import { useThemeStore } from '@/components/dashboard/stores/themeStore';
 import {
+  IconAlerts,
   IconArrowRight,
   IconCron,
   IconDatabase,
@@ -48,6 +49,7 @@ export const NAV: NavGroup[] = [
       { to: '/metrics', label: 'Metrics', icon: IconMetrics },
       { to: '/workers', label: 'Workers', icon: IconWorkers },
       { to: '/logs', label: 'Logs', icon: IconLogs },
+      { to: '/alerts', label: 'Alerts', icon: IconAlerts },
     ],
   },
   {
@@ -55,6 +57,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: '/server', label: 'Server', icon: IconWorkers },
       { to: '/add-job', label: 'Add Job', icon: IconJobs },
+      { to: '/jobs/bulk-add', label: 'Bulk Add', icon: IconJobs },
       { to: '/job', label: 'Job Inspector', icon: IconEye },
       { to: '/queue-control', label: 'Queue Control', icon: IconQueues },
       { to: '/dlq-control', label: 'DLQ Control', icon: IconDlq },

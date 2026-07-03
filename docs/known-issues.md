@@ -272,9 +272,10 @@ additive rule (the primary Pro routes are unaffected):
 
 ## UX gaps
 
-- **`src/pages/Alerts.tsx` is fully built but unreachable.** See
-  [pages.md](pages.md#not-part-of-the-router). If you're looking for an
-  "Alerts" nav item and can't find one, this is why.
+- ~~**`src/pages/Alerts.tsx` is fully built but unreachable.**~~ **Fixed:** the
+  Alerts page is now routed at `/alerts` with a Monitoring nav item, and a
+  client-side engine (`src/lib/useAlertEngine.ts`, mounted app-wide via
+  `AlertEngine`) evaluates the enabled rules against live metrics.
 
 ## Design limitations (not bugs, how bunqueue OSS works)
 
@@ -283,10 +284,16 @@ additive rule (the primary Pro routes are unaffected):
   form is a local-only (`localStorage`) convenience for assembling that env
   config to paste elsewhere, it has no effect on the running server, and
   "Backup Now" is permanently disabled.
-- **Alerts have no backend.** `alertsStore` persists rules/channels to
-  `localStorage` only; nothing evaluates them. bunqueue OSS has no alerting
-  engine, wire the rules into your own monitoring, or use hosted bunqueue
-  Cloud.
+- **Alerts are evaluated client-side, with real limits.** `useAlertEngine` now
+  evaluates the rules in the browser (in-app toast + optional desktop
+  Notification on each fresh threshold crossing), but: (1) it only runs **while a
+  tab is open** (even backgrounded) — it is not away-from-desk paging; the
+  email/webhook/slack **delivery channels still have no backend** (bunqueue OSS
+  has no alerting engine — wire them into your own monitoring or hosted bunqueue
+  Cloud); (2) the **`p99_latency`** metric is **global only** — bunqueue exposes
+  latency percentiles keyed by TCP operation (push/pull/ack), not per queue, so a
+  queue-scoped p99 rule evaluates the global max operation p99, not that queue's
+  job latency.
 - **Multiple pages cover overlapping ground on purpose** (three DLQ pages, two
   cron pages, `-classic` duplicates), this is the additive convention from
   `CLAUDE.md`, not accidental drift. See

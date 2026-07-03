@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Button } from '@/components/ui/Button';
+import { Button, IconButton } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { CopyButton } from '@/components/ui/CopyButton';
 import { EmptyState, LoadingState } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/form';
-import { IconSearch } from '@/components/ui/icons';
+import { IconDownload, IconSearch } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { BqError, bq } from '@/lib/bq';
 import type { JobFull } from '@/lib/bqTypes';
+import { buildCloneState } from '@/lib/cloneJob';
+import { downloadJson } from '@/lib/exportFile';
 import { formatDateTime, formatDuration } from '@/lib/format';
 import { JobActionsPanel } from './job/JobActionsPanel';
 import { JobBackoff } from './job/JobBackoff';
@@ -153,13 +155,36 @@ export function JobInspector() {
         title="Job Inspector"
         description="Look up any job by ID and drive its full lifecycle."
         actions={
-          job && (hasChildren || job.parentId) ? (
-            <Link
-              to={`/flows?root=${encodeURIComponent(job.id)}`}
-              className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
-            >
-              View flow
-            </Link>
+          job ? (
+            <>
+              {(hasChildren || job.parentId) && (
+                <Link
+                  to={`/flows?root=${encodeURIComponent(job.id)}`}
+                  className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+                >
+                  View flow
+                </Link>
+              )}
+              <Link
+                to="/add-job"
+                state={buildCloneState(job)}
+                title="Enqueue a new job pre-filled from this one"
+                className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+              >
+                Clone
+              </Link>
+              <Button
+                size="sm"
+                onClick={() =>
+                  downloadJson(
+                    `job-${job.id}`,
+                    result.fetched ? { ...job, result: result.value } : job
+                  )
+                }
+              >
+                <IconDownload className="size-3.5" /> Download JSON
+              </Button>
+            </>
           ) : undefined
         }
       />
@@ -241,10 +266,7 @@ export function JobInspector() {
               </dl>
             </Card>
 
-            <Card>
-              <CardHeader title="Data" />
-              <Json value={job.data} />
-            </Card>
+            <JsonCard title="Data" value={job.data} filename={`job-${job.id}-data`} />
 
             <JobDataEditor
               data={job.data}
@@ -254,7 +276,14 @@ export function JobInspector() {
 
             {state === 'completed' && (
               <Card>
-                <CardHeader title="Result" />
+                <CardHeader
+                  title="Result"
+                  action={
+                    result.fetched && result.value !== undefined && result.value !== null ? (
+                      <JsonToolbar value={result.value} filename={`job-${job.id}-result`} />
+                    ) : undefined
+                  }
+                />
                 {result.fetched && result.value !== undefined && result.value !== null ? (
                   <Json value={result.value} />
                 ) : (
@@ -310,5 +339,30 @@ function Json({ value }: { value: unknown }) {
     <pre className="max-h-64 overflow-auto rounded-lg bg-surface-2 p-3 font-mono text-xs text-muted">
       {JSON.stringify(value ?? null, null, 2)}
     </pre>
+  );
+}
+
+/** Copy + download controls for a JSON blob, shown in a card header. */
+function JsonToolbar({ value, filename }: { value: unknown; filename: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <CopyButton value={JSON.stringify(value ?? null, null, 2)} />
+      <IconButton
+        aria-label="Download JSON"
+        title="Download JSON"
+        onClick={() => downloadJson(filename, value ?? null)}
+      >
+        <IconDownload className="size-3.5" />
+      </IconButton>
+    </div>
+  );
+}
+
+function JsonCard({ title, value, filename }: { title: string; value: unknown; filename: string }) {
+  return (
+    <Card>
+      <CardHeader title={title} action={<JsonToolbar value={value} filename={filename} />} />
+      <Json value={value} />
+    </Card>
   );
 }

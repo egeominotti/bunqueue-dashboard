@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { IconButton } from '@/components/ui/Button';
+import { toast } from '@/components/dashboard/stores/toastStore';
+import { Button, IconButton } from '@/components/ui/Button';
 import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconArrowRight, IconPause, IconPlay, IconQueues, IconSearch } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -10,7 +11,10 @@ import { bq } from '@/lib/bq';
 import type { QueueSummaryFull } from '@/lib/bqTypes';
 import { cn } from '@/lib/cn';
 import { formatNumber } from '@/lib/format';
+import { settledPool } from '@/lib/promisePool';
 import { usePolledData } from '@/lib/usePolledData';
+
+const FANOUT_LIMIT = 6;
 
 const PAGE_SIZE = 15;
 
@@ -25,6 +29,7 @@ export function QueuesOverview() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const { data, error, loading, refetch } = usePolledData(() => bq.queuesSummary(), []);
@@ -64,6 +69,7 @@ export function QueuesOverview() {
       setMsg({ ok: true, text: `${q.name} ${q.paused ? 'resumed' : 'paused'} ✓` });
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
+      toast.error(`Failed to ${q.paused ? 'resume' : 'pause'} ${q.name}`, (e as Error).message);
     } finally {
       setBusy((s) => {
         const n = new Set(s);
@@ -74,11 +80,64 @@ export function QueuesOverview() {
     }
   };
 
+  // Freeze or unfreeze every queue in one action — the first reflex during an
+  // incident/deploy. Fans out over the current summary, skipping queues already
+  // in the target state; tolerates per-queue failures.
+  const bulkToggle = async (target: 'pause' | 'resume') => {
+    const targets = all.filter((q) => (target === 'pause' ? !q.paused : q.paused));
+    if (targets.length === 0) {
+      toast.info(`No queues to ${target}`);
+      return;
+    }
+    if (!window.confirm(`${target === 'pause' ? 'Pause' : 'Resume'} ${targets.length} queue(s)?`))
+      return;
+    setBulkBusy(true);
+    setMsg(null);
+    const results = await settledPool(targets, FANOUT_LIMIT, (q) =>
+      target === 'pause' ? bq.pause(q.name) : bq.resume(q.name)
+    );
+    const failures = results.filter((r) => r.status === 'rejected').length;
+    const text = `${target === 'pause' ? 'Paused' : 'Resumed'} ${targets.length - failures}/${targets.length} queues${
+      failures ? `, ${failures} failed` : ''
+    }`;
+    setMsg({ ok: failures === 0, text });
+    if (failures === 0) toast.success(text);
+    else toast.error(text);
+    setBulkBusy(false);
+    refetch();
+  };
+
   if (loading && !data && !error) return <LoadingState label="Loading queues…" />;
 
   return (
     <div>
-      <PageHeader title="Queues" description={`${all.length} queues`} live />
+      <PageHeader
+        title="Queues"
+        description={`${all.length} queues`}
+        live
+        actions={
+          all.length > 0 ? (
+            <>
+              <Button
+                variant="warning"
+                size="sm"
+                disabled={bulkBusy || totals.paused >= all.length}
+                onClick={() => bulkToggle('pause')}
+              >
+                <IconPause className="size-3.5" /> Pause all
+              </Button>
+              <Button
+                variant="success"
+                size="sm"
+                disabled={bulkBusy || totals.paused === 0}
+                onClick={() => bulkToggle('resume')}
+              >
+                <IconPlay className="size-3.5" /> Resume all
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
 
       {error && <OfflineBanner onRetry={refetch} />}
 

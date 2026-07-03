@@ -12,41 +12,107 @@ import { EmptyState } from '@/components/ui/feedback';
 import { Field, Input, Select, Toggle } from '@/components/ui/form';
 import { IconCheck, IconTrash } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { formatRelativeTime } from '@/lib/format';
+import { enableNotifications, useAlertRuntimeStore } from '@/lib/useAlertEngine';
 
 const CHANNELS: ChannelType[] = ['email', 'webhook', 'slack'];
 const METRICS = Object.keys(METRIC_LABELS) as Metric[];
 const OPERATORS: Operator[] = ['>=', '>', '<=', '<'];
 
+function initialPermission(): NotificationPermission | 'unsupported' {
+  if (typeof Notification === 'undefined') return 'unsupported';
+  return Notification.permission;
+}
+
 export function Alerts() {
   const { channels, rules, addChannel, removeChannel, addRule, removeRule, toggleRule } =
     useAlertsStore();
+  const breaching = useAlertRuntimeStore((s) => s.breaching);
   const [showRuleForm, setShowRuleForm] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>(
+    initialPermission
+  );
+
+  const requestPermission = async () => {
+    setPermission(await enableNotifications());
+  };
 
   return (
     <div>
       <PageHeader
         title="Alerts"
-        description="Configure alert rules and notification channels."
+        description="Threshold rules evaluated live in your browser."
         live
         actions={
-          <Button variant="accent" size="sm" onClick={() => setShowRuleForm((v) => !v)}>
-            + Create Alert Rule
-          </Button>
+          <>
+            {permission === 'granted' ? (
+              <span className="flex items-center gap-1.5 text-sm text-success">
+                <IconCheck className="size-4" /> Desktop alerts on
+              </span>
+            ) : permission === 'unsupported' ? (
+              <span className="text-sm text-faint">Notifications unsupported</span>
+            ) : (
+              <Button size="sm" onClick={requestPermission}>
+                Enable desktop notifications
+              </Button>
+            )}
+            <Button variant="accent" size="sm" onClick={() => setShowRuleForm((v) => !v)}>
+              + Create Alert Rule
+            </Button>
+          </>
         }
       />
 
       <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-400/90">
-        Alerts are stored locally in this browser. bunqueue OSS has no alerting backend — wire these
-        rules into your own monitoring, or use hosted bunqueue Cloud for delivery.
+        Rules are evaluated in this browser while a tab is open (even backgrounded), raising an
+        in-app toast and — if enabled — a desktop notification. bunqueue OSS has no alerting
+        backend, so email/webhook/slack delivery still needs your own monitoring or hosted bunqueue
+        Cloud.
       </div>
 
       <section className="mb-8">
         <h2 className="mb-3 text-lg font-semibold text-fg">Triggered Alerts</h2>
-        <EmptyState
-          icon={<IconCheck />}
-          title="No triggered alerts"
-          hint="All systems operational."
-        />
+        {breaching.length === 0 ? (
+          <EmptyState
+            icon={<IconCheck />}
+            title="No triggered alerts"
+            hint={
+              rules.some((r) => r.enabled)
+                ? 'All enabled rules are within their thresholds.'
+                : 'No enabled rules yet. Create one below.'
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto rounded-xl border border-danger/30 bg-red-500/5">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
+                  <th className="px-5 py-3 font-medium">Rule</th>
+                  <th className="px-5 py-3 font-medium">Condition</th>
+                  <th className="px-5 py-3 font-medium">Queue</th>
+                  <th className="px-5 py-3 text-right font-medium">Current</th>
+                  <th className="px-5 py-3 text-right font-medium">Since</th>
+                </tr>
+              </thead>
+              <tbody>
+                {breaching.map((b) => (
+                  <tr key={b.ruleId} className="border-b border-line last:border-0">
+                    <td className="px-5 py-3 font-medium text-danger">{b.ruleName}</td>
+                    <td className="px-5 py-3 text-muted">
+                      {b.metricLabel} {b.operator}{' '}
+                      <span className="font-semibold text-fg">{b.threshold}</span>
+                    </td>
+                    <td className="px-5 py-3 text-muted">{b.queue || 'All queues'}</td>
+                    <td className="px-5 py-3 text-right tnum font-semibold text-danger">
+                      {Math.round(b.value * 100) / 100}
+                    </td>
+                    <td className="px-5 py-3 text-right text-faint">{formatRelativeTime(b.at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="mb-8">

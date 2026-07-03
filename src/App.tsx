@@ -15,6 +15,9 @@ const AddJob = lazy(() => import('./pages/control/AddJob').then((m) => ({ defaul
 const Benchmark = lazy(() =>
   import('./pages/control/Benchmark').then((m) => ({ default: m.Benchmark }))
 );
+const BulkAddJobs = lazy(() =>
+  import('./pages/control/BulkAddJobs').then((m) => ({ default: m.BulkAddJobs }))
+);
 const CronManager = lazy(() =>
   import('./pages/control/CronManager').then((m) => ({ default: m.CronManager }))
 );
@@ -43,6 +46,9 @@ const MetricsPro = lazy(() =>
 const QueueControl = lazy(() =>
   import('./pages/control/QueueControl').then((m) => ({ default: m.QueueControl }))
 );
+const QueueDetailPro = lazy(() =>
+  import('./pages/control/QueueDetailPro').then((m) => ({ default: m.QueueDetailPro }))
+);
 const QueuesOverview = lazy(() =>
   import('./pages/control/QueuesOverview').then((m) => ({ default: m.QueuesOverview }))
 );
@@ -61,6 +67,7 @@ const Webhooks = lazy(() =>
 const WorkersPro = lazy(() =>
   import('./pages/control/WorkersPro').then((m) => ({ default: m.WorkersPro }))
 );
+const Alerts = lazy(() => import('./pages/Alerts').then((m) => ({ default: m.Alerts })));
 const Cron = lazy(() => import('./pages/Cron').then((m) => ({ default: m.Cron })));
 const Dlq = lazy(() => import('./pages/Dlq').then((m) => ({ default: m.Dlq })));
 const Jobs = lazy(() => import('./pages/Jobs').then((m) => ({ default: m.Jobs })));
@@ -84,7 +91,8 @@ export function App() {
         <Route path="/overview-classic" element={<Overview />} />
         <Route path="/queues" element={<QueuesOverview />} />
         <Route path="/queues-classic" element={<Queues />} />
-        <Route path="/queues/:name" element={<QueueDetail />} />
+        <Route path="/queues/:name" element={<QueueDetailPro />} />
+        <Route path="/queues-classic/:name" element={<QueueDetail />} />
         <Route path="/jobs" element={<JobsPro />} />
         <Route path="/jobs-classic" element={<Jobs />} />
         <Route path="/dlq" element={<DlqPro />} />
@@ -100,12 +108,14 @@ export function App() {
         <Route path="/logs-classic" element={<Logs />} />
         <Route path="/server" element={<ServerControl />} />
         <Route path="/add-job" element={<AddJob />} />
+        <Route path="/jobs/bulk-add" element={<BulkAddJobs />} />
         <Route path="/job" element={<JobInspector />} />
         <Route path="/queue-control" element={<QueueControl />} />
         <Route path="/cron-manager" element={<CronManager />} />
         <Route path="/dlq-control" element={<DlqControl />} />
         <Route path="/webhooks" element={<Webhooks />} />
         <Route path="/diagnostics" element={<Diagnostics />} />
+        <Route path="/alerts" element={<Alerts />} />
         <Route path="/benchmark" element={<Benchmark />} />
         <Route path="/database" element={<Database />} />
         <Route path="/mcp" element={<McpServer />} />

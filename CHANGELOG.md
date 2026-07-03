@@ -15,6 +15,47 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+### Added
+- **Pro queue drill-in.** Clicking a queue in the Overview / Queues list now opens
+  a route-param-driven Pro page (`/queues/:name` → `QueueDetailPro`) with live
+  counts, a backlog-depth sparkline + draining/accumulating trend, the full
+  lifecycle/limits/stall/DLQ-policy controls (reused from Queue Control),
+  **obliterate**, recent jobs, and jump-off links to the queue's Jobs and DLQ.
+  The classic detail page stays reachable at `/queues-classic/:name`.
+- **Global toast system.** A durable, cross-page action-feedback surface
+  (`toastStore` + `<Toaster/>` mounted in the layout). Mutating actions across the
+  Pro pages now raise a toast that survives navigation (a fire-and-leave bulk
+  action is still confirmed after you move on), alongside the existing inline
+  feedback.
+- **Threshold alerting + desktop notifications.** The previously-unreachable
+  **Alerts** page is now routed and in the nav, and a client-side engine
+  (`useAlertEngine`, mounted app-wide) evaluates the enabled rules against live
+  metrics, raising an in-app toast and — once you opt in — a browser
+  desktop notification on each fresh threshold crossing (edge-triggered, with a
+  per-rule cooldown). Delivery channels (email/webhook/slack) still need your own
+  backend; the browser evaluation runs while any tab is open.
+- **Bulk-import distinct jobs.** A new **Bulk Add** page (`/jobs/bulk-add`) imports
+  many *different* jobs at once from a pasted JSON array, NDJSON, or an uploaded
+  file (Add Job's Count field only replicates one identical payload).
+- **Clone a job.** The Job Inspector can now open Add Job pre-filled from an
+  existing job's queue/data/options, to tweak and enqueue a fresh job without
+  disturbing the original.
+- **Schedule at an absolute time.** Add Job gained a **Run at** datetime picker that
+  derives the delay, so you no longer hand-compute milliseconds.
+- **Copy / download job JSON.** The Job Inspector's Data and Result cards have
+  copy + download controls, plus a header **Download JSON** for the full record
+  (job + result).
+- **CSV export** on the Jobs Explorer and Dead Letter Queue pages (current page,
+  respecting the active filters).
+- **Cross-queue DLQ recovery.** The DLQ page can retry or purge across *every*
+  affected queue in one action (incident recovery), tolerating per-queue failures.
+- **Pause all / Resume all queues** from the Queues page header — the first reflex
+  during an incident or deploy.
+- **Cron advanced options + next-run preview.** The Cron create form now exposes
+  timezone, priority, prevent-overlap and skip-if-no-worker, and shows a live
+  preview of the next fire times (with client-side expression validation) so a
+  mistyped schedule is caught before it's created.
+
 ## [0.0.18] - 2026-07-03
 
 ### Fixed

@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/form';
-import { IconDlq, IconRefresh } from '@/components/ui/icons';
+import { IconDlq, IconDownload, IconRefresh } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { bq } from '@/lib/bq';
 import { cn } from '@/lib/cn';
+import { downloadCsv } from '@/lib/exportFile';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
+import { settledPool } from '@/lib/promisePool';
 import { usePolledData } from '@/lib/usePolledData';
+
+const FANOUT_LIMIT = 6;
 
 const PAGE_SIZE = 25;
 
@@ -72,16 +77,69 @@ export function DlqPro() {
     try {
       const r = await fn();
       const n = r?.count ?? 0;
-      setMsg({ ok: true, text: `${verb} ${formatNumber(n)} ${n === 1 ? 'entry' : 'entries'}` });
+      const text = `${verb} ${formatNumber(n)} ${n === 1 ? 'entry' : 'entries'}`;
+      setMsg({ ok: true, text });
+      toast.success(text);
       // Refresh the selected queue's page AND the queue list (grand total /
       // "DLQ by queue" grid / dropdown counts) after a retry or purge.
       refetch();
       refetchQueues();
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
+      toast.error(`${verb} failed`, (e as Error).message);
     } finally {
       setBusy(false);
     }
+  };
+
+  // Fan a retry/purge out over EVERY queue that currently has DLQ entries — the
+  // incident-recovery action (a downstream outage fails jobs across many queues
+  // at once). Tolerates per-queue failures via allSettled.
+  const runAcross = async (verb: 'Retry' | 'Purge') => {
+    const names = dlqQueues.map((x) => x.name);
+    if (names.length === 0) return;
+    if (
+      !window.confirm(
+        `${verb} the dead letter queue across ${names.length} queue(s) (${formatNumber(total)} entries)?`
+      )
+    )
+      return;
+    setBusy(true);
+    setMsg(null);
+    const results = await settledPool(names, FANOUT_LIMIT, (n) =>
+      verb === 'Retry' ? bq.retryDlq(n) : bq.purgeDlq(n)
+    );
+    let count = 0;
+    let failures = 0;
+    for (const r of results) {
+      if (r.status === 'fulfilled') count += r.value?.count ?? 0;
+      else failures++;
+    }
+    const done = verb === 'Retry' ? 'Retried' : 'Purged';
+    const text = `${done} ${formatNumber(count)} across ${names.length - failures}/${names.length} queues${
+      failures ? `, ${failures} failed` : ''
+    }`;
+    setMsg({ ok: failures === 0, text });
+    if (failures === 0) toast.success(text);
+    else toast.error(text);
+    refetch();
+    refetchQueues();
+    setBusy(false);
+  };
+
+  const exportEntries = () => {
+    const rows = (data?.entries ?? []).map((e) => ({
+      jobId: e.job.id,
+      reason: e.reason,
+      error: e.error ?? '',
+      enteredAt: new Date(e.enteredAt).toISOString(),
+      attempts: e.attempts?.length ?? 0,
+    }));
+    if (rows.length === 0) {
+      toast.info('Nothing to export on this page');
+      return;
+    }
+    downloadCsv(`dlq-${queue}`, rows, ['jobId', 'reason', 'error', 'enteredAt', 'attempts']);
   };
 
   const selectQueue = (name: string) => {
@@ -198,8 +256,18 @@ export function DlqPro() {
 
       {dlqQueues.length > 0 && (
         <Card className="mb-6">
-          <div className="mb-3 text-[11px] font-medium uppercase tracking-wider text-faint">
-            DLQ by queue
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-faint">
+              DLQ by queue
+            </span>
+            <div className="flex items-center gap-2">
+              <Button size="sm" disabled={busy} onClick={() => runAcross('Retry')}>
+                <IconRefresh className="size-3.5" /> Retry all ({dlqQueues.length} queues)
+              </Button>
+              <Button variant="danger" size="sm" disabled={busy} onClick={() => runAcross('Purge')}>
+                Purge all ({dlqQueues.length} queues)
+              </Button>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
             {dlqQueues.map((q) => (
@@ -280,6 +348,14 @@ export function DlqPro() {
         >
           Purge All
         </Button>
+        <IconButton
+          aria-label="Export this page to CSV"
+          title="Export this page to CSV"
+          disabled={!queue}
+          onClick={exportEntries}
+        >
+          <IconDownload className="size-3.5" />
+        </IconButton>
       </div>
       {msg && (
         <div className={cn('mb-3 text-sm', msg.ok ? 'text-success' : 'text-danger')}>

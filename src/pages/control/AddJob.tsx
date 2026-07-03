@@ -1,26 +1,38 @@
 import { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Field, Input, Toggle } from '@/components/ui/form';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { type AddJobBody, bq } from '@/lib/bq';
+import type { CloneJobState } from '@/lib/cloneJob';
 import { usePolledData } from '@/lib/usePolledData';
+
+const numOrEmpty = (v: number | undefined): string => (v == null ? '' : String(v));
 
 export function AddJob() {
   // Queue name datalist only — rarely changes, so slow-poll it.
   const { data: qs } = usePolledData(() => bq.queues(), [], { intervalMs: 30000 });
-  const [queue, setQueue] = useState('');
-  const [dataText, setDataText] = useState('{\n  "hello": "world"\n}');
+
+  // A "Clone" link from the Job Inspector hands us a source job's queue/data/
+  // options via router state, so this form opens pre-filled for a fresh enqueue.
+  const clone = (useLocation().state as Partial<CloneJobState> | null)?.clone;
+  const opts = clone?.options ?? {};
+
+  const [queue, setQueue] = useState(clone?.queue ?? '');
+  const [dataText, setDataText] = useState(clone?.dataText ?? '{\n  "hello": "world"\n}');
   const [count, setCount] = useState('1');
 
-  const [priority, setPriority] = useState('');
+  const [priority, setPriority] = useState(numOrEmpty(opts.priority));
   const [delay, setDelay] = useState('');
-  const [maxAttempts, setMaxAttempts] = useState('');
-  const [backoff, setBackoff] = useState('');
-  const [timeout, setTimeout] = useState('');
+  const [runAt, setRunAt] = useState('');
+  const [maxAttempts, setMaxAttempts] = useState(numOrEmpty(opts.maxAttempts));
+  const [backoff, setBackoff] = useState(numOrEmpty(opts.backoff));
+  const [timeout, setTimeout] = useState(numOrEmpty(opts.timeout));
   const [jobId, setJobId] = useState('');
-  const [removeOnComplete, setRemoveOnComplete] = useState(false);
-  const [removeOnFail, setRemoveOnFail] = useState(false);
+  const [removeOnComplete, setRemoveOnComplete] = useState(opts.removeOnComplete ?? false);
+  const [removeOnFail, setRemoveOnFail] = useState(opts.removeOnFail ?? false);
   const [durable, setDurable] = useState(false);
   const [lifo, setLifo] = useState(false);
 
@@ -47,10 +59,21 @@ export function AddJob() {
       setJsonErr(`Invalid JSON: ${(e as Error).message}`);
       return;
     }
+    // "Run at" (absolute wall-clock) wins over the raw "Delay (ms)" field: derive
+    // the relative delay the API actually takes from the picked datetime.
+    let effectiveDelay = num(delay);
+    if (runAt.trim()) {
+      const targetMs = new Date(runAt).getTime();
+      if (!Number.isFinite(targetMs)) {
+        setResult({ ok: false, msg: 'Run at is not a valid date/time' });
+        return;
+      }
+      effectiveDelay = Math.max(0, targetMs - Date.now());
+    }
     const body: AddJobBody = {
       data: parsed,
       priority: num(priority),
-      delay: num(delay),
+      delay: effectiveDelay,
       maxAttempts: num(maxAttempts),
       backoff: num(backoff),
       timeout: num(timeout),
@@ -74,6 +97,7 @@ export function AddJob() {
       if (n === 1) {
         const r = await bq.addJob(queue, body);
         setResult({ ok: true, msg: `Created job ${r.id}` });
+        toast.success('Job created', `${queue} · ${r.id}`);
       } else {
         const r = await bq.addJobsBulk(
           queue,
@@ -83,9 +107,11 @@ export function AddJob() {
         // distinct ids the server actually created, not the requested count.
         const created = new Set(r.ids).size;
         setResult({ ok: true, msg: `Created ${created} job${created === 1 ? '' : 's'}` });
+        toast.success(`Created ${created} job${created === 1 ? '' : 's'}`, `in ${queue}`);
       }
     } catch (e) {
       setResult({ ok: false, msg: (e as Error).message });
+      toast.error('Add job failed', (e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -93,7 +119,24 @@ export function AddJob() {
 
   return (
     <div>
-      <PageHeader title="Add Job" description="Enqueue a job with full options." />
+      <PageHeader
+        title="Add Job"
+        description="Enqueue a job with full options."
+        actions={
+          <Link
+            to="/jobs/bulk-add"
+            className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+          >
+            Bulk import
+          </Link>
+        }
+      />
+
+      {clone && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/[0.06] px-4 py-2 text-sm text-accent">
+          Pre-filled from an existing job. Review the data and options, then enqueue a fresh job.
+        </div>
+      )}
 
       <form
         className="grid grid-cols-1 gap-6 lg:grid-cols-2"
@@ -151,6 +194,17 @@ export function AddJob() {
                 value={delay}
                 onChange={(e) => setDelay(e.target.value)}
                 placeholder="0"
+                disabled={runAt.trim() !== ''}
+              />
+            </Field>
+            <Field
+              label="Run at"
+              hint={runAt.trim() ? 'Overrides Delay — derived from this time.' : undefined}
+            >
+              <Input
+                type="datetime-local"
+                value={runAt}
+                onChange={(e) => setRunAt(e.target.value)}
               />
             </Field>
             <Field label="Max attempts">
