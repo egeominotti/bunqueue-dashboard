@@ -113,6 +113,19 @@ never imports or modifies bunqueue itself, so it tracks any bunqueue server you 
 **Prerequisites:** [Bun](https://bun.sh) ≥ 1.3 and a reachable bunqueue server (or let the control
 agent start one for you from the **Server** page).
 
+### Run from npm (no clone)
+
+```bash
+bunx bunqueue-dashboard
+```
+
+One command: serves the prebuilt dashboard on http://127.0.0.1:8080, proxies `/api/*` to your
+bunqueue server (`BUNQUEUE_URL`, default `http://localhost:6790`), and runs the control agent on
+`127.0.0.1:6800`. Same env knobs as the standalone binaries: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` ·
+`AGENT_PORT` · `AGENT_ALLOWED_ORIGINS` · `AGENT_TOKEN` · `BUNQUEUE_START_CMD`.
+
+### Run from source
+
 ```bash
 git clone https://github.com/egeominotti/bunqueue-dashboard.git
 cd bunqueue-dashboard

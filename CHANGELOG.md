@@ -15,6 +15,21 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.14] - 2026-07-03
+
+### Added
+- **npm package: `bunx bunqueue-dashboard`.** The dashboard is now publishable
+  to npm as a Bun-first CLI: one command serves the prebuilt SPA, proxies
+  `/api/*` to the bunqueue server, and runs the control agent — the same
+  `scripts/serve.ts` the standalone binaries compile, running uncompiled
+  (verified: SPA, history fallback, proxy, and agent all answer from a tarball
+  install). The tarball ships `dist/` + the agent + the embed manifest only;
+  runtime dependencies are down to `pino`/`pino-pretty` (the UI libraries are
+  build-time and moved to devDependencies). `release.yml` gains an idempotent
+  `npm` job: it publishes with `--provenance` iff the `NPM_TOKEN` secret is set
+  and the version isn't already on the registry — a missing secret or an
+  un-bumped version is a clean skip, never a failure.
+
 ## [0.0.13] - 2026-07-03
 
 ### Fixed
@@ -283,7 +298,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.13...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.14...HEAD
+[0.0.14]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.13...v0.0.14
 [0.0.13]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.10...v0.0.11
