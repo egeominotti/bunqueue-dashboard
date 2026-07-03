@@ -15,6 +15,55 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.17] - 2026-07-03
+
+### Security
+- **`AGENT_TOKEN` is now wired end-to-end (was a functional dead-end).** The
+  browser agent client (`bq.ts` `agent()`) never sent a token, so a control
+  agent started with `AGENT_TOKEN` set rejected every start/stop/restart/config
+  call with 401 — and `bq.ts`'s 401 handler popped the **server** token prompt,
+  which can never satisfy an **agent** 401 (an unfixable loop). Now the agent
+  client sends the agent token, the `auth:required` event is **scoped**
+  (`server` vs `agent`) so the lock screen asks for the right one, and there's
+  an **Agent token** field in Settings (memory-only, or `VITE_BUNQUEUE_AGENT_TOKEN`).
+- **DNS-rebinding read exposure closed on the control agent.** The Origin
+  allowlist doesn't cover a *same-origin* request, so a page whose DNS was
+  rebound to `127.0.0.1` could read `/control/status`, `/control/logs` and the
+  `/db/*` inspector (job payloads) over Origin-less GETs — even with
+  `AGENT_TOKEN` set (the token exempts reads). The agent now enforces a
+  **Host-header allowlist** (loopback + `AGENT_ALLOWED_HOSTS`); an attacker
+  domain rebound to loopback fails it. The standalone binary applies the same
+  gate across `/api`, `/agent` and assets when bound to loopback (a non-loopback
+  `BIND_ADDR` is unchanged — that's an explicit LAN opt-in).
+- **Alert channel secrets no longer persisted in plaintext.** `alertsStore` had
+  no `partialize`, so `webhook`/`slack` channel targets (secret URLs) were
+  written to `localStorage`. They're now kept in memory only (email targets,
+  not credentials, still persist), matching the connection-token / S3-key policy.
+
+### Fixed
+- **Benchmark "Clean queue" no longer reports a false success.** With the server
+  unreachable, the verification `counts()` failed silently and the UI showed a
+  green "Cleaned — 0 jobs remain" having cleaned nothing. It now surfaces
+  "Clean unverified — <error>" when the verifying read fails.
+- **Copilot error messages: a rate-limit/overload error that mentions the model
+  id is no longer mislabeled as "invalid model id".** `friendly()` classified
+  any message containing "model" as a bad model; rate-limit/overload is now
+  matched first and the model-error branch only fires on genuine not-found/
+  invalid-model signals.
+- **Blue `StatCard` values now meet contrast on the light theme** (`light:` shade
+  override, matching `StatusBadge`).
+- **Demo mode now renders Server Control.** The GitHub Pages demo faked no
+  `/control/*` endpoint, so ServerControl got a bare `{ ok: true }`; it now
+  returns a coherent running-server snapshot (status / logs / config).
+
+### Changed
+- **`agent/` and `scripts/` are now typechecked** by the build gate
+  (`tsconfig.agent.json`, `bun-types`) — the shipped npm bin (`serve.ts`) and
+  the security-sensitive agent code previously passed the gate with no
+  typecheck. This surfaced and fixed four latent type errors (Bun subprocess
+  stream casts, a readonly-tuple spawn arg, a `URL`→`Request` construction). The
+  Biome exclusion of those dirs is unchanged (lint/format style, not types).
+
 ## [0.0.16] - 2026-07-03
 
 ### Fixed
@@ -336,7 +385,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.16...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.17...HEAD
+[0.0.17]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.16...v0.0.17
 [0.0.16]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.15...v0.0.16
 [0.0.15]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.14...v0.0.15
 [0.0.14]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.13...v0.0.14

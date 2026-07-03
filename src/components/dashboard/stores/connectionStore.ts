@@ -11,20 +11,24 @@ import { persist } from 'zustand/middleware';
 interface ConnectionState {
   baseUrl: string;
   token: string;
+  /** Bearer token for the control agent when it runs with AGENT_TOKEN set. */
+  agentToken: string;
   refreshMs: number;
   setBaseUrl: (baseUrl: string) => void;
   setToken: (token: string) => void;
+  setAgentToken: (agentToken: string) => void;
   setRefreshMs: (refreshMs: number) => void;
 }
 
 const envBase = import.meta.env.VITE_BUNQUEUE_URL?.replace(/\/$/, '');
 const envToken = import.meta.env.VITE_BUNQUEUE_TOKEN;
+const envAgentToken = import.meta.env.VITE_BUNQUEUE_AGENT_TOKEN;
 
 /**
- * What gets persisted to localStorage. The bearer token is deliberately
- * excluded — an API credential must not sit in plaintext at rest (same
- * tradeoff as the S3 keys in s3Store): set VITE_BUNQUEUE_TOKEN or re-enter it
- * in Settings per session.
+ * What gets persisted to localStorage. Both bearer tokens (server + control
+ * agent) are deliberately excluded — an API credential must not sit in
+ * plaintext at rest (same tradeoff as the S3 keys in s3Store): set
+ * VITE_BUNQUEUE_TOKEN / VITE_BUNQUEUE_AGENT_TOKEN or re-enter them per session.
  */
 export function persistedConnectionState(s: ConnectionState): {
   baseUrl: string;
@@ -38,9 +42,11 @@ export const useConnectionStore = create<ConnectionState>()(
     (set) => ({
       baseUrl: envBase || '/api',
       token: envToken || '',
+      agentToken: envAgentToken || '',
       refreshMs: 3000,
       setBaseUrl: (baseUrl) => set({ baseUrl: baseUrl.replace(/\/$/, '') }),
       setToken: (token) => set({ token }),
+      setAgentToken: (agentToken) => set({ agentToken }),
       setRefreshMs: (refreshMs) => set({ refreshMs: Math.max(500, refreshMs) }),
     }),
     {
@@ -62,4 +68,10 @@ export function getBaseUrl(): string {
 export function getAuthHeaders(): Record<string, string> {
   const { token } = useConnectionStore.getState();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** Auth headers for the control agent (empty unless an AGENT_TOKEN was entered). */
+export function getAgentAuthHeaders(): Record<string, string> {
+  const { agentToken } = useConnectionStore.getState();
+  return agentToken ? { Authorization: `Bearer ${agentToken}` } : {};
 }

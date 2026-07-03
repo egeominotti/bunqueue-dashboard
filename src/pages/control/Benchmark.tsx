@@ -111,24 +111,40 @@ export function Benchmark() {
   const c = counts?.counts ?? null;
 
   const [cleaning, setCleaning] = useState(false);
-  const [cleanResult, setCleanResult] = useState<{ remaining: number } | null>(null);
+  const [cleanResult, setCleanResult] = useState<{ remaining: number } | { error: string } | null>(
+    null
+  );
   const cleanup = async () => {
     const q = draft.queue.trim();
     if (cleaning || !q || !window.confirm(`Remove benchmark jobs from "${q}"?`)) return;
     setCleaning(true);
     setCleanResult(null);
     try {
+      let lastErr: string | null = null;
       for (const state of ['waiting', 'completed', 'failed', 'delayed']) {
         try {
           await bq.clean(q, { state, limit: LIMITS.total });
-        } catch {
-          /* state not cleanable */
+        } catch (e) {
+          // A per-state clean can legitimately fail (state not cleanable); the
+          // authoritative signal is the verification count below. Keep the last
+          // message so a genuine failure isn't reported as a spotless clean.
+          lastErr = (e as Error).message;
         }
       }
-      // Pulled-but-unacked jobs can't be cleaned; the server requeues them after
-      // its stall timeout — tell the user instead of silently under-cleaning.
-      const after = await bq.counts(q).catch(() => null);
-      setCleanResult({ remaining: after?.counts?.active ?? 0 });
+      // Verify against the live queue. If this fetch fails the server is
+      // unreachable, so we CANNOT claim "0 jobs remain" — surface the error
+      // instead of a false green success.
+      const after = await bq.counts(q).catch((e) => {
+        lastErr = (e as Error).message;
+        return null;
+      });
+      if (after == null) {
+        setCleanResult({ error: lastErr ?? 'server unreachable — could not verify' });
+      } else {
+        // Pulled-but-unacked jobs can't be cleaned; the server requeues them
+        // after its stall timeout — report the residual active count honestly.
+        setCleanResult({ remaining: after.counts?.active ?? 0 });
+      }
     } finally {
       setCleaning(false);
     }
@@ -371,18 +387,23 @@ export function Benchmark() {
               <Button variant="ghost" size="sm" disabled={active || cleaning} onClick={cleanup}>
                 {cleaning ? 'Cleaning…' : 'Clean queue'}
               </Button>
-              {cleanResult && (
-                <span
-                  className={cn(
-                    'text-xs',
-                    cleanResult.remaining > 0 ? 'text-warning' : 'text-success'
-                  )}
-                >
-                  {cleanResult.remaining > 0
-                    ? `Cleaned — ${formatNumber(cleanResult.remaining)} active job(s) remain (requeued after the stall timeout)`
-                    : 'Cleaned — 0 jobs remain'}
-                </span>
-              )}
+              {cleanResult &&
+                ('error' in cleanResult ? (
+                  <span className="text-xs text-danger">
+                    Clean unverified — {cleanResult.error}
+                  </span>
+                ) : (
+                  <span
+                    className={cn(
+                      'text-xs',
+                      cleanResult.remaining > 0 ? 'text-warning' : 'text-success'
+                    )}
+                  >
+                    {cleanResult.remaining > 0
+                      ? `Cleaned — ${formatNumber(cleanResult.remaining)} active job(s) remain (requeued after the stall timeout)`
+                      : 'Cleaned — 0 jobs remain'}
+                  </span>
+                ))}
             </div>
           </div>
         </Card>

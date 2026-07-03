@@ -14,7 +14,15 @@
  *     always sends `Origin`, so a drive-by page cannot start/stop/reconfigure
  *     the server. Non-browser callers (curl, same-process) send no Origin and
  *     still work for local use.
- *  3. Optional bearer token (AGENT_TOKEN): when set, state-changing requests
+ *  3. Host-header allowlist (DNS-rebinding defense). The Origin gate does NOT
+ *     cover a *same-origin* request: a page whose DNS name is rebound to
+ *     127.0.0.1 issues same-origin GETs that carry no `Origin` header, so it
+ *     could otherwise read /control/status, /control/logs and the /db/*
+ *     inspector (job payloads) even with a token set (the token exempts reads).
+ *     When `allowedHosts` is configured, a request whose `Host` header names a
+ *     hostname outside the allowlist is rejected (403) — the rebinding page's
+ *     `Host` is the attacker's domain, never a loopback/allowlisted host.
+ *  4. Optional bearer token (AGENT_TOKEN): when set, state-changing requests
  *     must present it (`Authorization: Bearer <t>` or `x-agent-token: <t>`).
  */
 import { type DbFilter, dbCell, dbInfo, dbRows, dbSchema, dbTables, MissingDbError, queryWithTimeout } from './db';
@@ -22,11 +30,22 @@ import type { ProcessManager, ServerConfig } from './manager';
 
 export interface AgentOptions {
   allowedOrigins: string[];
+  /**
+   * DNS-rebinding defense: when set (non-empty), a request whose `Host` header
+   * resolves to a hostname outside this list is rejected. Compared by hostname
+   * only (port stripped). Leave undefined to disable the check — e.g. when the
+   * agent is fronted by a proxy that already validates Host, or bound to a
+   * non-loopback interface where the user opted into network exposure.
+   */
+  allowedHosts?: string[];
   /** When set, POST/PUT requests must present this token. */
   token?: string;
 }
 
 const DEFAULT_ORIGINS = ['http://localhost:5273', 'http://127.0.0.1:5273'];
+
+/** Hostnames always trusted as loopback for the Host-header allowlist. */
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '::1', '0.0.0.0'];
 
 /** Parse AGENT_ALLOWED_ORIGINS (comma-separated) merged with sane dev defaults. */
 export function resolveAllowedOrigins(env = process.env): string[] {
@@ -37,9 +56,47 @@ export function resolveAllowedOrigins(env = process.env): string[] {
   return Array.from(new Set([...DEFAULT_ORIGINS, ...extra]));
 }
 
+/**
+ * Extract the bare hostname from a `Host` header or an origin/URL (strips a
+ * leading scheme and any port, unwraps IPv6 brackets, lowercases).
+ */
+export function hostnameOf(host: string): string {
+  const s = host.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, ''); // drop scheme:// if present
+  const v6 = s.match(/^\[([^\]]+)\]/); // [::1]:6800 → ::1
+  if (v6) return v6[1].toLowerCase();
+  const i = s.indexOf(':');
+  return (i === -1 ? s : s.slice(0, i)).toLowerCase();
+}
+
+/**
+ * Loopback hostnames plus any from AGENT_ALLOWED_HOSTS (comma-separated) and
+ * `extra` (hostnames or full origins of the served/allowlisted origins).
+ * Reduced to bare hostnames, deduped.
+ */
+export function resolveAllowedHosts(env = process.env, extra: string[] = []): string[] {
+  const fromEnv = (env.AGENT_ALLOWED_HOSTS ?? '')
+    .split(',')
+    .map((s) => hostnameOf(s.trim()))
+    .filter(Boolean);
+  const extraHosts = extra.map((s) => hostnameOf(s)).filter(Boolean);
+  return Array.from(new Set([...LOOPBACK_HOSTS, ...extraHosts, ...fromEnv]));
+}
+
 export function isOriginAllowed(origin: string | null, allowed: string[]): boolean {
   if (!origin) return true; // non-browser caller (curl / same process) — no Origin header
   return allowed.includes(origin.replace(/\/$/, ''));
+}
+
+/**
+ * Host-header allowlist. Disabled (always true) when `allowed` is undefined. A
+ * missing Host header is a non-browser/loopback caller and is allowed; a
+ * present Host must match by hostname. A DNS-rebinding page always sends its
+ * own domain as Host, so it fails this check.
+ */
+export function isHostAllowed(host: string | null, allowed?: string[]): boolean {
+  if (!allowed) return true;
+  if (!host) return true; // non-browser caller — no Host header
+  return allowed.includes(hostnameOf(host));
 }
 
 /** CORS headers. ACAO is reflected only for an allowed origin (never `*`). */
@@ -67,7 +124,7 @@ function tokenOk(req: Request, token?: string): boolean {
  * ProcessManager and policy, returns an async (req) => Response.
  */
 export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
-  const { allowedOrigins, token } = opts;
+  const { allowedOrigins, allowedHosts, token } = opts;
 
   const json = (data: unknown, status: number, origin: string | null): Response =>
     new Response(JSON.stringify(data), {
@@ -105,6 +162,13 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
 
     if (method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(origin, allowedOrigins) });
+    }
+
+    // DNS-rebinding defense: reject a same-origin request whose Host header is
+    // an attacker domain rebound to loopback (no Origin header would be sent,
+    // so the Origin gate below can't see it). No-op when allowedHosts is unset.
+    if (!isHostAllowed(req.headers.get('host'), allowedHosts)) {
+      return json({ ok: false, error: 'Host not allowed' }, 403, origin);
     }
 
     // Block any request from a disallowed browser origin before it can act.

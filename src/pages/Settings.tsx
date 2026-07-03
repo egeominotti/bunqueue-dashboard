@@ -28,7 +28,16 @@ function isValidBaseUrl(v: string): boolean {
 }
 
 export function Settings() {
-  const { baseUrl, token, refreshMs, setBaseUrl, setToken, setRefreshMs } = useConnectionStore();
+  const {
+    baseUrl,
+    token,
+    agentToken,
+    refreshMs,
+    setBaseUrl,
+    setToken,
+    setAgentToken,
+    setRefreshMs,
+  } = useConnectionStore();
   const { theme, setTheme } = useThemeStore();
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -36,6 +45,7 @@ export function Settings() {
   // keystroke would retarget all polling at a half-typed URL.
   const [url, setUrl] = useState(baseUrl);
   const [tok, setTok] = useState(token);
+  const [agentTok, setAgentTok] = useState(agentToken);
   const [showToken, setShowToken] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -49,6 +59,7 @@ export function Settings() {
     setUrlError(null);
     setBaseUrl(trimmed);
     setToken(tok);
+    setAgentToken(agentTok);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -114,6 +125,17 @@ export function Settings() {
                   <IconEye className="size-4" />
                 </IconButton>
               </div>
+            </Field>
+            <Field
+              label="Agent token (optional)"
+              hint="Only if the control agent runs with AGENT_TOKEN. Memory only — or set VITE_BUNQUEUE_AGENT_TOKEN."
+            >
+              <Input
+                type={showToken ? 'text' : 'password'}
+                value={agentTok}
+                onChange={(e) => setAgentTok(e.target.value)}
+                placeholder="only if AGENT_TOKEN is set"
+              />
             </Field>
             <div className="flex flex-wrap items-center gap-3">
               <Button variant="accent" onClick={save}>

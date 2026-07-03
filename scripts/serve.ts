@@ -20,7 +20,12 @@
  */
 import { logger } from '../agent/logger';
 import { ProcessManager } from '../agent/manager';
-import { createFetchHandler, resolveAllowedOrigins } from '../agent/server';
+import {
+  createFetchHandler,
+  isHostAllowed,
+  resolveAllowedHosts,
+  resolveAllowedOrigins,
+} from '../agent/server';
 import { ASSETS } from './embedded.gen';
 
 const PORT = Number(process.env.PORT) || 8080;
@@ -40,9 +45,29 @@ const allowedOrigins = Array.from(
     `http://127.0.0.1:${PORT}`,
   ])
 );
+
+// DNS-rebinding defense (see agent/server.ts). Only enforced when bound to
+// loopback — the common "looks safe" case where a rebound page could reach the
+// /api proxy and /agent inspector over same-origin GETs. When the user binds a
+// non-loopback interface (BIND_ADDR=0.0.0.0) they opted into network exposure,
+// where a fixed host allowlist would break legitimate LAN-IP access; leave it
+// off there (configure a reverse proxy / AGENT_ALLOWED_HOSTS instead).
+const loopbackBind = HOST === '127.0.0.1' || HOST === '::1' || HOST === 'localhost';
+const originHosts = allowedOrigins
+  .map((o) => {
+    try {
+      return new URL(o).hostname;
+    } catch {
+      return '';
+    }
+  })
+  .filter(Boolean);
+const allowedHosts = loopbackBind ? resolveAllowedHosts(process.env, originHosts) : undefined;
+
 const mgr = new ProcessManager();
 const agentHandle = createFetchHandler(mgr, {
   allowedOrigins,
+  allowedHosts,
   token: process.env.AGENT_TOKEN || undefined,
 });
 Bun.serve({ port: AGENT_PORT, hostname: '127.0.0.1', fetch: agentHandle });
@@ -65,6 +90,13 @@ Bun.serve({
   async fetch(req) {
     const url = new URL(req.url);
 
+    // DNS-rebinding defense across every route (/api proxy, /agent, assets):
+    // a page rebound to this loopback port sends its own domain as Host. No-op
+    // on non-loopback binds (allowedHosts is undefined there).
+    if (!isHostAllowed(req.headers.get('host'), allowedHosts)) {
+      return new Response('Host not allowed', { status: 403 });
+    }
+
     // Same-origin bridge to the control agent: strip the /agent prefix and
     // hand the request to the in-process agent handler (no loopback hop).
     // The agent's own Origin allowlist + optional AGENT_TOKEN still apply —
@@ -72,7 +104,7 @@ Bun.serve({
     if (url.pathname === '/agent' || url.pathname.startsWith('/agent/')) {
       const sub = new URL(url.pathname.slice('/agent'.length) || '/', 'http://agent.internal');
       sub.search = url.search;
-      return agentHandle(new Request(sub, req));
+      return agentHandle(new Request(sub.href, req));
     }
 
     // Same-origin proxy to the bunqueue server (mirrors the Vite dev proxy).

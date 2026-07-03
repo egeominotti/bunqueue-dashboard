@@ -5,7 +5,10 @@ import { ProcessManager } from '../agent/manager';
 import {
   corsHeaders,
   createFetchHandler,
+  hostnameOf,
+  isHostAllowed,
   isOriginAllowed,
+  resolveAllowedHosts,
   resolveAllowedOrigins,
 } from '../agent/server';
 
@@ -58,6 +61,69 @@ describe('agent origin policy', () => {
     for (const o of [null, 'https://evil.example', 'http://localhost:5273']) {
       expect(corsHeaders(o, ALLOWED)['Access-Control-Allow-Origin']).not.toBe('*');
     }
+  });
+});
+
+describe('agent DNS-rebinding (Host header) defense', () => {
+  test('hostnameOf strips port and unwraps IPv6', () => {
+    expect(hostnameOf('localhost:6800')).toBe('localhost');
+    expect(hostnameOf('127.0.0.1')).toBe('127.0.0.1');
+    expect(hostnameOf('EVIL.EXAMPLE:80')).toBe('evil.example');
+    expect(hostnameOf('[::1]:6800')).toBe('::1');
+    expect(hostnameOf('[::1]')).toBe('::1');
+  });
+
+  test('resolveAllowedHosts: loopback defaults + env + extra, hostname-only, deduped', () => {
+    const out = resolveAllowedHosts(
+      { AGENT_ALLOWED_HOSTS: 'dash.example:8080, localhost' } as NodeJS.ProcessEnv,
+      ['http://queue.internal:6790', '127.0.0.1']
+    );
+    expect(out).toContain('localhost');
+    expect(out).toContain('127.0.0.1');
+    expect(out).toContain('dash.example');
+    // extra passed as full origins is reduced to a hostname too
+    expect(out).toContain('queue.internal');
+    expect(out.filter((h) => h === 'localhost')).toHaveLength(1);
+  });
+
+  test('isHostAllowed: disabled when undefined, allows missing host, matches by hostname', () => {
+    expect(isHostAllowed('evil.example', undefined)).toBe(true); // check disabled
+    expect(isHostAllowed(null, ['localhost'])).toBe(true); // non-browser caller
+    expect(isHostAllowed('localhost:6800', ['localhost'])).toBe(true);
+    expect(isHostAllowed('evil.example:6800', ['localhost', '127.0.0.1'])).toBe(false);
+  });
+
+  test('handler: a rebinding Host is 403 even for reads; loopback/no-Host pass', async () => {
+    const m = new ProcessManager();
+    const handle = createFetchHandler(m, {
+      allowedOrigins: ALLOWED,
+      allowedHosts: ['localhost', '127.0.0.1'],
+    });
+    const get = (host: string | null) =>
+      handle(
+        new Request('http://127.0.0.1:6800/control/status', {
+          headers: host ? { host } : {},
+        })
+      );
+
+    // DNS-rebound page: same-origin GET, no Origin, attacker Host → blocked.
+    expect((await get('evil.example')).status).toBe(403);
+    // Legitimate loopback access still reads.
+    expect((await get('localhost:6800')).status).toBe(200);
+    expect((await get('127.0.0.1:6800')).status).toBe(200);
+    // Non-browser caller (no Host header) is trusted on loopback.
+    expect((await get(null)).status).toBe(200);
+  });
+
+  test('handler: without allowedHosts the Host check is a no-op (backward compatible)', async () => {
+    const m = new ProcessManager();
+    const handle = createFetchHandler(m, { allowedOrigins: ALLOWED });
+    const res = await handle(
+      new Request('http://127.0.0.1:6800/control/status', {
+        headers: { host: 'evil.example' },
+      })
+    );
+    expect(res.status).toBe(200);
   });
 });
 

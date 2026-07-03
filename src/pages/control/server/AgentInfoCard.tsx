@@ -62,9 +62,15 @@ export function AgentInfoCard({ agentBase }: { agentBase: string }) {
             <div className="mb-1 font-medium text-fg">Security</div>
             <p>
               The agent can spawn processes, so it binds <Code>127.0.0.1</Code> only, locks CORS to
-              an allowlist (never <Code>*</Code>), rejects any disallowed <Code>Origin</Code> with a{' '}
-              <Code>403</Code>, and honours an optional <Code>AGENT_TOKEN</Code> on state-changing
-              requests. Keep its port on loopback.
+              an allowlist (never <Code>*</Code>), rejects any disallowed <Code>Origin</Code> or{' '}
+              <Code>Host</Code> with a <Code>403</Code> (the latter blocks DNS-rebinding reads), and
+              honours an optional <Code>AGENT_TOKEN</Code> on state-changing requests. Keep its port
+              on loopback.
+            </p>
+            <p>
+              If you started the agent with <Code>AGENT_TOKEN</Code>, enter that token under{' '}
+              <span className="text-fg">Settings → Agent token</span> (or when the lock screen
+              prompts) so start / stop / restart and config changes are authorized.
             </p>
           </div>
         </div>

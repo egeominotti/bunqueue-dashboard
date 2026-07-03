@@ -30,7 +30,30 @@ function friendly(msg: string, providerId: string): string {
   ) {
     return 'The provider rejected the API key. Check the key is valid and matches the selected provider.';
   }
-  if (m.includes('404') || m.includes('model')) {
+  // Rate-limit / overload errors often name the model too, so classify them
+  // BEFORE the bad-model check — otherwise a 429 mentioning the model id is
+  // misreported as an invalid model id.
+  if (
+    m.includes('rate limit') ||
+    m.includes('rate_limit') ||
+    m.includes('429') ||
+    m.includes('overloaded') ||
+    m.includes('quota') ||
+    m.includes('too many requests')
+  ) {
+    return `The provider is rate-limiting or overloaded: ${msg}. Wait a moment and retry.`;
+  }
+  // Only a genuine not-found / invalid-model signal — not any message that
+  // merely contains the word "model".
+  if (
+    m.includes('404') ||
+    m.includes('not found') ||
+    m.includes('model_not_found') ||
+    m.includes('no such model') ||
+    m.includes('does not exist') ||
+    m.includes('unknown model') ||
+    m.includes('invalid model')
+  ) {
     return `Model request failed: ${msg}. Check the model id is valid for this provider.`;
   }
   return msg;

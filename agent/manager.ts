@@ -192,8 +192,10 @@ export class ProcessManager {
     this.status = 'running';
     this.runningConfig = { ...this.config, extraEnv: { ...this.config.extraEnv } };
     this.push('sys', `started: ${this.config.command} (pid ${this.proc.pid})`);
-    void this.pipe(this.proc.stdout as ReadableStream<Uint8Array>, 'stdout');
-    void this.pipe(this.proc.stderr as ReadableStream<Uint8Array>, 'stderr');
+    // stdout/stderr are spawned as pipes, so they are ReadableStreams at
+    // runtime; Bun types them as a union that also includes a numeric fd.
+    void this.pipe(this.proc.stdout as unknown as ReadableStream<Uint8Array>, 'stdout');
+    void this.pipe(this.proc.stderr as unknown as ReadableStream<Uint8Array>, 'stderr');
     return this.getStatus();
   }
 

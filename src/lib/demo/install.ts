@@ -142,6 +142,54 @@ const DEMO_FLOW: Record<string, Json> = {
   },
 };
 
+// The control agent (process lifecycle) isn't present in the demo. Synthesize a
+// healthy "running" server so ServerControl renders a realistic snapshot rather
+// than the empty/shape-mismatched state a bare { ok: true } would produce.
+const DEMO_CONFIG = {
+  command: 'bunqueue start',
+  httpPort: 6790,
+  tcpPort: 6791,
+  dataPath: './data/bunqueue.db',
+  extraEnv: { LOG_LEVEL: 'info' },
+};
+const demoStatus = (): Json => ({
+  status: 'running',
+  pid: 42317,
+  startedAt: Date.now() - 3_600_000,
+  exitCode: null,
+  healthy: true,
+  version: '2.8.26',
+  config: DEMO_CONFIG,
+  runningConfig: DEMO_CONFIG,
+  db: {
+    path: DEMO_CONFIG.dataPath,
+    exists: true,
+    size: 2_621_440,
+    walSize: 49_152,
+    shmSize: 32_768,
+    totalSize: 2_703_360,
+    mtimeMs: Date.now() - 12_000,
+  },
+});
+const demoControlLogs = (): Json => {
+  const t = Date.now();
+  const line = (seq: number, ago: number, stream: string, line: string) => ({
+    seq,
+    ts: t - ago,
+    stream,
+    line,
+  });
+  return {
+    lines: [
+      line(1, 8000, 'sys', 'starting: bunqueue start'),
+      line(2, 7800, 'stdout', 'bunqueue v2.8.26 — HTTP :6790, TCP :6791'),
+      line(3, 7600, 'stdout', 'SQLite ready (WAL) at ./data/bunqueue.db'),
+      line(4, 5000, 'stdout', 'worker registered: image-processing'),
+      line(5, 1200, 'stdout', 'health ok — 4 queues, 34 jobs'),
+    ],
+  };
+};
+
 function dbRows(table: string, search: string): Json {
   const t = DB_DATA[table];
   const columns = t?.columns ?? ['id', 'data'];
@@ -186,6 +234,14 @@ const API_ROOTS = new Set([
 function resolve(path: string, method: string, search: string): Json {
   const clean = path.replace(/\/+$/, '') || '/';
   const seg = clean.split('/').filter(Boolean);
+
+  // /control/* — process-lifecycle agent, faked for all methods so a start/stop
+  // click and the status/logs/config polls all resolve to a coherent snapshot.
+  if (seg[0] === 'control') {
+    if (seg[1] === 'logs') return demoControlLogs();
+    if (seg[1] === 'config') return DEMO_CONFIG;
+    return demoStatus(); // status / start / stop / restart
+  }
 
   if (method !== 'GET') {
     // Mutations "succeed" without mutating the static dataset (this is a demo).

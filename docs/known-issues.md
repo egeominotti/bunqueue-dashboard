@@ -12,6 +12,25 @@ means being honest about the rough edges, not hiding them.
 
 ## Recently fixed (kept here for history)
 
+A security + gate pass resolved these, no longer present:
+
+- **`AGENT_TOKEN` end-to-end.** The browser agent client never sent the token,
+  so a token-protected agent 401'd every control action, and the 401 popped the
+  wrong (server) token prompt. The client now sends the agent token, the
+  `auth:required` event is scoped (server vs agent), and Settings has an **Agent
+  token** field (memory-only / `VITE_BUNQUEUE_AGENT_TOKEN`). See
+  [agent.md](agent.md).
+- **DNS-rebinding read exposure closed.** The agent now enforces a **Host-header
+  allowlist** (loopback + `AGENT_ALLOWED_HOSTS`) in addition to the Origin gate,
+  so a page whose DNS was rebound to loopback can no longer read `/control/*` or
+  `/db/*` over Origin-less same-origin GETs. The standalone binary applies the
+  same gate to `/api`, `/agent` and assets on a loopback bind.
+- **Alert channel secrets no longer persisted.** `alertsStore` kept `webhook`/
+  `slack` targets (secret URLs) in `localStorage`; they're now memory-only.
+- **`agent/` and `scripts/` are typechecked** by the build gate
+  (`tsconfig.agent.json`) — the npm bin and agent code used to ship with no
+  typecheck.
+
 A performance + pagination pass resolved these, no longer present:
 
 - **Per-poll fan-outs collapsed.** OverviewPro (was 8 req/poll), MetricsPro
@@ -75,8 +94,10 @@ were the root cause of the recurring orphaned vite/agent processes.
   scan can therefore pin the agent's thread in a compiled binary until it
   finishes. Under `bun start` / `bun run agent` (the normal path) the Worker
   timeout is active and aborts runaway queries at 5s. `/db` reads are protected
-  by the Origin allowlist (not the optional `AGENT_TOKEN`, which gates only
-  state changes, the browser client sends no agent token).
+  by the Origin **and Host** allowlists (the Host gate now blocks DNS-rebinding
+  reads too); the optional `AGENT_TOKEN` still gates only state changes, but the
+  browser client now sends it when configured, so a token-protected agent's
+  control actions work from the dashboard.
 
 ## Stability sweep (adversarially verified, earlier change-set)
 

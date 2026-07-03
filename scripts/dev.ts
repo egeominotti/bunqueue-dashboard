@@ -53,7 +53,7 @@ async function shutdown(reason: string): Promise<void> {
 
 for (const { name, cmd } of services) {
   children.push(
-    Bun.spawn(cmd, {
+    Bun.spawn([...cmd], {
       stdio: ['inherit', 'inherit', 'inherit'],
       env: process.env,
       onExit(_child, code) {

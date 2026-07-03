@@ -35,6 +35,19 @@ interface AlertsState {
 const uid = () => `${Date.now().toString(36)}${Math.floor(Math.random() * 1e6).toString(36)}`;
 
 /**
+ * What gets persisted. A webhook/slack channel `target` is a secret URL, so it
+ * is kept in memory only (same secrets-at-rest policy as the connection token
+ * and the S3 keys) — the channel survives reload with a blank, re-enterable
+ * target. `email` targets are not credentials and persist as-is.
+ */
+export function persistedAlertsState(s: AlertsState): { channels: Channel[]; rules: AlertRule[] } {
+  return {
+    channels: s.channels.map((c) => (c.type === 'email' ? c : { ...c, target: '' })),
+    rules: s.rules,
+  };
+}
+
+/**
  * Alert configuration is stored client-side only. bunqueue OSS has no alerting
  * backend, so this persists rules/channels in localStorage for you to wire into
  * your own monitoring (or the hosted bunqueue Cloud).
@@ -54,7 +67,7 @@ export const useAlertsStore = create<AlertsState>()(
           rules: s.rules.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)),
         })),
     }),
-    { name: 'bq-dash-alerts' }
+    { name: 'bq-dash-alerts', partialize: persistedAlertsState }
   )
 );
 

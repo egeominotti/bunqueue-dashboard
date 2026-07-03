@@ -5,7 +5,11 @@
  * Reads base URL + token from the connection store; talks to the control agent
  * (process lifecycle) at VITE_BUNQUEUE_AGENT_URL (default http://localhost:6800).
  */
-import { getAuthHeaders, getBaseUrl } from '@/components/dashboard/stores/connectionStore';
+import {
+  getAgentAuthHeaders,
+  getAuthHeaders,
+  getBaseUrl,
+} from '@/components/dashboard/stores/connectionStore';
 import type {
   CronFull,
   DlqConfig,
@@ -61,7 +65,8 @@ async function call<T>(
   path: string,
   headers: Record<string, string>,
   init?: RequestInit,
-  strict = true
+  strict = true,
+  authScope: 'server' | 'agent' = 'server'
 ): Promise<T> {
   const res = await fetch(base + path, {
     ...init,
@@ -75,11 +80,13 @@ async function call<T>(
     } catch {
       /* non-JSON */
     }
-    // A 401 means the server runs with AUTH_TOKENS and our bearer token is
-    // missing or wrong. Signal the UI (AuthGate) to prompt for it, then still
-    // throw so callers see the failure. Guarded for non-browser contexts (tests).
+    // A 401 means a bearer token is missing or wrong. Signal the UI (AuthGate)
+    // to prompt for it, scoped to which backend rejected us — a server 401 asks
+    // for the bunqueue token, an agent 401 (AGENT_TOKEN) asks for the agent
+    // token; prompting for the wrong one is an unfixable loop. Then still throw
+    // so callers see the failure. Guarded for non-browser contexts (tests).
     if (res.status === 401 && typeof window !== 'undefined') {
-      window.dispatchEvent(new Event('auth:required'));
+      window.dispatchEvent(new CustomEvent('auth:required', { detail: { scope: authScope } }));
     }
     throw new BqError(message, res.status);
   }
@@ -121,7 +128,8 @@ const AGENT = (
   import.meta.env.VITE_BUNQUEUE_AGENT_URL ||
   'http://localhost:6800'
 ).replace(/\/$/, '');
-const agent = <T>(path: string, init?: RequestInit): Promise<T> => call<T>(AGENT, path, {}, init);
+const agent = <T>(path: string, init?: RequestInit): Promise<T> =>
+  call<T>(AGENT, path, getAgentAuthHeaders(), init, true, 'agent');
 
 const q = (s: string) => encodeURIComponent(s);
 const body = (method: string, b?: unknown): RequestInit => ({

@@ -1,25 +1,36 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
+import { bq } from '@/lib/bq';
+
+type AuthScope = 'server' | 'agent';
 
 /**
- * Token lock screen. When any `bq` API call gets a 401 (the bunqueue server runs
- * with AUTH_TOKENS and our bearer token is missing or wrong), `bq.ts` dispatches
- * an `auth:required` window event and this overlay prompts for the token. On
- * submit it stores the token (connection store, session-only, never persisted)
- * and dismisses optimistically; if the token is still rejected, the next poll
- * re-locks. Mounted once in AppLayout.
+ * Token lock screen. When any `bq` API call gets a 401 (a bearer token is
+ * missing or wrong), `bq.ts` dispatches a scoped `auth:required` window event
+ * and this overlay prompts for the right token — the bunqueue server's token
+ * for a server 401, the control agent's AGENT_TOKEN for an agent 401 (prompting
+ * for the wrong one can never clear the lock). On submit it stores the token
+ * (connection store, session-only, never persisted) and dismisses
+ * optimistically; if still rejected, the next poll re-locks. Mounted once in
+ * AppLayout.
  */
 export function AuthGate() {
   const [locked, setLocked] = useState(false);
+  const [scope, setScope] = useState<AuthScope>('server');
   const [value, setValue] = useState('');
   const baseUrl = useConnectionStore((s) => s.baseUrl);
   const setToken = useConnectionStore((s) => s.setToken);
+  const setAgentToken = useConnectionStore((s) => s.setAgentToken);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Lock whenever the API reports a 401.
+  // Lock whenever the API reports a 401, remembering which backend rejected us.
   useEffect(() => {
-    const onAuth = () => setLocked(true);
+    const onAuth = (e: Event) => {
+      const s = (e as CustomEvent<{ scope?: AuthScope }>).detail?.scope;
+      setScope(s === 'agent' ? 'agent' : 'server');
+      setLocked(true);
+    };
     window.addEventListener('auth:required', onAuth);
     return () => window.removeEventListener('auth:required', onAuth);
   }, []);
@@ -37,7 +48,8 @@ export function AuthGate() {
     e.preventDefault();
     const token = value.trim();
     if (!token) return;
-    setToken(token);
+    if (scope === 'agent') setAgentToken(token);
+    else setToken(token);
     setValue('');
     setLocked(false); // optimistic; a still-401 poll re-locks
   };
@@ -52,17 +64,25 @@ export function AuthGate() {
         className="w-full max-w-sm rounded-xl border border-line-strong bg-surface p-6 shadow-2xl"
       >
         <h2 className="text-lg font-semibold text-fg">Authentication required</h2>
-        <p className="mt-1 text-sm text-muted">
-          The server at <span className="break-all font-mono text-fg">{baseUrl}</span> rejected the
-          request (401). Enter its bearer token to continue.
-        </p>
+        {scope === 'agent' ? (
+          <p className="mt-1 text-sm text-muted">
+            The control agent at <span className="break-all font-mono text-fg">{bq.agentBase}</span>{' '}
+            rejected the request (401). Enter its{' '}
+            <span className="font-mono text-fg">AGENT_TOKEN</span> to continue.
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-muted">
+            The server at <span className="break-all font-mono text-fg">{baseUrl}</span> rejected
+            the request (401). Enter its bearer token to continue.
+          </p>
+        )}
         <input
           ref={inputRef}
           type="password"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder="Bearer token"
-          aria-label="Bearer token"
+          placeholder={scope === 'agent' ? 'AGENT_TOKEN' : 'Bearer token'}
+          aria-label={scope === 'agent' ? 'Agent token' : 'Bearer token'}
           autoComplete="off"
           className="mt-4 w-full rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-fg outline-none placeholder:text-faint focus-visible:ring-2 focus-visible:ring-accent/50"
         />

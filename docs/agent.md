@@ -42,11 +42,28 @@ request to `http://127.0.0.1:6800` (CSRF → RCE). Defenses:
    request always sends `Origin`, so a drive-by page cannot start/stop/reconfigure
    the server. Non-browser callers (curl, same process) send no `Origin` and keep
    working for local use.
-3. **Optional bearer token**, set `AGENT_TOKEN` to require it on state-changing
-   requests (`Authorization: Bearer <t>` or `x-agent-token: <t>`).
+3. **Host allowlist (DNS-rebinding defense)**, the Origin gate can't see a
+   *same-origin* request (a page whose DNS was rebound to `127.0.0.1` sends no
+   `Origin`), so the agent also rejects `403` any request whose `Host` header is
+   a hostname outside the allowlist — an attacker domain rebound to loopback
+   fails it, while `Host: localhost` / `127.0.0.1` pass. A missing `Host` (a
+   non-browser caller) is trusted.
+4. **Optional bearer token**, set `AGENT_TOKEN` to require it on state-changing
+   requests (`Authorization: Bearer <t>` or `x-agent-token: <t>`). The dashboard
+   sends it too when you enter it under **Settings → Agent token** (or
+   `VITE_BUNQUEUE_AGENT_TOKEN`), so a token-protected agent stays usable.
 
 Env: `AGENT_ALLOWED_ORIGINS` (comma-separated; merged with dev defaults
-`http://localhost:5273`, `http://127.0.0.1:5273`) and `AGENT_TOKEN`.
+`http://localhost:5273`, `http://127.0.0.1:5273`), `AGENT_ALLOWED_HOSTS` and
+`AGENT_TOKEN`.
+
+> **Reverse proxy / custom hostname on a loopback bind.** The Host allowlist is
+> loopback hostnames plus the hostnames of your allowed origins. If you reach the
+> agent (or the standalone binary) via a `/etc/hosts` alias or a same-host
+> reverse proxy that forwards `Host: <your-domain>`, add that hostname to
+> `AGENT_ALLOWED_HOSTS` (comma-separated, bracket IPv6 literals) — otherwise the
+> request is `403`ed as a rebinding attempt. A non-loopback `BIND_ADDR` (e.g.
+> `0.0.0.0`) turns the Host check off (you've opted into network exposure).
 
 ## Endpoints (`http://127.0.0.1:6800`)
 

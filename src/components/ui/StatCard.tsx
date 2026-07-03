@@ -7,7 +7,7 @@ const toneClass: Record<StatTone, string> = {
   default: 'text-fg',
   green: 'text-success',
   red: 'text-danger',
-  blue: 'text-blue-400',
+  blue: 'text-blue-400 light:text-blue-700',
   amber: 'text-warning',
   accent: 'text-accent',
 };

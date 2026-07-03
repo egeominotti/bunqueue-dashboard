@@ -13,14 +13,19 @@
  */
 import { logger } from './logger';
 import { ProcessManager } from './manager';
-import { createFetchHandler, resolveAllowedOrigins } from './server';
+import { createFetchHandler, resolveAllowedHosts, resolveAllowedOrigins } from './server';
 
 const mgr = new ProcessManager();
 const PORT = Number(process.env.AGENT_PORT) || 6800;
 const allowedOrigins = resolveAllowedOrigins();
+// The agent binds loopback only, so a legitimate Host is always a loopback
+// hostname (localhost / 127.0.0.1). Enforcing the allowlist blocks a page whose
+// DNS was rebound to 127.0.0.1 from reading /control or /db over same-origin
+// GETs. Extend via AGENT_ALLOWED_HOSTS when fronted by a proxy on another host.
+const allowedHosts = resolveAllowedHosts();
 const token = process.env.AGENT_TOKEN || undefined;
 
-const handle = createFetchHandler(mgr, { allowedOrigins, token });
+const handle = createFetchHandler(mgr, { allowedOrigins, allowedHosts, token });
 
 Bun.serve({
   port: PORT,
@@ -42,6 +47,6 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 
 logger.info(
-  { url: `http://127.0.0.1:${PORT}/control`, allowedOrigins, tokenAuth: Boolean(token) },
+  { url: `http://127.0.0.1:${PORT}/control`, allowedOrigins, allowedHosts, tokenAuth: Boolean(token) },
   'bunqueue dashboard control agent ready'
 );
