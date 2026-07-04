@@ -17,9 +17,9 @@ import { withBase } from 'vitepress'
 
 <p class="lp-chip">bunqueue dashboard</p>
 
-<h1 class="lp-h1">Web dashboard for bunqueue<br>with full control and server lifecycle</h1>
+<h1 class="lp-h1">The only queue dashboard that also<br>runs the server</h1>
 
-<p class="lp-sub">A free, open source web UI that <strong>fully drives</strong> a bunqueue server: queues, jobs, dead-letter queue, cron, webhooks, workers and live activity, plus start / stop / restart of the server process itself. It talks only to bunqueue's public HTTP API and a tiny loopback control agent.</p>
+<p class="lp-sub">A free, open source web UI that <strong>fully drives</strong> a bunqueue server (a fast, Redis-free, Bun-native background-job queue): queues, jobs, dead-letter queue, cron, webhooks, workers and live activity, plus start / stop / restart of the server process itself. Built for Bun developers and AI-agent builders who want to <em>operate</em> their queue, not just watch it. It talks only to bunqueue's public HTTP API and a tiny loopback control agent.</p>
 
 <p class="lp-ctas">
 <a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">Open the live demo</a>

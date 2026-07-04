@@ -4,9 +4,12 @@
 
 # bunqueue dashboard
 
-**A web dashboard that _fully drives_ a [bunqueue](https://bunqueue.dev) server**, monitor and
-control queues, jobs, DLQ, cron, webhooks, workers, a live activity stream, and the server
-**process lifecycle** (start / stop / restart) from one place.
+**The only queue dashboard that also _runs_ the server.** Monitor and control queues, jobs, DLQ,
+cron, webhooks, workers, and a live activity stream for a [bunqueue](https://bunqueue.dev) server
+(a fast, Redis-free, Bun-native background-job queue), plus **start / stop / restart of the server
+process itself**, all from one place.
+
+For Bun developers and AI-agent builders running bunqueue who want to _operate_ their queue, not just watch it.
 
 ### [▶ Try the live demo](https://egeominotti.github.io/bunqueue-dashboard/)
 

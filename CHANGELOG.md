@@ -15,6 +15,29 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.27] - 2026-07-04
+
+### Added
+- **Social/OG cards on the live demo.** The demo is the project's most-shared
+  link but shipped with only a `<title>`, so it unfurled as a bare, image-less
+  link on Twitter/Slack/Reddit/LinkedIn. `index.html` now carries a meta
+  description, canonical, Open Graph and Twitter `summary_large_image` tags, and
+  the OG image is served from the app root.
+- **Demo-mode conversion CTA.** In the hosted demo the sidebar now shows a small
+  prompt with a copy-to-clipboard `bunx bunqueue-dashboard`, a Star-on-GitHub
+  button, and a Docs link, so a wowed visitor has a path to install instead of a
+  dead end. Hidden outside demo mode.
+
+### Changed
+- **Sharper positioning.** README and docs hero now lead with the one ownable
+  differentiator ("the only queue dashboard that also runs the server"), gloss
+  what bunqueue is (a fast, Redis-free, Bun-native job queue) for cold visitors,
+  and name who it's for.
+- **Richer npm discoverability.** Expanded `package.json` keywords with the
+  high-intent terms people actually search (`bullmq-alternative`,
+  `queue-dashboard`, `job-queue-ui`, `dlq`, …) and pointed `homepage` at the
+  live demo instead of a README anchor.
+
 ## [0.0.26] - 2026-07-04
 
 ### Fixed
@@ -609,7 +632,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.26...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.27...HEAD
+[0.0.27]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.26...v0.0.27
 [0.0.26]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.25...v0.0.26
 [0.0.25]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.24...v0.0.25
 [0.0.24]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.23...v0.0.24
