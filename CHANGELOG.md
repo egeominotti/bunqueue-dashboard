@@ -15,6 +15,17 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.24] - 2026-07-04
+
+### Fixed
+- **Landing page buttons/links dead on GitHub Pages.** The new landing used
+  raw-HTML `href="/…"` anchors, which VitePress does not rewrite with the
+  site base (`/bunqueue-dashboard/docs/`) — every internal button/card/tile
+  pointed outside the site. All internal raw anchors are now relative, and
+  the tour video resolves through `withBase()` (raw `src` attributes aren't
+  base-rewritten either). Verified by building with the Pages base locally
+  and clicking through.
+
 ## [0.0.23] - 2026-07-04
 
 ### Fixed
@@ -535,7 +546,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.23...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.24...HEAD
+[0.0.24]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.23...v0.0.24
 [0.0.23]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.22...v0.0.23
 [0.0.22]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.21...v0.0.22
 [0.0.21]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.20...v0.0.21

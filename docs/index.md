@@ -4,6 +4,13 @@ description: "bunqueue dashboard is a free, open source web UI that fully drives
 layout: home
 ---
 
+<script setup>
+// Public assets and raw-HTML srcs are NOT base-rewritten by VitePress (only
+// markdown links/images are), so the tour video must be resolved explicitly —
+// the docs deploy under /bunqueue-dashboard/docs/ on Pages.
+import { withBase } from 'vitepress'
+</script>
+
 <div class="lp">
 
 <section class="lp-hero">
@@ -16,7 +23,7 @@ layout: home
 
 <p class="lp-ctas">
 <a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/">Open the live demo</a>
-<a class="lp-btn" href="/quickstart">Quick start</a>
+<a class="lp-btn" href="./quickstart">Quick start</a>
 <a class="lp-btn" href="https://github.com/egeominotti/bunqueue-dashboard">GitHub</a>
 </p>
 
@@ -34,7 +41,7 @@ layout: home
 <span>Zero-dependency npm package</span>
 <span>Standalone binaries for 5 platforms</span>
 <span>Multi-arch Docker image</span>
-<a href="/known-issues">Limits documented honestly →</a>
+<a href="./known-issues">Limits documented honestly →</a>
 </section>
 
 <section class="lp-section">
@@ -51,7 +58,7 @@ layout: home
 
 ### State-gated job actions
 
-Add, inspect, promote, retry, requeue and cancel jobs. Every action is gated by the job's <em>actual</em> current state, so the UI never offers something the server would reject. <a href="/guide/job-inspector">Job Inspector →</a>
+Add, inspect, promote, retry, requeue and cancel jobs. Every action is gated by the job's <em>actual</em> current state, so the UI never offers something the server would reject. <a href="./guide/job-inspector">Job Inspector →</a>
 
 </article>
 
@@ -59,7 +66,7 @@ Add, inspect, promote, retry, requeue and cancel jobs. Every action is gated by 
 
 ### Live activity stream
 
-A Server-Sent-Events feed with automatic reconnect shows jobs flowing in real time — built on fetch so it works with bearer-token auth, unlike EventSource. <a href="/guide/logs">Live logs →</a>
+A Server-Sent-Events feed with automatic reconnect shows jobs flowing in real time — built on fetch so it works with bearer-token auth, unlike EventSource. <a href="./guide/logs">Live logs →</a>
 
 </article>
 
@@ -67,7 +74,7 @@ A Server-Sent-Events feed with automatic reconnect shows jobs flowing in real ti
 
 ### DLQ triage
 
-A fleet-wide dead-letter dashboard plus a single-queue triage surface: failure reasons, per-attempt history, retry one / retry all / purge, CSV export. <a href="/guide/dlq-control">DLQ Control →</a>
+A fleet-wide dead-letter dashboard plus a single-queue triage surface: failure reasons, per-attempt history, retry one / retry all / purge, CSV export. <a href="./guide/dlq-control">DLQ Control →</a>
 
 </article>
 
@@ -75,7 +82,7 @@ A fleet-wide dead-letter dashboard plus a single-queue triage surface: failure r
 
 ### Cron manager
 
-Schedule by cron expression or interval-in-ms with a next-runs preview, then list and delete existing schedules. <a href="/guide/cron">Cron →</a>
+Schedule by cron expression or interval-in-ms with a next-runs preview, then list and delete existing schedules. <a href="./guide/cron">Cron →</a>
 
 </article>
 
@@ -83,7 +90,7 @@ Schedule by cron expression or interval-in-ms with a next-runs preview, then lis
 
 ### Webhooks
 
-Register endpoints with event scoping and an optional HMAC secret; watch success/failure counts, toggle, delete. <a href="/guide/webhooks">Webhooks →</a>
+Register endpoints with event scoping and an optional HMAC secret; watch success/failure counts, toggle, delete. <a href="./guide/webhooks">Webhooks →</a>
 
 </article>
 
@@ -91,7 +98,7 @@ Register endpoints with event scoping and an optional HMAC secret; watch success
 
 ### Server lifecycle
 
-The one thing HTTP can't do — start, stop, restart the bunqueue process — is delegated to a small loopback-bound agent with an Origin + Host allowlist, locked CORS and an optional bearer token. <a href="/guide/server">Server Control →</a>
+The one thing HTTP can't do — start, stop, restart the bunqueue process — is delegated to a small loopback-bound agent with an Origin + Host allowlist, locked CORS and an optional bearer token. <a href="./guide/server">Server Control →</a>
 
 </article>
 
@@ -99,7 +106,7 @@ The one thing HTTP can't do — start, stop, restart the bunqueue process — is
 
 ### SQLite inspector
 
-Browse tables, schema and indexes, page through rows, run SELECT-only queries with EXPLAIN and CSV/JSON export — over a read-only connection, capped at 500 rows. <a href="/guide/database">Database →</a>
+Browse tables, schema and indexes, page through rows, run SELECT-only queries with EXPLAIN and CSV/JSON export — over a read-only connection, capped at 500 rows. <a href="./guide/database">Database →</a>
 
 </article>
 
@@ -107,7 +114,7 @@ Browse tables, schema and indexes, page through rows, run SELECT-only queries wi
 
 ### Metrics & throughput
 
-Rolling live throughput charts, error-rate gauge, per-operation latency percentiles (push / pull / ack × p50 / p95 / p99). <a href="/guide/metrics">Metrics →</a>
+Rolling live throughput charts, error-rate gauge, per-operation latency percentiles (push / pull / ack × p50 / p95 / p99). <a href="./guide/metrics">Metrics →</a>
 
 </article>
 
@@ -115,7 +122,7 @@ Rolling live throughput charts, error-rate gauge, per-operation latency percenti
 
 ### Client-side alerts
 
-Threshold rules on queue depth, failures, error rate and latency — evaluated in the browser, with in-app toasts and desktop notifications. <a href="/user-guide">Alerts →</a>
+Threshold rules on queue depth, failures, error rate and latency — evaluated in the browser, with in-app toasts and desktop notifications. <a href="./user-guide">Alerts →</a>
 
 </article>
 
@@ -123,7 +130,7 @@ Threshold rules on queue depth, failures, error rate and latency — evaluated i
 
 ### Benchmark
 
-Push and drain load runs against any queue, in count or duration mode, with a live chart and run history. <a href="/guide/benchmark">Benchmark →</a>
+Push and drain load runs against any queue, in count or duration mode, with a live chart and run history. <a href="./guide/benchmark">Benchmark →</a>
 
 </article>
 
@@ -131,7 +138,7 @@ Push and drain load runs against any queue, in count or duration mode, with a li
 
 ### Flow DAG viewer
 
-Parent / children / depends-on relationships drawn as a graph, laid out client-side with no graph library. <a href="/guide/flows">Flows →</a>
+Parent / children / depends-on relationships drawn as a graph, laid out client-side with no graph library. <a href="./guide/flows">Flows →</a>
 
 </article>
 
@@ -139,7 +146,7 @@ Parent / children / depends-on relationships drawn as a graph, laid out client-s
 
 ### AI Copilot <em class="lp-tag">experimental</em>
 
-An in-app assistant that drives the same API through tools — bring your own key, requests go straight from your browser to your provider. <a href="/guide/copilot">Copilot →</a>
+An in-app assistant that drives the same API through tools — bring your own key, requests go straight from your browser to your provider. <a href="./guide/copilot">Copilot →</a>
 
 </article>
 
@@ -155,7 +162,7 @@ An in-app assistant that drives the same API through tools — bring your own ke
 
 <p class="lp-lead">A real control surface, not a read-only viewer — every screen in this tour is a live page you can drive in the <a href="https://egeominotti.github.io/bunqueue-dashboard/">demo</a>.</p>
 
-<video class="lp-video" src="/tour.mp4" autoplay muted loop playsinline preload="metadata" aria-label="A guided tour of the bunqueue dashboard: overview, queues, jobs, DLQ, flows, the SQLite inspector, and the AI Copilot"></video>
+<video class="lp-video" :src="withBase('/tour.mp4')" autoplay muted loop playsinline preload="metadata" aria-label="A guided tour of the bunqueue dashboard: overview, queues, jobs, DLQ, flows, the SQLite inspector, and the AI Copilot"></video>
 
 </section>
 
@@ -166,14 +173,14 @@ An in-app assistant that drives the same API through tools — bring your own ke
 ## Everything you can drive {.lp-title}
 
 <div class="lp-tiles">
-<a href="/guide/queues"><strong>Queues</strong><span>pause · resume · rate-limit · concurrency · drain · obliterate</span></a>
-<a href="/guide/jobs"><strong>Jobs</strong><span>add · inspect · promote · retry · requeue · cancel</span></a>
-<a href="/guide/dlq"><strong>DLQ</strong><span>reasons · per-row retry · retry-all · purge</span></a>
-<a href="/guide/cron"><strong>Cron</strong><span>expressions or intervals · next-runs preview</span></a>
-<a href="/guide/webhooks"><strong>Webhooks</strong><span>event scoping · HMAC secrets · delivery stats</span></a>
-<a href="/guide/workers"><strong>Workers</strong><span>health · last seen · unregister</span></a>
-<a href="/guide/server"><strong>Server</strong><span>start · stop · restart · live process logs</span></a>
-<a href="/guide/database"><strong>Database</strong><span>read-only SQLite tables · schema · queries</span></a>
+<a href="./guide/queues"><strong>Queues</strong><span>pause · resume · rate-limit · concurrency · drain · obliterate</span></a>
+<a href="./guide/jobs"><strong>Jobs</strong><span>add · inspect · promote · retry · requeue · cancel</span></a>
+<a href="./guide/dlq"><strong>DLQ</strong><span>reasons · per-row retry · retry-all · purge</span></a>
+<a href="./guide/cron"><strong>Cron</strong><span>expressions or intervals · next-runs preview</span></a>
+<a href="./guide/webhooks"><strong>Webhooks</strong><span>event scoping · HMAC secrets · delivery stats</span></a>
+<a href="./guide/workers"><strong>Workers</strong><span>health · last seen · unregister</span></a>
+<a href="./guide/server"><strong>Server</strong><span>start · stop · restart · live process logs</span></a>
+<a href="./guide/database"><strong>Database</strong><span>read-only SQLite tables · schema · queries</span></a>
 </div>
 
 </section>
@@ -322,7 +329,7 @@ No. It never imports or modifies bunqueue source — it speaks only to the publi
 
 ### Is the control agent safe to run?
 
-The agent can spawn processes, so it's locked down: bound to 127.0.0.1, an Origin allowlist with CORS never set to `*`, a Host-header allowlist against DNS rebinding, and an optional `AGENT_TOKEN` on state-changing requests. The full threat model is in <a href="/agent">the agent docs</a>.
+The agent can spawn processes, so it's locked down: bound to 127.0.0.1, an Origin allowlist with CORS never set to `*`, a Host-header allowlist against DNS rebinding, and an optional `AGENT_TOKEN` on state-changing requests. The full threat model is in <a href="./agent">the agent docs</a>.
 
 </article>
 
@@ -354,7 +361,7 @@ Four ways: the zero-dependency npm package (`bunx bunqueue-dashboard`), a standa
 
 ### What doesn't it do?
 
-Alerts are evaluated in the browser while a tab is open — it's not away-from-desk paging. S3 backup is configured by the server's environment, not from the UI. Every other verified gap is listed, with file references, on the <a href="/known-issues">known issues</a> page.
+Alerts are evaluated in the browser while a tab is open — it's not away-from-desk paging. S3 backup is configured by the server's environment, not from the UI. Every other verified gap is listed, with file references, on the <a href="./known-issues">known issues</a> page.
 
 </article>
 
@@ -376,7 +383,7 @@ No telemetry. The only optional egress is the AI Copilot: if you enable it, requ
 
 <p class="lp-ctas">
 <a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/">Open the live demo</a>
-<a class="lp-btn" href="/quickstart">Quick start</a>
+<a class="lp-btn" href="./quickstart">Quick start</a>
 </p>
 
 </section>
