@@ -15,6 +15,31 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.28] - 2026-07-04
+
+### Fixed
+- **Docs hero subtitle now centered.** VitePress's prose paragraph styles reset
+  the alignment the hero inherits, so the intro paragraph rendered left-aligned
+  under the centered heading; pinned `text-align: center` on it.
+
+### Added
+- **Per-priority histogram on a queue.** Queue detail now charts how many waiting
+  jobs sit at each priority level, so you can see at a glance whether high-priority
+  work is starving the rest. The data already shipped in the queue payload and was
+  being dropped.
+- **Memory tools in Diagnostics.** A "Compact (GC)" button forces a garbage
+  collection + internal compaction and reports the freed RSS; a "Heap statistics"
+  panel loads the `bun:jsc` breakdown (object counts + top object types) on demand
+  for leak hunting; and a copyable Prometheus scrape URL for Grafana/Alertmanager.
+- **Set job progress.** The Job Inspector can now set an active job's progress
+  (0–100), which also refreshes its stall heartbeat and fires a `job.progress`
+  webhook. Added `setJobProgress`/`gc`/`heapStats`/`prometheusUrl` to the client.
+- **Advanced enqueue options.** Add Job exposes tags, a group id, a dedup unique
+  key, job dependencies, and a backoff strategy (flat / fixed / exponential).
+- **Advanced cron options.** Create-schedule exposes a max-executions cap, run-
+  immediately, skip-missed-on-restart, and per-spawned-job options (max attempts,
+  backoff, timeout).
+
 ## [0.0.27] - 2026-07-04
 
 ### Added
@@ -632,7 +657,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.27...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.28...HEAD
+[0.0.28]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.27...v0.0.28
 [0.0.27]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.26...v0.0.27
 [0.0.26]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.25...v0.0.26
 [0.0.25]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.24...v0.0.25

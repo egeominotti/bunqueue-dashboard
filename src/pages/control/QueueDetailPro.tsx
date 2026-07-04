@@ -199,6 +199,8 @@ export function QueueDetailPro() {
             ))}
           </div>
 
+          <PriorityHistogram counts={detail.priorityCounts} />
+
           <Card className="mb-6">
             <CardHeader
               title="Backlog depth"
@@ -334,6 +336,41 @@ export function QueueDetailPro() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Per-priority backlog distribution. The server already ships `priorityCounts`
+ * inside the queue-detail payload (priority level → number of waiting jobs); it
+ * was fetched and dropped before. A histogram is the most direct read on whether
+ * high-priority jobs are starving low-priority ones. Hidden when empty.
+ */
+function PriorityHistogram({ counts }: { counts: Record<string, number> }) {
+  const rows = Object.entries(counts ?? {})
+    .map(([p, n]) => [Number(p), n] as const)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[0] - a[0]);
+  if (rows.length === 0) return null;
+  const max = Math.max(...rows.map(([, n]) => n));
+  return (
+    <Card className="mb-6">
+      <CardHeader title="Jobs by priority" />
+      <div className="flex flex-col gap-2">
+        {rows.map(([p, n]) => (
+          <div key={p} className="flex items-center gap-3">
+            <span className="w-16 shrink-0 text-right font-mono text-xs text-muted">p{p}</span>
+            <div className="h-4 flex-1 overflow-hidden rounded bg-surface-2">
+              <div
+                className="h-full rounded bg-accent"
+                style={{ width: `${Math.max(2, (n / max) * 100)}%` }}
+              />
+            </div>
+            <span className="w-14 shrink-0 tnum text-xs text-fg">{formatNumber(n)}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-faint">Higher p = higher priority. Waiting jobs only.</p>
+    </Card>
   );
 }
 

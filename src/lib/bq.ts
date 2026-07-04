@@ -137,12 +137,22 @@ const body = (method: string, b?: unknown): RequestInit => ({
   body: b === undefined ? undefined : JSON.stringify(b),
 });
 
+/** Backoff on a job: a flat delay, or a strategy with a base delay. */
+export type Backoff = number | { type: 'fixed' | 'exponential'; delay: number };
+
+/** Memory figures reported by the server, already rounded to whole megabytes. */
+export interface HeapMB {
+  heapUsed: number;
+  heapTotal: number;
+  rss: number;
+}
+
 export interface AddJobBody {
   data: unknown;
   priority?: number;
   delay?: number;
   maxAttempts?: number;
-  backoff?: number;
+  backoff?: Backoff;
   timeout?: number;
   jobId?: string;
   removeOnComplete?: boolean;
@@ -151,6 +161,18 @@ export interface AddJobBody {
   ttl?: number;
   uniqueKey?: string;
   lifo?: boolean;
+  // Advanced (all honored by the single-push HTTP route): free-form tags, a
+  // group key for grouped processing, and parent-job ids this job depends on.
+  tags?: string[];
+  groupId?: string;
+  dependsOn?: string[];
+}
+
+/** Options applied to the jobs a cron spawns (subset the HTTP route forwards). */
+export interface CronJobOptions {
+  maxAttempts?: number;
+  backoff?: Backoff;
+  timeout?: number;
 }
 
 export interface CreateCronBody {
@@ -163,6 +185,13 @@ export interface CreateCronBody {
   timezone?: string;
   skipIfNoWorker?: boolean;
   preventOverlap?: boolean;
+  // Advanced: cap total executions, run once immediately on create, replay a
+  // missed run after a restart, and per-spawned-job options.
+  maxLimit?: number;
+  immediately?: boolean;
+  skipMissedOnRestart?: boolean;
+  uniqueKey?: string;
+  jobOptions?: CronJobOptions;
 }
 
 export interface AddWebhookBody {
@@ -198,6 +227,20 @@ export const bq = {
   health: () =>
     srv<{ ok?: boolean; version?: string } & Record<string, unknown>>('/health', undefined, false),
   ping: () => srv<{ ok: boolean; data: { pong: boolean; time: number } }>('/ping'),
+  // Prometheus scrape URL (the endpoint returns text/plain exposition, not JSON,
+  // so this is a URL to hand to a scraper, not a fetch helper).
+  prometheusUrl: () => `${getBaseUrl()}/prometheus`,
+  // Force GC + compact internal state; returns before/after heap in MB.
+  gc: () => srv<{ ok: boolean; before: HeapMB; after: HeapMB }>('/gc', body('POST')),
+  // bun:jsc heap breakdown for leak diagnosis (top object types + collection sizes).
+  heapStats: () =>
+    srv<{
+      ok: boolean;
+      memory: HeapMB;
+      heap: { objectCount: number; protectedCount: number; globalCount: number };
+      collections: Record<string, unknown>;
+      topObjectTypes: { type: string; count: number }[];
+    }>('/heapstats'),
 
   // ---- Jobs (read) ----
   jobsList: (queue: string, states?: string[], limit = 50, offset = 0) => {
@@ -243,6 +286,11 @@ export const bq = {
   addJobLog: (id: string, message: string, level?: 'info' | 'warn' | 'error') =>
     srv(`/jobs/${q(id)}/logs`, body('POST', { message, level })),
   clearJobLogs: (id: string) => srv(`/jobs/${q(id)}/logs`, { method: 'DELETE' }),
+  // Admin-set a job's progress (0–100 + optional message). Also refreshes the
+  // stall heartbeat and fires a job.progress webhook. Active jobs only (server
+  // returns ok:false otherwise, surfaced as a BqError).
+  setJobProgress: (id: string, progress: number, message?: string) =>
+    srv(`/jobs/${q(id)}/progress`, body('POST', { progress, message })),
 
   // ---- Queue control ----
   counts: (queue: string) =>

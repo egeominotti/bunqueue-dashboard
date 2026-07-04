@@ -1,12 +1,16 @@
 import { useState } from 'react';
+import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { CopyButton } from '@/components/ui/CopyButton';
 import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { bq } from '@/lib/bq';
 import { formatBytes, formatNumber, formatUptime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
+
+type HeapStats = Awaited<ReturnType<typeof bq.heapStats>>;
 
 // Safe default so the page renders its diagnostic cards (empty/zeroed) when the
 // server is unreachable — including a /health failure — instead of a blocking
@@ -32,6 +36,42 @@ export function Diagnostics() {
       setPing(`${Math.round(performance.now() - t0)} ms`);
     } catch {
       setPing('unreachable');
+    }
+  };
+
+  const [gcBusy, setGcBusy] = useState(false);
+  const [gcMsg, setGcMsg] = useState<string | null>(null);
+  const doGc = async () => {
+    setGcBusy(true);
+    setGcMsg(null);
+    try {
+      const r = await bq.gc();
+      const freed = r.before.rss - r.after.rss;
+      const text =
+        freed > 0
+          ? `Freed ${freed} MB (RSS ${r.before.rss}→${r.after.rss})`
+          : 'No memory reclaimed';
+      setGcMsg(text);
+      toast.success('Memory compacted', text);
+      refetch();
+    } catch (e) {
+      toast.error('GC failed', (e as Error).message);
+      setGcMsg((e as Error).message);
+    } finally {
+      setGcBusy(false);
+    }
+  };
+
+  const [heap, setHeap] = useState<HeapStats | null>(null);
+  const [heapBusy, setHeapBusy] = useState(false);
+  const loadHeap = async () => {
+    setHeapBusy(true);
+    try {
+      setHeap(await bq.heapStats());
+    } catch (e) {
+      toast.error('Heap stats failed', (e as Error).message);
+    } finally {
+      setHeapBusy(false);
     }
   };
 
@@ -93,14 +133,80 @@ export function Diagnostics() {
         </Card>
 
         <Card>
-          <CardHeader title="Memory" />
+          <CardHeader
+            title="Memory"
+            action={
+              <Button size="sm" disabled={gcBusy} onClick={doGc}>
+                {gcBusy ? 'Compacting…' : 'Compact (GC)'}
+              </Button>
+            }
+          />
           <div className="grid grid-cols-3 gap-4">
             <Mini k="Heap used" v={formatBytes((h.memory?.heapUsed ?? 0) * 1024 * 1024)} />
             <Mini k="Heap total" v={formatBytes((h.memory?.heapTotal ?? 0) * 1024 * 1024)} />
             <Mini k="RSS" v={formatBytes((h.memory?.rss ?? 0) * 1024 * 1024)} />
           </div>
+          {gcMsg && <p className="mt-3 text-xs text-muted">{gcMsg}</p>}
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <CardHeader
+          title="Heap statistics"
+          action={
+            <Button size="sm" disabled={heapBusy} onClick={loadHeap}>
+              {heapBusy ? 'Loading…' : heap ? 'Refresh' : 'Load'}
+            </Button>
+          }
+        />
+        {!heap ? (
+          <p className="text-sm text-muted">
+            On-demand <code className="font-mono text-xs">bun:jsc</code> heap breakdown (forces a GC
+            first). Use it to spot which internal object type is growing when chasing a leak.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="grid grid-cols-3 gap-4">
+              <Mini k="Objects" v={formatNumber(heap.heap?.objectCount ?? 0)} />
+              <Mini k="Protected" v={formatNumber(heap.heap?.protectedCount ?? 0)} />
+              <Mini k="Global" v={formatNumber(heap.heap?.globalCount ?? 0)} />
+            </div>
+            <div>
+              <div className="mb-2 text-[11px] uppercase tracking-wider text-faint">
+                Top object types
+              </div>
+              <div className="max-h-52 overflow-y-auto rounded-lg border border-line">
+                <table className="w-full text-xs">
+                  <tbody>
+                    {(heap.topObjectTypes ?? []).map((t) => (
+                      <tr key={t.type} className="border-b border-line last:border-0">
+                        <td className="px-3 py-1.5 font-mono text-muted">{t.type}</td>
+                        <td className="px-3 py-1.5 text-right tnum text-fg">
+                          {formatNumber(t.count)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader title="Prometheus" />
+        <p className="mb-3 text-sm text-muted">
+          Scrape endpoint (text exposition) for Grafana / Alertmanager. Auth is required only if the
+          server sets <code className="font-mono text-xs">requireAuthForMetrics</code>.
+        </p>
+        <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2">
+          <code className="min-w-0 flex-1 truncate font-mono text-xs text-fg">
+            {bq.prometheusUrl()}
+          </code>
+          <CopyButton value={bq.prometheusUrl()} />
+        </div>
+      </Card>
 
       {st && (
         <Card className="mt-6">

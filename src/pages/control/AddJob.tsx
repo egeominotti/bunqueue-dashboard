@@ -3,9 +3,9 @@ import { Link, useLocation } from 'react-router-dom';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { Field, Input, Toggle } from '@/components/ui/form';
+import { Field, Input, Select, Toggle } from '@/components/ui/form';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { type AddJobBody, bq } from '@/lib/bq';
+import { type AddJobBody, type Backoff, bq } from '@/lib/bq';
 import type { CloneJobState } from '@/lib/cloneJob';
 import { usePolledData } from '@/lib/usePolledData';
 
@@ -28,13 +28,21 @@ export function AddJob() {
   const [delay, setDelay] = useState('');
   const [runAt, setRunAt] = useState('');
   const [maxAttempts, setMaxAttempts] = useState(numOrEmpty(opts.maxAttempts));
-  const [backoff, setBackoff] = useState(numOrEmpty(opts.backoff));
+  const [backoff, setBackoff] = useState(
+    numOrEmpty(typeof opts.backoff === 'number' ? opts.backoff : undefined)
+  );
   const [timeout, setTimeout] = useState(numOrEmpty(opts.timeout));
   const [jobId, setJobId] = useState('');
   const [removeOnComplete, setRemoveOnComplete] = useState(opts.removeOnComplete ?? false);
   const [removeOnFail, setRemoveOnFail] = useState(opts.removeOnFail ?? false);
   const [durable, setDurable] = useState(false);
   const [lifo, setLifo] = useState(false);
+  // Advanced (honored by the single-push HTTP route).
+  const [backoffType, setBackoffType] = useState<'' | 'fixed' | 'exponential'>('');
+  const [tags, setTags] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [dependsOn, setDependsOn] = useState('');
+  const [uniqueKey, setUniqueKey] = useState('');
 
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -70,18 +78,37 @@ export function AddJob() {
       }
       effectiveDelay = Math.max(0, targetMs - Date.now());
     }
+    const backoffNum = num(backoff);
+    const backoff_: Backoff | undefined =
+      backoffNum == null
+        ? undefined
+        : backoffType
+          ? { type: backoffType, delay: backoffNum }
+          : backoffNum;
+    const tagList = tags
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const depList = dependsOn
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
     const body: AddJobBody = {
       data: parsed,
       priority: num(priority),
       delay: effectiveDelay,
       maxAttempts: num(maxAttempts),
-      backoff: num(backoff),
+      backoff: backoff_,
       timeout: num(timeout),
       jobId: jobId.trim() || undefined,
       removeOnComplete: removeOnComplete || undefined,
       removeOnFail: removeOnFail || undefined,
       durable: durable || undefined,
       lifo: lifo || undefined,
+      tags: tagList.length ? tagList : undefined,
+      groupId: groupId.trim() || undefined,
+      dependsOn: depList.length ? depList : undefined,
+      uniqueKey: uniqueKey.trim() || undefined,
     };
     const n = num(count) ?? 1;
     if (!Number.isInteger(n) || n < 1) {
@@ -239,6 +266,16 @@ export function AddJob() {
                 placeholder="1000"
               />
             </Field>
+            <Field label="Backoff strategy" hint="flat delay unless set">
+              <Select
+                value={backoffType}
+                onChange={(e) => setBackoffType(e.target.value as '' | 'fixed' | 'exponential')}
+              >
+                <option value="">flat</option>
+                <option value="fixed">fixed</option>
+                <option value="exponential">exponential</option>
+              </Select>
+            </Field>
             <Field label="Timeout (ms)">
               <Input
                 type="number"
@@ -265,6 +302,40 @@ export function AddJob() {
             <ToggleRow label="removeOnFail" checked={removeOnFail} onChange={setRemoveOnFail} />
             <ToggleRow label="durable" checked={durable} onChange={setDurable} />
             <ToggleRow label="lifo" checked={lifo} onChange={setLifo} />
+          </div>
+
+          <div className="mt-4 border-t border-line pt-4">
+            <div className="mb-3 text-[11px] uppercase tracking-wider text-faint">Advanced</div>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
+              <Field label="Tags" hint="comma-separated">
+                <Input
+                  value={tags}
+                  onChange={(e) => setTags(e.target.value)}
+                  placeholder="email, urgent"
+                />
+              </Field>
+              <Field label="Group ID">
+                <Input
+                  value={groupId}
+                  onChange={(e) => setGroupId(e.target.value)}
+                  placeholder="—"
+                />
+              </Field>
+              <Field label="Unique key" hint="dedup key">
+                <Input
+                  value={uniqueKey}
+                  onChange={(e) => setUniqueKey(e.target.value)}
+                  placeholder="—"
+                />
+              </Field>
+              <Field label="Depends on" hint="parent job ids, comma-separated">
+                <Input
+                  value={dependsOn}
+                  onChange={(e) => setDependsOn(e.target.value)}
+                  placeholder="job-id-1, job-id-2"
+                />
+              </Field>
+            </div>
           </div>
         </Card>
 

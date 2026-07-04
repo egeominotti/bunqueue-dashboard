@@ -291,6 +291,8 @@ const API_ROOTS = new Set([
   'dlq',
   'control',
   'db',
+  'gc',
+  'heapstats',
 ]);
 
 /** Map a normalized API path + method to a fixture response body. */
@@ -307,6 +309,15 @@ function resolve(path: string, method: string, search: string): Json {
   }
 
   if (method !== 'GET') {
+    // Force-GC returns a plausible before/after so the Diagnostics button shows a
+    // reclaim instead of an error in the backend-less demo.
+    if (clean === '/gc') {
+      return {
+        ok: true,
+        before: { heapUsed: 118, heapTotal: 176, rss: 214 },
+        after: { heapUsed: 94, heapTotal: 150, rss: 181 },
+      };
+    }
     // Mutations "succeed" without mutating the static dataset (this is a demo).
     if (clean.endsWith('/db/query')) {
       return {
@@ -326,6 +337,23 @@ function resolve(path: string, method: string, search: string): Json {
 
   // Workers carry now-relative timestamps — synthesized, not fixture-served.
   if (clean === '/workers') return demoWorkers();
+
+  // Heap breakdown for the Diagnostics panel — plausible static figures.
+  if (clean === '/heapstats') {
+    return {
+      ok: true,
+      memory: { heapUsed: 94, heapTotal: 150, rss: 181 },
+      heap: { objectCount: 486_204, protectedCount: 1284, globalCount: 312 },
+      collections: {},
+      topObjectTypes: [
+        { type: 'Structure', count: 42_118 },
+        { type: 'Object', count: 31_064 },
+        { type: 'Function', count: 18_902 },
+        { type: 'string', count: 12_447 },
+        { type: 'Array', count: 8021 },
+      ],
+    };
+  }
 
   const exact: Record<string, string> = {
     '/health': 'health',

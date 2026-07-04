@@ -154,6 +154,9 @@ body {
 .lp-sub {
   margin: 18px auto 0;
   max-width: 720px;
+  /* Explicit: .vp-doc's paragraph rules reset text-align, overriding the
+     inherited center from .lp-hero, so pin it on the element itself. */
+  text-align: center;
   color: var(--vp-c-text-2);
   font-size: clamp(15px, 14px + 0.4vw, 17px);
   line-height: 1.65;

@@ -7,7 +7,7 @@ import { Field, Input, SegmentedControl, Toggle } from '@/components/ui/form';
 import { IconCron, IconTrash } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
-import { bq, type CreateCronBody } from '@/lib/bq';
+import { bq, type CreateCronBody, type CronJobOptions } from '@/lib/bq';
 import { cn } from '@/lib/cn';
 import { nextCronRuns } from '@/lib/cronPreview';
 import { formatDateTime, formatNumber } from '@/lib/format';
@@ -158,6 +158,12 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
   const [priority, setPriority] = useState('');
   const [preventOverlap, setPreventOverlap] = useState(false);
   const [skipIfNoWorker, setSkipIfNoWorker] = useState(false);
+  const [maxLimit, setMaxLimit] = useState('');
+  const [immediately, setImmediately] = useState(false);
+  const [skipMissedOnRestart, setSkipMissedOnRestart] = useState(false);
+  const [jobMaxAttempts, setJobMaxAttempts] = useState('');
+  const [jobBackoff, setJobBackoff] = useState('');
+  const [jobTimeout, setJobTimeout] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
@@ -209,6 +215,18 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
     if (priority.trim() !== '' && Number.isFinite(prio)) body.priority = prio;
     if (preventOverlap) body.preventOverlap = true;
     if (skipIfNoWorker) body.skipIfNoWorker = true;
+    const ml = Number(maxLimit);
+    if (maxLimit.trim() !== '' && Number.isInteger(ml) && ml > 0) body.maxLimit = ml;
+    if (immediately) body.immediately = true;
+    if (skipMissedOnRestart) body.skipMissedOnRestart = true;
+    const jobOptions: CronJobOptions = {};
+    const jma = Number(jobMaxAttempts);
+    if (jobMaxAttempts.trim() !== '' && Number.isFinite(jma)) jobOptions.maxAttempts = jma;
+    const jb = Number(jobBackoff);
+    if (jobBackoff.trim() !== '' && Number.isFinite(jb)) jobOptions.backoff = jb;
+    const jt = Number(jobTimeout);
+    if (jobTimeout.trim() !== '' && Number.isFinite(jt)) jobOptions.timeout = jt;
+    if (Object.keys(jobOptions).length > 0) body.jobOptions = jobOptions;
     setBusy(true);
     try {
       await onCreate(body);
@@ -337,6 +355,15 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
                 placeholder="0"
               />
             </Field>
+            <Field label="Max executions" hint="blank = unlimited">
+              <Input
+                type="number"
+                min={1}
+                value={maxLimit}
+                onChange={(e) => setMaxLimit(e.target.value)}
+                placeholder="∞"
+              />
+            </Field>
             <div className="col-span-2 flex flex-wrap gap-6">
               <div className="flex items-center gap-2">
                 <Toggle
@@ -353,6 +380,52 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
                   label="skip if no worker"
                 />
                 <span className="text-sm text-muted">skip if no worker</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Toggle checked={immediately} onChange={setImmediately} label="run immediately" />
+                <span className="text-sm text-muted">run immediately</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Toggle
+                  checked={skipMissedOnRestart}
+                  onChange={setSkipMissedOnRestart}
+                  label="skip missed on restart"
+                />
+                <span className="text-sm text-muted">skip missed on restart</span>
+              </div>
+            </div>
+            <div className="col-span-2">
+              <div className="mb-2 text-[11px] uppercase tracking-wider text-faint">
+                Spawned-job options
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Max attempts">
+                  <Input
+                    type="number"
+                    min={1}
+                    value={jobMaxAttempts}
+                    onChange={(e) => setJobMaxAttempts(e.target.value)}
+                    placeholder="3"
+                  />
+                </Field>
+                <Field label="Backoff (ms)">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={jobBackoff}
+                    onChange={(e) => setJobBackoff(e.target.value)}
+                    placeholder="1000"
+                  />
+                </Field>
+                <Field label="Timeout (ms)">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={jobTimeout}
+                    onChange={(e) => setJobTimeout(e.target.value)}
+                    placeholder="—"
+                  />
+                </Field>
               </div>
             </div>
           </div>

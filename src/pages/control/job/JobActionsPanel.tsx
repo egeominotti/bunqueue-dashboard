@@ -72,6 +72,16 @@ export function JobActionsPanel({ job, busy, act }: { job: JobFull; busy: boolea
             onSubmit={(n) => act('Move to delayed', () => bq.moveToDelayed(job.id, n))}
           />
         )}
+        {job.state === 'active' && (
+          <InlineNumber
+            label="Set progress (0–100)"
+            cta="Progress"
+            disabled={busy}
+            onSubmit={(n) =>
+              act('Progress', () => bq.setJobProgress(job.id, Math.max(0, Math.min(100, n))))
+            }
+          />
+        )}
         {gates.discard && (
           <Button
             size="sm"
