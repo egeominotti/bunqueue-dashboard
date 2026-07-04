@@ -43,22 +43,33 @@ bunqueue-dashboard/
 ├── Dockerfile                 # multi-stage: Bun build → Caddy serve
 ├── src/
 │   ├── lib/                   # api.ts, bq.ts, bqTypes.ts, types.ts, jobActions.ts, sse.ts, format.ts, cn.ts,
-│   │                           # usePolledData.ts, useActivityStream.ts, useThroughputSeries.ts
+│   │   │                       # usePolledData.ts, useActivityStream.ts, useThroughputSeries.ts, useAlertEngine.ts,
+│   │   │                       # cloneJob.ts, cronPreview.ts, exportFile.ts, flowLayout.ts, promisePool.ts
+│   │   ├── demo/              # demo mode (VITE_DEMO=1 / ?demo): installs a fetch+SSE shim answering every
+│   │   │                       # bunqueue/agent route from fixtures.json — what the GitHub Pages build runs
+│   │   └── copilot/           # in-app LLM assistant runtime: providers.ts (Anthropic/OpenAI/Google/custom),
+│   │                           # tools.ts (zod-validated bq tools), runtime.ts (agent loop, max 8 steps)
 │   ├── components/
 │   │   ├── layout/            # Sidebar, Topbar, AppLayout, SidebarFooter
 │   │   ├── ui/                # StatCard, StatusBadge, Card, Button, CopyButton, form, feedback, PageHeader, AreaChart, icons
-│   │   └── dashboard/stores/  # Zustand: theme, connection, alerts, s3
+│   │   ├── copilot/           # Copilot launcher + lazy CopilotPanel (~160 KB gz chunk, loaded on first open)
+│   │   └── dashboard/stores/  # Zustand: theme, connection, alerts, s3, toast, copilot
 │   ├── pages/                 # first-gen view pages (Overview, Queues, QueueDetail, Jobs, Dlq, Cron, Metrics, Workers,
-│   │   │                       # Logs, Usage, S3Backup, Settings, Alerts [unrouted — see docs/pages.md], NotFound)
+│   │   │                       # Logs, Usage, S3Backup, Settings, NotFound) + Alerts (routed at /alerts, in nav)
 │   │   ├── queue/              # QueueConfig (used by classic QueueDetail)
-│   │   └── control/           # Pro pages: OverviewPro, ServerControl, AddJob, JobInspector, JobsPro, DlqPro,
-│   │       │                   # DlqControl, MetricsPro, LogsPro, QueueControl, CronManager, Webhooks,
-│   │       │                   # Diagnostics, S3BackupPro, Database (SQLite inspector), UsagePro, WorkersPro
-│   │       ├── job/            # JobInspector subcomponents: JobTimeline, JobBackoff
-│   │       └── queue/          # QueueControl subcomponents: QueueActions, ConfigForms
+│   │   └── control/           # Pro pages: OverviewPro, ServerControl, AddJob, BulkAddJobs, JobInspector, JobsPro,
+│   │       │                   # QueuesOverview, QueueDetailPro, DlqPro, DlqControl, MetricsPro, LogsPro,
+│   │       │                   # QueueControl, CronManager, Webhooks, Diagnostics, S3BackupPro, Database
+│   │       │                   # (SQLite inspector), UsagePro, WorkersPro, Benchmark, Flows (DAG viewer), McpServer
+│   │       ├── benchmark/      # Benchmark subcomponents: engine, useBenchmark, RunHistory
+│   │       ├── job/            # JobInspector subcomponents: JobTimeline, JobBackoff, JobActionsPanel, JobChildren,
+│   │       │                   # JobDataEditor, JobLogs
+│   │       ├── queue/          # QueueControl subcomponents: QueueActions, ConfigForms
+│   │       └── server/        # ServerControl subcomponents
 │   ├── App.tsx                # routes — see docs/pages.md for the verified route→page table
 │   └── main.tsx                # entry (fonts, theme, router; basename = import.meta.env.BASE_URL for Pages)
-├── test/                      # bun test (format, sse, manager, agent lifecycle, s3 store)
+├── test/                      # bun test (format, sse, manager, agent lifecycle, s3 store, bq client, stores)
+│                               # coverage floor enforced by scripts/check-coverage.ts (`bun run test:coverage`)
 └── docs/                      # how it works — see docs/README.md; docs/known-issues.md tracks verified gaps
 ```
 
@@ -89,7 +100,11 @@ bun run check     # biome lint + format (production-grade config)
 bun test          # unit + agent lifecycle tests
 ```
 
-CI runs this exact gate on every push and PR (`.github/workflows/ci.yml`).
+CI runs this exact gate on every push and PR (`.github/workflows/ci.yml`), with the test step
+upgraded to `bun run test:coverage`: it runs the suite with coverage and then
+`scripts/check-coverage.ts` enforces an **aggregate coverage floor** (sums the lcov report; Bun's
+own `coverageThreshold` is per-file and would be failed by any single low-coverage module).
+Raise the floors as coverage grows; never lower them to make a failing change pass.
 
 ### Biome config
 

@@ -1,2 +1,6 @@
 [test]
 preload = ["./test/setup.ts"]
+# NOTE: no `coverageThreshold` here on purpose — Bun applies it PER FILE, so one
+# low-coverage file (e.g. copilot tools) fails the whole run regardless of the
+# aggregate. The aggregate floor is enforced by scripts/check-coverage.ts
+# (`bun run test:coverage`), which CI runs.

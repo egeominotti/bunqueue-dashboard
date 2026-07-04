@@ -19,7 +19,6 @@ const TITLES: Record<string, string> = {
   '/jobs/bulk-add': 'Bulk Add Jobs',
   '/job': 'Job Inspector',
   '/queue-control': 'Queue Control',
-  '/cron-manager': 'Cron Manager',
   '/dlq-control': 'DLQ Control',
   '/webhooks': 'Webhooks',
   '/diagnostics': 'Diagnostics',

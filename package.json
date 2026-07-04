@@ -1,6 +1,6 @@
 {
   "name": "bunqueue-dashboard",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun).",
   "bin": {
@@ -51,6 +51,7 @@
     "build:bin": "bun run build && bun run scripts/gen-embed.ts && bun build scripts/serve.ts --compile --minify --outfile bunqueue-dashboard",
     "preview": "vite preview",
     "test": "bun test",
+    "test:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir=coverage && bun scripts/check-coverage.ts",
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "format": "biome format --write ."

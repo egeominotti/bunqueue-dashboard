@@ -15,6 +15,33 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.21] - 2026-07-04
+
+### Added
+- **Unit tests for the core API client (`lib/bq.ts`).** The transport layer's
+  contract is now pinned by tests: error mapping (HTTP errors, non-JSON bodies,
+  empty/204 responses, invalid JSON), the HTTP-200-`{ok:false}` throw convention
+  and `health()`'s opt-out, server-vs-agent auth-header scoping, the scoped
+  `auth:required` event on 401, and URL/body construction for representative
+  endpoints (encoding, `{limit}`/`{concurrency}` shapes, optional bodies).
+- **Aggregate test-coverage floor in CI.** `bun run test:coverage` runs the
+  suite with coverage and `scripts/check-coverage.ts` enforces a floor on the
+  lcov totals (lines ≥ 62%, functions ≥ 55%), so overall coverage can only go
+  up. (Bun's own `coverageThreshold` is applied per file, which a single
+  legitimately low-coverage module would fail regardless of the aggregate.)
+
+### Changed
+- **`/cron-manager` now redirects to `/cron`.** The two routes served the same
+  `CronManager` page; the alias is kept as a redirect so old bookmarks keep
+  working.
+- **Docs caught up with the shipped app.** `CLAUDE.md`'s layout and
+  `docs/pages.md`'s route/page tables now document every routed page —
+  Benchmark, Flows, MCP guide, QueuesOverview, QueueDetailPro, Bulk Add, the
+  demo-mode fetch shim, the Copilot assistant, the client-side alert engine —
+  and no longer claim Alerts is unrouted.
+
+## [0.0.20] - 2026-07-03
+
 ### Changed
 - **DLQ Control redesign.** The single-queue DLQ page is now a proper triage
   surface: a 4-card summary (entries + top failure reason, distinct failure
@@ -445,7 +472,10 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.18...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.21...HEAD
+[0.0.21]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.20...v0.0.21
+[0.0.20]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.19...v0.0.20
+[0.0.19]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.18...v0.0.19
 [0.0.18]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.17...v0.0.18
 [0.0.17]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.16...v0.0.17
 [0.0.16]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.15...v0.0.16

@@ -49,8 +49,10 @@ jobs:
       - name: Bundle size budget
         run: bun run size
 
-      - name: Test (with coverage)
-        run: bun test --coverage
+      # Runs the suite with coverage, then enforces the aggregate floor
+      # (scripts/check-coverage.ts) so overall coverage can only go up.
+      - name: Test (with coverage floor)
+        run: bun run test:coverage
 
       # Report known-vulnerable dependencies. Non-blocking: a newly-published
       # advisory shouldn't wedge every merge, but it surfaces in the log/summary.

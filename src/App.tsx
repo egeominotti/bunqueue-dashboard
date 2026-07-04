@@ -1,5 +1,5 @@
 import { lazy } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from './components/layout/AppLayout';
 import { OverviewPro } from './pages/control/OverviewPro';
 // Eager: the layout shell, the landing route ('/'), and the trivial 404 — so the
@@ -111,7 +111,8 @@ export function App() {
         <Route path="/jobs/bulk-add" element={<BulkAddJobs />} />
         <Route path="/job" element={<JobInspector />} />
         <Route path="/queue-control" element={<QueueControl />} />
-        <Route path="/cron-manager" element={<CronManager />} />
+        {/* Legacy alias: CronManager graduated to /cron; redirect keeps old bookmarks alive. */}
+        <Route path="/cron-manager" element={<Navigate to="/cron" replace />} />
         <Route path="/dlq-control" element={<DlqControl />} />
         <Route path="/webhooks" element={<Webhooks />} />
         <Route path="/diagnostics" element={<Diagnostics />} />
