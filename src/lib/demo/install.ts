@@ -171,6 +171,69 @@ const demoStatus = (): Json => ({
     mtimeMs: Date.now() - 12_000,
   },
 });
+// Workers carry timestamps the UI compares against Date.now() (last-seen,
+// uptime), so they're synthesized here instead of the static fixture — a JSON
+// lastSeen would drift into "stale" as the fixture ages.
+const demoWorkers = (): Json => {
+  const now = Date.now();
+  return {
+    ok: true,
+    data: {
+      workers: [
+        {
+          id: 'wrk-9f21c3d0',
+          name: 'worker-emails-1',
+          queues: ['emails', 'notifications'],
+          concurrency: 10,
+          hostname: 'worker-01',
+          pid: 3411,
+          status: 'active',
+          registeredAt: now - 5_400_000,
+          lastSeen: now - 4_000,
+          activeJobs: 0,
+          processedJobs: 1284,
+          failedJobs: 6,
+          currentJob: null,
+          uptime: 5_400_000,
+        },
+        {
+          id: 'wrk-4b77aa19',
+          name: 'worker-media-1',
+          queues: ['image-processing'],
+          concurrency: 4,
+          hostname: 'worker-02',
+          pid: 3987,
+          status: 'active',
+          registeredAt: now - 5_100_000,
+          lastSeen: now - 2_000,
+          activeJobs: 2,
+          processedJobs: 342,
+          failedJobs: 1,
+          currentJob: '019f252b-8769-7000-bc44-cfc168232f53',
+          uptime: 5_100_000,
+        },
+        {
+          id: 'wrk-c05e881f',
+          name: 'worker-batch-1',
+          queues: ['reports'],
+          concurrency: 2,
+          hostname: 'worker-02',
+          pid: 4102,
+          status: 'stale',
+          registeredAt: now - 9_000_000,
+          lastSeen: now - 1_200_000,
+          activeJobs: 0,
+          processedJobs: 57,
+          failedJobs: 0,
+          currentJob: null,
+          uptime: 7_800_000,
+        },
+      ],
+      stats: { total: 3, active: 2, totalProcessed: 1683, totalFailed: 7, activeJobs: 2 },
+    },
+  };
+};
+
 const demoControlLogs = (): Json => {
   const t = Date.now();
   const line = (seq: number, ago: number, stream: string, line: string) => ({
@@ -261,6 +324,9 @@ function resolve(path: string, method: string, search: string): Json {
     return { ok: true };
   }
 
+  // Workers carry now-relative timestamps — synthesized, not fixture-served.
+  if (clean === '/workers') return demoWorkers();
+
   const exact: Record<string, string> = {
     '/health': 'health',
     '/ping': 'ping',
@@ -271,7 +337,6 @@ function resolve(path: string, method: string, search: string): Json {
     '/queues/summary': 'queuesSummary',
     '/crons': 'crons',
     '/webhooks': 'webhooks',
-    '/workers': 'workers',
     '/dlq/stats': 'dlqStats',
   };
   if (exact[clean]) return F[exact[clean]];
@@ -281,19 +346,60 @@ function resolve(path: string, method: string, search: string): Json {
     return F[`detail_${seg[2]}`] ?? F.detail_emails;
   }
 
-  // /queues/:q/(counts | dlq | dlq/stats | jobs/list)
+  // /queues/:q/(counts | dlq | dlq/stats | jobs/list | stall-config | dlq-config)
   if (seg[0] === 'queues' && seg[1]) {
-    const q = seg[1];
+    const q = decodeURIComponent(seg[1]);
     if (seg[2] === 'counts') return F[`counts_${q}`] ?? { ok: true, counts: {} };
     if (seg[2] === 'dlq' && seg[3] === 'stats') {
-      return { ok: true, stats: { total: q === 'emails' ? 2 : 0, byReason: { unknown: 2 } } };
+      return {
+        ok: true,
+        stats:
+          q === 'emails'
+            ? { total: 2, byReason: { timeout: 1, max_attempts: 1 } }
+            : { total: 0, byReason: {} },
+      };
     }
     if (seg[2] === 'dlq') return F[`dlq_${q}`] ?? { ok: true, entries: [], total: 0 };
+    // QueueControl's stall / DLQ-policy cards render only when these resolve.
+    if (seg[2] === 'stall-config') {
+      return {
+        ok: true,
+        config: { enabled: true, stallInterval: 30000, maxStalls: 3, gracePeriod: 5000 },
+      };
+    }
+    if (seg[2] === 'dlq-config') {
+      return {
+        ok: true,
+        config: {
+          autoRetry: false,
+          autoRetryInterval: 60000,
+          maxAutoRetries: 3,
+          maxAge: null,
+          maxEntries: 1000,
+        },
+      };
+    }
     if (seg[2] === 'jobs' && seg[3] === 'list') {
-      const state = new URLSearchParams(search).get('state');
-      if (q === 'emails' && state === 'completed') return F.emailsCompleted;
-      if (q === 'emails') return F.emailsWaiting;
-      return { ok: true, jobs: [] };
+      // The client sends `states` (comma-separated). Filter the fixture pool by
+      // the requested states, and retag jobs for non-emails queues so every
+      // queue in the demo has browseable jobs rather than an empty table.
+      const sp = new URLSearchParams(search);
+      const wanted = (sp.get('states') ?? sp.get('state') ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const jobsOf = (key: string): Json[] => (F[key] as { jobs?: Json[] })?.jobs ?? [];
+      const failedJob = (F.oneJob as { job?: Json })?.job;
+      const pool: Json[] = [...jobsOf('emailsWaiting'), ...jobsOf('emailsCompleted')];
+      if (failedJob) pool.push(failedJob);
+      const matches = (state: unknown) =>
+        wanted.length === 0 ||
+        wanted.includes(String(state)) ||
+        // The UI's "waiting" bucket includes prioritized jobs.
+        (wanted.includes('waiting') && state === 'prioritized');
+      const retag = (j: Json, i: number): Json =>
+        q === 'emails' ? j : { ...j, id: `${q}-${String(j.id).slice(-12)}-${i}`, queue: q };
+      return { ok: true, jobs: pool.filter((j) => matches(j.state)).map(retag) };
     }
   }
 
@@ -303,7 +409,15 @@ function resolve(path: string, method: string, search: string): Json {
     // /jobs/custom/:customId — resolve a custom/idempotency id to a job.
     if (seg[1] === 'custom' && seg[2]) return F.oneJob;
     if (seg[2] === 'result') return { ok: true, result: { sent: true, provider: 'demo' } };
-    if (seg[2] === 'logs') return { ok: true, logs: [] };
+    if (seg[2] === 'logs') {
+      // bq.jobLogs reads { data: { logs, count } }; lines render as strings.
+      const logs = [
+        '[info] picked up by worker-emails-1',
+        '[info] connecting to smtp.example.com:587',
+        '[error] SMTP 550: mailbox unavailable — will retry with backoff',
+      ];
+      return { ok: true, data: { logs, count: logs.length } };
+    }
     if (!seg[2]) return DEMO_FLOW[jid] ? { ok: true, job: DEMO_FLOW[jid] } : F.oneJob;
   }
 

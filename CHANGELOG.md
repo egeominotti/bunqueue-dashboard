@@ -15,6 +15,32 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.23] - 2026-07-04
+
+### Fixed
+- **The live demo now has data on every page.** A full click-through of demo
+  mode found and fixed the gaps: Workers was empty (three synthesized workers
+  with now-relative last-seen, active/stale mix); DLQ entries had reason
+  "unknown" and no error (now realistic timeout / max-attempts failures, and
+  the per-queue reason stats match); the webhook showed 0/0 deliveries (now
+  42/3 with a last-triggered time); Queue Control's Stall-detection and
+  DLQ-policy cards never rendered (`/stall-config` and `/dlq-config` are now
+  answered); Job Inspector logs were empty and mis-shaped (`{data:{logs}}`
+  with sample lines); and the Jobs Explorer read the wrong query param
+  (`state` vs the client's `states`), so status tabs did nothing and every
+  queue but `emails` was empty — jobs are now filtered by the requested
+  states and retagged per queue, so all four queues are browseable.
+
+### Changed
+- **Docs landing page redesigned** as a single-page product landing: keyword
+  hero with a clickable window-framed screenshot that opens the live demo, an
+  honest fact strip (MIT · zero-dep npm · 5-platform binaries · Docker),
+  a numbered 12-card feature inventory (each linking its guide page), the tour
+  video, an 8-tile "everything you can drive" grid, a 4-step get-running
+  process with real UI screenshots, install tabs (npm / binary / Docker /
+  source), and an 8-question FAQ with verifiable answers. Works in light and
+  dark, responsive, built on VitePress theme tokens.
+
 ## [0.0.22] - 2026-07-04
 
 ### Added
@@ -509,7 +535,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.22...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.23...HEAD
+[0.0.23]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.22...v0.0.23
 [0.0.22]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.21...v0.0.22
 [0.0.21]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.20...v0.0.21
 [0.0.20]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.19...v0.0.20

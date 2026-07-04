@@ -207,9 +207,9 @@
           "events": ["job.completed", "job.failed"],
           "queue": null,
           "createdAt": 1783035131363,
-          "lastTriggered": null,
-          "successCount": 0,
-          "failureCount": 0,
+          "lastTriggered": 1783035120000,
+          "successCount": 42,
+          "failureCount": 3,
           "enabled": true
         }
       ],
@@ -292,15 +292,15 @@
           ]
         },
         "enteredAt": 1783035131367,
-        "reason": "unknown",
-        "error": null,
+        "reason": "timeout",
+        "error": "Job exceeded its 30000 ms timeout while connecting to smtp.example.com",
         "attempts": [
           {
             "attempt": 0,
             "startedAt": 1783035131364,
             "failedAt": 1783035131367,
-            "reason": "unknown",
-            "error": null,
+            "reason": "timeout",
+            "error": "Job exceeded its 30000 ms timeout while connecting to smtp.example.com",
             "duration": 3
           }
         ],
@@ -361,15 +361,15 @@
           ]
         },
         "enteredAt": 1783035131368,
-        "reason": "unknown",
-        "error": null,
+        "reason": "max_attempts",
+        "error": "SMTP 550: mailbox unavailable (user13@example.com) — 3 of 3 attempts failed",
         "attempts": [
           {
             "attempt": 0,
             "startedAt": 1783035131364,
             "failedAt": 1783035131368,
-            "reason": "unknown",
-            "error": null,
+            "reason": "max_attempts",
+            "error": "SMTP 550: mailbox unavailable (user13@example.com) — 3 of 3 attempts failed",
             "duration": 4
           }
         ],

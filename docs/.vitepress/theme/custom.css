@@ -109,109 +109,406 @@ body {
   margin: 22px 0;
 }
 
-/* ── Home: custom sections below the hero/features ─────────────────────── */
-.home-section {
+/* ── Landing page (docs/index.md) ──────────────────────────────────────────
+   A databasus-style single-page landing: keyword hero + clickable product
+   window, fact strip, numbered feature inventory, tour video, drive tiles,
+   4-step process, install tabs, FAQ. Built on VitePress theme tokens so it
+   works in light AND dark, keeping the app's pink brand. */
+.lp {
   max-width: 1152px;
   margin: 0 auto;
-  padding: 0 24px;
-}
-.home-section h2 {
-  margin: 56px 0 8px;
-  padding-top: 40px;
-  border-top: 1px solid var(--vp-c-divider);
-  font-size: 27px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-.home-section > p {
-  color: var(--vp-c-text-2);
-  font-size: 15.5px;
-  max-width: 720px;
-}
-.home-section pre {
-  border-radius: 12px;
+  padding: 0 24px 48px;
 }
 
-/* Screenshot showcase */
-.home-shots {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
-  margin: 28px 0 4px;
+/* Small mono chip — the landing's utility voice (eyebrows, numbers, live pill). */
+.lp-chip {
+  display: inline-block;
+  margin: 0 0 14px;
+  padding: 4px 12px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 999px;
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-2);
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
 }
-.home-shots p {
-  margin: 0;
+
+/* Hero */
+.lp-hero {
+  padding: 56px 0 8px;
+  text-align: center;
 }
-.home-shots a {
+.lp-h1 {
+  margin: 0 auto;
+  max-width: 880px;
+  font-size: clamp(2rem, 1.3rem + 3.2vw, 3.3rem);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+  background: linear-gradient(120deg, var(--vp-c-text-1) 55%, var(--vp-c-brand-1));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.lp-sub {
+  margin: 18px auto 0;
+  max-width: 720px;
+  color: var(--vp-c-text-2);
+  font-size: clamp(15px, 14px + 0.4vw, 17px);
+  line-height: 1.65;
+}
+.lp-ctas {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin: 26px 0 0;
+}
+/* .vp-doc's anchor rules (brand color + underline) would repaint these — the
+   doubled selectors below out-specify them for both light and dark. */
+.lp .lp-btn,
+.vp-doc .lp .lp-btn {
+  display: inline-block;
+  padding: 10px 22px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-1);
+  font-size: 14.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+.lp-btn:hover {
+  border-color: var(--vp-c-brand-1);
+  transform: translateY(-1px);
+}
+.lp-btn:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
+}
+.lp .lp-btn-primary,
+.vp-doc .lp .lp-btn-primary {
+  border-color: transparent;
+  background: linear-gradient(120deg, #db2777, #ec4899);
+  color: #fff;
+}
+.lp .lp-btn-primary:hover,
+.vp-doc .lp .lp-btn-primary:hover {
+  border-color: transparent;
+  color: #fff;
+  filter: brightness(1.08);
+}
+
+/* The signature: a window-framed product shot that IS the live demo. */
+.lp-window {
   display: block;
-  border-radius: 14px;
-  outline: none;
-}
-.home-shots img {
-  width: 100%;
-  /* Uniform cards regardless of each screenshot's native aspect ratio: crop to a
-     consistent shape, anchored to the top so the app header stays visible. */
-  aspect-ratio: 16 / 10;
-  object-fit: cover;
-  object-position: top center;
-  display: block;
+  margin: 44px auto 0;
+  max-width: 980px;
   border: 1px solid var(--vp-c-divider);
   border-radius: 14px;
+  overflow: hidden;
+  background: var(--vp-c-bg-soft);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.2),
-    0 12px 34px rgba(0, 0, 0, 0.16);
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
+    0 24px 70px -20px rgba(219, 39, 119, 0.25);
+  text-decoration: none;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
-.home-shots a:hover img {
-  transform: translateY(-5px);
+.lp-window:hover {
+  transform: translateY(-4px);
   border-color: var(--vp-c-brand-1);
   box-shadow:
     0 2px 4px rgba(0, 0, 0, 0.22),
-    0 22px 50px rgba(219, 39, 119, 0.22);
+    0 30px 80px -18px rgba(219, 39, 119, 0.4);
+}
+.lp-window:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 3px;
+}
+.lp-window-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+.lp-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--vp-c-divider);
+}
+.lp-live {
+  margin-left: auto;
+  color: var(--vp-c-brand-1);
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+}
+.vp-doc .lp a.lp-window {
+  text-decoration: none;
+}
+.lp .lp-window-shot,
+.lp-window p {
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  display: block;
+  width: 100%;
 }
 
-/* Capability grid */
-.home-grid ul {
-  columns: 2;
-  column-gap: 40px;
-  margin: 18px 0 8px;
+/* Fact strip — honest project facts, no invented endorsements. */
+.lp-proof {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 28px;
+  margin: 40px auto 0;
+  padding: 18px 12px;
+  border-top: 1px solid var(--vp-c-divider);
+  border-bottom: 1px solid var(--vp-c-divider);
+  color: var(--vp-c-text-2);
+  font-size: 13.5px;
+}
+.lp-proof a {
+  color: var(--vp-c-brand-1);
+  font-weight: 550;
+  text-decoration: none;
+}
+.lp-proof a:hover {
+  text-decoration: underline;
+}
+
+/* Sections */
+.lp-section {
+  padding-top: 72px;
+  text-align: center;
+}
+.lp .lp-title {
+  margin: 0;
+  border: none;
   padding: 0;
-  list-style: none;
+  font-size: clamp(1.7rem, 1.3rem + 1.8vw, 2.5rem);
+  font-weight: 720;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
 }
-.home-grid li {
-  break-inside: avoid;
-  padding: 7px 0 7px 26px;
-  position: relative;
-  color: var(--vp-c-text-1);
+.lp-lead {
+  margin: 14px auto 0;
+  max-width: 700px;
+  color: var(--vp-c-text-2);
+  font-size: 15.5px;
+  line-height: 1.65;
 }
-.home-grid li::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 14px;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: linear-gradient(135deg, #f472b6, #db2777);
+.lp-lead a,
+.lp-card a {
+  color: var(--vp-c-brand-1);
+  font-weight: 550;
+  text-decoration: none;
 }
-.home-grid li strong {
-  color: var(--vp-c-text-1);
-}
-.home-cta > p:last-child {
-  margin-top: 20px;
-  font-size: 16px;
+.lp-lead a:hover,
+.lp-card a:hover {
+  text-decoration: underline;
 }
 
-@media (max-width: 860px) {
-  .home-shots {
+/* Numbered feature inventory (and FAQ cards). */
+.lp-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  margin-top: 36px;
+  text-align: left;
+}
+.lp-card {
+  padding: 22px 22px 18px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 14px;
+  background: var(--vp-c-bg-soft);
+}
+.lp-num {
+  display: inline-block;
+  min-width: 26px;
+  padding: 2px 8px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 7px;
+  background: var(--vp-c-bg);
+  color: var(--vp-c-text-2);
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  text-align: center;
+}
+.lp-card h3 {
+  margin: 12px 0 8px;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.014em;
+}
+.lp-card p {
+  margin: 0;
+  color: var(--vp-c-text-2);
+  font-size: 14px;
+  line-height: 1.62;
+}
+.lp-tag {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+  font-style: normal;
+  vertical-align: 2px;
+}
+
+/* Tour video */
+.lp-video {
+  display: block;
+  width: 100%;
+  max-width: 980px;
+  margin: 32px auto 0;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.35);
+}
+
+/* Drive tiles */
+.lp-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-top: 32px;
+}
+.lp-tiles a {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 16px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+  text-decoration: none;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.lp-tiles a:hover {
+  border-color: var(--vp-c-brand-1);
+  transform: translateY(-3px);
+}
+.lp-tiles a:focus-visible {
+  outline: 2px solid var(--vp-c-brand-1);
+  outline-offset: 2px;
+}
+.lp-tiles strong {
+  color: var(--vp-c-text-1);
+  font-size: 15px;
+}
+.lp-tiles span {
+  color: var(--vp-c-text-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* 4-step process: text left, UI right. */
+.lp-step {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  gap: 28px;
+  align-items: center;
+  margin-top: 26px;
+  padding: 26px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 16px;
+  background: var(--vp-c-bg-soft);
+  text-align: left;
+}
+.lp-step-text h3 {
+  margin: 12px 0 8px;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+}
+.lp-step-text p {
+  margin: 0;
+  color: var(--vp-c-text-2);
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+.lp-step-media img {
+  margin: 0 !important;
+  width: 100%;
+}
+.lp-step-media div[class*='language-'] {
+  margin: 0;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+}
+.lp-step-media p {
+  margin: 0;
+}
+
+/* Install tabs + FAQ */
+.lp-section .vp-code-group {
+  margin-top: 32px;
+  text-align: left;
+}
+.lp-faq {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+  margin-top: 36px;
+  text-align: left;
+}
+.lp-faq .lp-card p {
+  font-size: 14.5px;
+}
+.lp-faq .lp-card h3 {
+  margin-top: 0;
+}
+
+/* Final CTA */
+.lp-final {
+  margin-top: 88px;
+  padding: 56px 24px 8px;
+  border-top: 1px solid var(--vp-c-divider);
+  text-align: center;
+}
+.lp-final h2 {
+  margin: 0;
+  border: none;
+  padding: 0;
+  font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2.1rem);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+@media (max-width: 960px) {
+  .lp-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .lp-tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .lp-step {
     grid-template-columns: 1fr;
   }
-  .home-grid ul {
-    columns: 1;
+}
+@media (max-width: 600px) {
+  .lp-cards,
+  .lp-tiles,
+  .lp-faq {
+    grid-template-columns: 1fr;
+  }
+  .lp-hero {
+    padding-top: 36px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-btn,
+  .lp-window,
+  .lp-tiles a {
+    transition: none;
   }
 }
 
