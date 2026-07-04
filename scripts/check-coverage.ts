@@ -14,11 +14,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../agent/logger';
 
-// Floors sit ~2pts under the measured lcov totals at v0.0.21 (64.0% lines,
-// 57.4% functions — note lcov weights by line count, so it reads lower than
-// `bun test --coverage`'s per-file table average).
-const LINES_FLOOR = 0.62;
-const FUNCTIONS_FLOOR = 0.55;
+// Floors sit ~2pts under the measured lcov totals at v0.0.22 (72.7% lines,
+// 60.3% functions after the hook tests — note lcov weights by line count, so
+// it reads lower than `bun test --coverage`'s per-file table average).
+const LINES_FLOOR = 0.7;
+const FUNCTIONS_FLOOR = 0.58;
 
 const lcovPath = join(import.meta.dir, '..', 'coverage', 'lcov.info');
 

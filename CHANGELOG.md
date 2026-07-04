@@ -15,6 +15,35 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.22] - 2026-07-04
+
+### Added
+- **Hook tests (23 new tests).** The four data hooks are now covered by real
+  behavioral tests, rendered through a minimal in-repo hook harness
+  (`test/domSetup.ts`: happy-dom document + `react-dom` root under `act()` — no
+  testing-library dependency):
+  - `usePolledData` — initial load, self-scheduled re-polls, render stability
+    on unchanged payloads (same data reference), error set + clear on recovery,
+    the generation guard dropping a stale in-flight result after a deps change,
+    `refetch()`, and unmount stopping the loop.
+  - `useActivityStream` — driven end-to-end through the real `sse.ts` parser
+    via a mocked fetch stream: handshake → connected, newest-first ordering
+    through the 150 ms flush, status/counter mapping, the 250-event ring cap,
+    and the 2 s reconnect after a clean stream end.
+  - `useThroughputSeries` — immediate first sample (series + `latest` + summed
+    depth), swallowed transient failures; plus pure `depthTrend` cases
+    (draining/accumulating/steady, dead band).
+  - `useAlertEngine` — breach + single toast, edge-triggered no-re-notify, the
+    skip-tick-when-overview-is-down policy (no false `<`-rule trips), per-source
+    null metrics on partial failure, queue-scoped and `p99_latency` resolution,
+    and the idle no-rules path (zero polling).
+- `happy-dom` (dev-only) provides the DOM; the published package stays
+  zero-dependency.
+
+### Changed
+- **Coverage floors raised** to lines ≥ 70% / functions ≥ 58% (from 62%/55%),
+  matching the new measured totals (72.7% / 60.3%).
+
 ## [0.0.21] - 2026-07-04
 
 ### Added
@@ -472,7 +501,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.21...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.22...HEAD
+[0.0.22]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.21...v0.0.22
 [0.0.21]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.20...v0.0.21
 [0.0.20]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.19...v0.0.20
 [0.0.19]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.18...v0.0.19

@@ -117,6 +117,10 @@ describe('bq auth scoping', () => {
   });
 
   test('a 401 dispatches auth:required scoped to the backend that rejected', async () => {
+    // Swap in a bare EventTarget as `window`, restoring whatever was there
+    // before (test files share one global scope — another file may have
+    // installed a happy-dom window that must survive this test).
+    const prev = (globalThis as { window?: unknown }).window;
     const target = new EventTarget();
     (globalThis as { window?: unknown }).window = target;
     try {
@@ -129,7 +133,11 @@ describe('bq auth scoping', () => {
       await expect(bq.control.status()).rejects.toThrow('unauthorized');
       expect(scopes).toEqual(['server', 'agent']);
     } finally {
-      delete (globalThis as { window?: unknown }).window;
+      if (prev === undefined) {
+        delete (globalThis as { window?: unknown }).window;
+      } else {
+        (globalThis as { window?: unknown }).window = prev;
+      }
     }
   });
 });
