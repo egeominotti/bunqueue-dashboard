@@ -39,6 +39,12 @@ export function CopilotPanel() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, pending]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [setOpen]);
+
   const submit = (text: string) => {
     const t = text.trim();
     if (!t || busy || !configured) return;
@@ -63,7 +69,12 @@ export function CopilotPanel() {
         onClick={() => setOpen(false)}
         className="fixed inset-0 z-[55] cursor-default bg-black/30"
       />
-      <aside className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-md flex-col border-l border-line bg-surface shadow-xl">
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label="Copilot"
+        className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-md flex-col border-l border-line bg-surface shadow-xl"
+      >
         {/* Header */}
         <header className="flex items-center gap-2 border-b border-line px-4 py-3">
           <span className="font-semibold text-fg">Copilot</span>
@@ -134,6 +145,10 @@ export function CopilotPanel() {
               />
             </Field>
             <p className="text-xs text-faint">
+              Chat and tool results (live queue/job data) are sent directly from your browser to the
+              provider you configure.
+            </p>
+            <p className="text-xs text-faint">
               Key stays in memory for this session only, never saved to disk.{' '}
               {def?.keyUrl && (
                 <a
@@ -155,7 +170,11 @@ export function CopilotPanel() {
         )}
 
         {/* Messages */}
-        <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <div
+          ref={scrollRef}
+          aria-live="polite"
+          className="flex-1 space-y-4 overflow-y-auto px-4 py-4"
+        >
           {messages.length === 0 && (
             <div className="space-y-3 pt-6">
               <p className="text-sm text-muted">

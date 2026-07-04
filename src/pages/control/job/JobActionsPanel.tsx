@@ -117,7 +117,9 @@ export function JobActionsPanel({ job, busy, act }: { job: JobFull; busy: boolea
             variant="danger"
             size="sm"
             disabled={busy}
-            onClick={() => act('Cancel', () => bq.cancelJob(job.id), 'Cancel and remove this job?')}
+            onClick={() =>
+              act('Cancel', () => bq.cancelJob(job.id), `Cancel and remove job ${job.id}?`)
+            }
           >
             Cancel (delete)
           </Button>
@@ -145,7 +147,14 @@ function InlineNumber({
 }) {
   const [v, setV] = useState('');
   return (
-    <div className="flex gap-2">
+    // A real <form> so Enter in the field submits, same as clicking the button.
+    <form
+      className="flex gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!disabled && v.trim() !== '') onSubmit(Number(v));
+      }}
+    >
       <Input
         type="number"
         value={v}
@@ -154,10 +163,10 @@ function InlineNumber({
         aria-label={label}
         className="h-8 text-xs"
       />
-      <Button size="sm" disabled={disabled || v.trim() === ''} onClick={() => onSubmit(Number(v))}>
+      <Button type="submit" size="sm" disabled={disabled || v.trim() === ''}>
         {cta}
       </Button>
-    </div>
+    </form>
   );
 }
 
@@ -176,7 +185,16 @@ function InlineText({
 }) {
   const [v, setV] = useState('');
   return (
-    <div className="flex gap-2">
+    // A real <form> so Enter in the field submits, same as clicking the button.
+    <form
+      className="flex gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (disabled) return;
+        onSubmit(v);
+        setV('');
+      }}
+    >
       <Input
         value={v}
         onChange={(e) => setV(e.target.value)}
@@ -184,17 +202,9 @@ function InlineText({
         aria-label={label}
         className="h-8 text-xs"
       />
-      <Button
-        size="sm"
-        variant={variant}
-        disabled={disabled}
-        onClick={() => {
-          onSubmit(v);
-          setV('');
-        }}
-      >
+      <Button type="submit" size="sm" variant={variant} disabled={disabled}>
         {cta}
       </Button>
-    </div>
+    </form>
   );
 }

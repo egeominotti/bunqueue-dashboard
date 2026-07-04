@@ -18,6 +18,15 @@ const FANOUT_LIMIT = 6;
 
 const PAGE_SIZE = 15;
 
+const SORT_COLS = [
+  ['waiting', 'Waiting'],
+  ['active', 'Active'],
+  ['completed', 'Completed'],
+  ['failed', 'Failed'],
+  ['delayed', 'Delayed'],
+] as const;
+type SortKey = (typeof SORT_COLS)[number][0];
+
 /**
  * All queues with per-state counts and inline pause/resume. Backed by a single
  * `GET /queues/summary` call per poll (not an N-queue fan-out), then filtered
@@ -31,15 +40,36 @@ export function QueuesOverview() {
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [sortCol, setSortCol] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
 
   const { data, error, loading, refetch } = usePolledData(() => bq.queuesSummary(), []);
   const all = data ?? [];
 
+  // Header click cycles desc → asc → off (back to the alphabetical default).
+  const cycleSort = (k: SortKey) => {
+    if (sortCol !== k) {
+      setSortCol(k);
+      setSortDir('desc');
+    } else if (sortDir === 'desc') {
+      setSortDir('asc');
+    } else {
+      setSortCol(null);
+    }
+    setPage(0);
+  };
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     const list = term ? all.filter((q) => q.name.toLowerCase().includes(term)) : all;
-    return [...list].sort((a, b) => a.name.localeCompare(b.name));
-  }, [all, search]);
+    // Alphabetical base sort; the numeric re-sort is stable, so ties keep name order.
+    const sorted = [...list].sort((a, b) => a.name.localeCompare(b.name));
+    if (sortCol) {
+      const dir = sortDir === 'desc' ? -1 : 1;
+      sorted.sort((a, b) => dir * (a.counts[sortCol] - b.counts[sortCol]));
+    }
+    return sorted;
+  }, [all, search, sortCol, sortDir]);
 
   const totals = useMemo(
     () =>
@@ -173,7 +203,7 @@ export function QueuesOverview() {
       </div>
 
       {msg && (
-        <div className={cn('mb-3 text-sm', msg.ok ? 'text-success' : 'text-danger')}>
+        <div role="status" className={cn('mb-3 text-sm', msg.ok ? 'text-success' : 'text-danger')}>
           {msg.text}
         </div>
       )}
@@ -182,14 +212,36 @@ export function QueuesOverview() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-              <th className="px-5 py-3 font-medium">Queue</th>
-              <th className="px-5 py-3 text-right font-medium">Waiting</th>
-              <th className="px-5 py-3 text-right font-medium">Active</th>
-              <th className="px-5 py-3 text-right font-medium">Completed</th>
-              <th className="px-5 py-3 text-right font-medium">Failed</th>
-              <th className="px-5 py-3 text-right font-medium">Delayed</th>
-              <th className="px-5 py-3 font-medium">Status</th>
-              <th className="w-24 px-5 py-3 text-right font-medium">Actions</th>
+              <th scope="col" className="px-5 py-3 font-medium">
+                Queue
+              </th>
+              {SORT_COLS.map(([key, label]) => (
+                <th
+                  key={key}
+                  scope="col"
+                  aria-sort={
+                    sortCol === key ? (sortDir === 'desc' ? 'descending' : 'ascending') : undefined
+                  }
+                  className="px-5 py-3 text-right font-medium"
+                >
+                  <button
+                    type="button"
+                    onClick={() => cycleSort(key)}
+                    className="inline-flex items-center gap-1 rounded uppercase tracking-wider hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                  >
+                    {label}
+                    {sortCol === key && (
+                      <span aria-hidden="true">{sortDir === 'desc' ? '↓' : '↑'}</span>
+                    )}
+                  </button>
+                </th>
+              ))}
+              <th scope="col" className="px-5 py-3 font-medium">
+                Status
+              </th>
+              <th scope="col" className="w-24 px-5 py-3 text-right font-medium">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>

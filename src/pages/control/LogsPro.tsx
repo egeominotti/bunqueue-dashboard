@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/Button';
+import { CopyButton } from '@/components/ui/CopyButton';
 import { OfflineBanner } from '@/components/ui/feedback';
 import { SegmentedControl, Select } from '@/components/ui/form';
 import { IconSearch } from '@/components/ui/icons';
@@ -8,6 +11,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { bq } from '@/lib/bq';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
+import type { ActivityEvent } from '@/lib/types';
 import { useActivityStream } from '@/lib/useActivityStream';
 import { usePolledData } from '@/lib/usePolledData';
 
@@ -15,12 +19,18 @@ const ALL = '__all__';
 const STATUS = ['all', 'waiting', 'active', 'completed', 'failed'] as const;
 type StatusFilter = (typeof STATUS)[number];
 const PAGE = 10;
+// Mirrors MAX_EVENTS in useActivityStream — the ring buffer search/filters run over.
+const BUFFER_SIZE = 250;
 
 export function LogsPro() {
   const [queue, setQueue] = useState(ALL);
   const [status, setStatus] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
+  // Follow/pause: non-null holds the snapshot of `events` taken when the user
+  // paused — the visible list freezes while the stream keeps buffering behind it.
+  const [frozen, setFrozen] = useState<ActivityEvent[] | null>(null);
+  const paused = frozen !== null;
 
   // Dropdown options only — slow-poll so it doesn't ride the live SSE cadence.
   const {
@@ -35,19 +45,29 @@ export function LogsPro() {
   );
 
   const filtered = useMemo(() => {
+    const source = frozen ?? events;
     const term = search.trim().toLowerCase();
-    return events.filter((e) => {
+    return source.filter((e) => {
       if (status !== 'all' && e.status !== status) return false;
       if (!term) return true;
       return (
         (e.jobId ?? '').toLowerCase().includes(term) || (e.queue ?? '').toLowerCase().includes(term)
       );
     });
-  }, [events, status, search]);
+  }, [events, frozen, status, search]);
+
+  // Events that arrived since pause. seq is monotonic per stream, so the head
+  // delta survives the ring buffer dropping old entries; clamped because a
+  // reconnect resets seq to 0.
+  const newSincePause = paused ? Math.max(0, (events[0]?.seq ?? 0) - (frozen[0]?.seq ?? 0)) : 0;
 
   // Reset to first page when filters change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on filter change
   useEffect(() => setPage(0), [queue, status, search]);
+  // A queue switch tears the stream down and restarts seq — a snapshot from the
+  // old stream would be misleading, so drop the pause.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resume on queue change
+  useEffect(() => setFrozen(null), [queue]);
 
   const start = page * PAGE;
   const rows = filtered.slice(start, start + PAGE);
@@ -57,7 +77,7 @@ export function LogsPro() {
       <PageHeader
         title="Activity Logs"
         description="Real-time job activity across all queues."
-        live={connected}
+        live={connected && !paused}
       />
       {error && <OfflineBanner onRetry={refetch} />}
 
@@ -91,6 +111,20 @@ export function LogsPro() {
           </Select>
         </div>
         <SegmentedControl options={STATUS} value={status} onChange={setStatus} />
+        <Button
+          size="sm"
+          variant={paused ? 'warning' : 'default'}
+          onClick={() => setFrozen(paused ? null : events)}
+          title={
+            paused
+              ? 'Resume applying live events to the list'
+              : 'Freeze the visible list while the stream keeps buffering'
+          }
+        >
+          {paused
+            ? `Resume${newSincePause ? ` — ${formatNumber(newSincePause)} new` : ''}`
+            : 'Following · Pause'}
+        </Button>
         <div className="relative ml-auto min-w-56 flex-1 md:max-w-xs">
           <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
           <input
@@ -102,6 +136,9 @@ export function LogsPro() {
           />
         </div>
       </div>
+      <p className="-mt-2 mb-4 text-xs text-faint">
+        Search and filters cover the last {BUFFER_SIZE} streamed events held in this browser.
+      </p>
 
       <div className="overflow-x-auto rounded-xl border border-line bg-surface">
         <table className="w-full text-sm">
@@ -134,17 +171,42 @@ export function LogsPro() {
                   <td className="px-5 py-3">
                     <StatusBadge status={e.status} />
                   </td>
-                  <td className="px-5 py-3 font-mono text-xs text-fg">{e.event}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-fg">
+                    {e.event}
+                    {e.status === 'failed' && e.error && (
+                      <div
+                        className="mt-0.5 max-w-64 truncate text-[11px] text-danger"
+                        title={e.error}
+                      >
+                        {e.error}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-5 py-3">
                     <span className="rounded-md bg-surface-2 px-2 py-0.5 font-mono text-xs text-muted">
                       {e.queue || '—'}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-right text-faint">
+                  <td
+                    className="px-5 py-3 text-right text-faint"
+                    title={new Date(e.timestamp).toISOString()}
+                  >
                     {formatRelativeTime(e.timestamp)}
                   </td>
                   <td className="px-5 py-3 text-right font-mono text-xs text-faint">
-                    {e.jobId || '—'}
+                    {e.jobId ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Link
+                          to={`/job?id=${encodeURIComponent(e.jobId)}`}
+                          className="text-accent hover:underline"
+                        >
+                          {e.jobId}
+                        </Link>
+                        <CopyButton value={e.jobId} />
+                      </span>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                 </tr>
               ))

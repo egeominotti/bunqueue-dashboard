@@ -62,7 +62,7 @@ export function QueueControl() {
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <div className="w-56">
-          <Select value={queue} onChange={(e) => setQueue(e.target.value)}>
+          <Select value={queue} aria-label="Queue" onChange={(e) => setQueue(e.target.value)}>
             {(qs?.queues ?? []).map((x) => (
               <option key={x.name} value={x.name}>
                 {x.name}
@@ -77,7 +77,7 @@ export function QueueControl() {
           />
         )}
         {msg && (
-          <span className={msg.ok ? 'text-xs text-success' : 'text-xs text-danger'}>
+          <span role="status" className={msg.ok ? 'text-xs text-success' : 'text-xs text-danger'}>
             {msg.text}
           </span>
         )}

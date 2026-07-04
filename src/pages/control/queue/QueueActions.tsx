@@ -48,15 +48,6 @@ export function LifecycleCard({
         <Button
           size="sm"
           disabled={busy}
-          onClick={() =>
-            run('Drained', () => bq.drain(queue), `Drain waiting jobs from "${queue}"?`)
-          }
-        >
-          Drain
-        </Button>
-        <Button
-          size="sm"
-          disabled={busy}
           onClick={() => run('Retried completed', () => bq.retryCompleted(queue))}
         >
           Retry completed
@@ -84,39 +75,56 @@ export function LifecycleCard({
             Promote delayed
           </Button>
         </div>
-        <div className="flex items-end gap-2">
-          <div className="w-24">
-            <Field label="Grace (ms)">
-              <Input
-                type="number"
-                value={cleanGrace}
-                onChange={(e) => setCleanGrace(e.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="w-24">
-            <Field label="Limit">
-              <Input
-                type="number"
-                value={cleanLimit}
-                onChange={(e) => setCleanLimit(e.target.value)}
-              />
-            </Field>
-          </div>
+      </div>
+      {/* Divider: everything below removes jobs; everything above is reversible. */}
+      <div className="mt-4 border-t border-line pt-3">
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-faint">
+          Destructive — these permanently remove jobs
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
           <Button
-            variant="danger"
             size="sm"
             disabled={busy}
             onClick={() =>
-              run(
-                'Cleaned',
-                () => bq.clean(queue, { grace: Number(cleanGrace), limit: Number(cleanLimit) }),
-                `Permanently delete up to ${cleanLimit} completed/failed jobs older than ${cleanGrace}ms from "${queue}"?`
-              )
+              run('Drained', () => bq.drain(queue), `Drain waiting jobs from "${queue}"?`)
             }
           >
-            Clean
+            Drain
           </Button>
+          <div className="flex items-end gap-2">
+            <div className="w-24">
+              <Field label="Grace (ms)">
+                <Input
+                  type="number"
+                  value={cleanGrace}
+                  onChange={(e) => setCleanGrace(e.target.value)}
+                />
+              </Field>
+            </div>
+            <div className="w-24">
+              <Field label="Limit">
+                <Input
+                  type="number"
+                  value={cleanLimit}
+                  onChange={(e) => setCleanLimit(e.target.value)}
+                />
+              </Field>
+            </div>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                run(
+                  'Cleaned',
+                  () => bq.clean(queue, { grace: Number(cleanGrace), limit: Number(cleanLimit) }),
+                  `Permanently delete up to ${cleanLimit} completed/failed jobs older than ${cleanGrace}ms from "${queue}"?`
+                )
+              }
+            >
+              Clean
+            </Button>
+          </div>
         </div>
       </div>
     </Card>

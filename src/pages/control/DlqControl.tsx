@@ -172,13 +172,19 @@ export function DlqControl() {
               variant="danger"
               size="sm"
               disabled={!queue || busy || !data?.total}
-              onClick={() =>
-                run(
-                  'Purged',
-                  () => bq.purgeDlq(queue),
-                  `Purge all ${data?.total ?? 0} DLQ entries for "${queue}"? This cannot be undone.`
-                )
-              }
+              onClick={() => {
+                // Type-to-confirm: a plain confirm is too easy to click through
+                // for an irreversible bulk delete.
+                const typed = window.prompt(
+                  `Purge all ${data?.total ?? 0} DLQ entries for "${queue}"? This cannot be undone.\n\nType the queue name to confirm:`
+                );
+                if (typed == null) return;
+                if (typed.trim() !== queue) {
+                  setMsg({ ok: false, text: 'Purge cancelled — queue name did not match.' });
+                  return;
+                }
+                run('Purged', () => bq.purgeDlq(queue));
+              }}
             >
               Purge
             </Button>
@@ -266,7 +272,7 @@ export function DlqControl() {
           />
         </div>
         {msg && (
-          <span className={msg.ok ? 'text-sm text-success' : 'text-sm text-danger'}>
+          <span role="status" className={msg.ok ? 'text-sm text-success' : 'text-sm text-danger'}>
             {msg.text}
           </span>
         )}

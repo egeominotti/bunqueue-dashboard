@@ -166,6 +166,16 @@ export function AddJob() {
                 <textarea
                   value={dataText}
                   onChange={(e) => setDataText(e.target.value)}
+                  onBlur={() => {
+                    // Validate on blur so a typo surfaces while the field is
+                    // still in view, not only after Submit.
+                    try {
+                      JSON.parse(dataText);
+                      setJsonErr(null);
+                    } catch (e) {
+                      setJsonErr(`Invalid JSON: ${(e as Error).message}`);
+                    }
+                  }}
                   spellCheck={false}
                   rows={7}
                   className="w-full rounded-lg border border-line bg-surface-2 p-3 font-mono text-sm text-fg focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
@@ -199,7 +209,11 @@ export function AddJob() {
             </Field>
             <Field
               label="Run at"
-              hint={runAt.trim() ? 'Overrides Delay — derived from this time.' : undefined}
+              hint={
+                runAt.trim()
+                  ? 'Overrides Delay — derived from this time (local time).'
+                  : '(local time)'
+              }
             >
               <Input
                 type="datetime-local"
@@ -207,7 +221,7 @@ export function AddJob() {
                 onChange={(e) => setRunAt(e.target.value)}
               />
             </Field>
-            <Field label="Max attempts">
+            <Field label="Max attempts" hint="blank = server default">
               <Input
                 type="number"
                 min={1}
@@ -216,7 +230,7 @@ export function AddJob() {
                 placeholder="3"
               />
             </Field>
-            <Field label="Backoff (ms)">
+            <Field label="Backoff (ms)" hint="blank = server default">
               <Input
                 type="number"
                 min={0}
@@ -256,7 +270,7 @@ export function AddJob() {
 
         <div className="flex flex-wrap items-end gap-3 lg:col-span-2">
           <div className="w-28">
-            <Field label="Count">
+            <Field label="Count" hint="1–10000">
               <Input
                 type="number"
                 min={1}
@@ -269,7 +283,10 @@ export function AddJob() {
             {busy ? 'Adding…' : 'Add job'}
           </Button>
           {result && (
-            <span className={result.ok ? 'text-sm text-success' : 'text-sm text-danger'}>
+            <span
+              role="status"
+              className={result.ok ? 'text-sm text-success' : 'text-sm text-danger'}
+            >
               {result.msg}
             </span>
           )}

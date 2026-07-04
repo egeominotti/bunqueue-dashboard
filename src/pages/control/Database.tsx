@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { CopyButton } from '@/components/ui/CopyButton';
@@ -145,7 +146,13 @@ function ResultsTable({
                     numericCols[ci] && 'text-right'
                   )}
                   aria-sort={
-                    sort?.col === c ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined
+                    sort?.col === c
+                      ? sort.dir === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : onSort
+                        ? 'none'
+                        : undefined
                   }
                 >
                   {onSort ? (
@@ -164,8 +171,11 @@ function ResultsTable({
                       {meta?.type && (
                         <span className="text-faint/70">{meta.type.toLowerCase()}</span>
                       )}
-                      <span aria-hidden="true" className="text-accent">
-                        {sort?.col === c ? (sort.dir === 'asc' ? '▲' : '▼') : ''}
+                      <span
+                        aria-hidden="true"
+                        className={sort?.col === c ? 'text-accent' : 'text-faint/60'}
+                      >
+                        {sort?.col === c ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
                       </span>
                     </button>
                   ) : (
@@ -183,6 +193,17 @@ function ResultsTable({
               // biome-ignore lint/suspicious/noArrayIndexKey: rows have no stable id
               key={ri}
               onClick={onRowClick ? () => onRowClick(ri) : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onRowClick(ri);
+                      }
+                    }
+                  : undefined
+              }
+              tabIndex={onRowClick ? 0 : undefined}
               className={cn(
                 'border-b border-line font-mono text-xs last:border-0 hover:bg-surface-2/40',
                 onRowClick && 'cursor-pointer'
@@ -371,13 +392,14 @@ export function Database() {
         if (r.rows.length < EXPORT_BATCH || off >= r.total) break;
       }
       download(`${selected}.csv`, 'text/csv', toCsv(cols, all));
-      setMsg(
-        capped
-          ? `Exported the first ${formatNumber(all.length)} rows (export cap reached)`
-          : `Exported ${formatNumber(all.length)} rows`
-      );
+      const done = capped
+        ? `Exported the first ${formatNumber(all.length)} rows (export cap reached)`
+        : `Exported ${formatNumber(all.length)} rows`;
+      setMsg(done);
+      toast.success(`Export of ${selected} complete`, done);
     } catch (e) {
       setMsg(`Export failed: ${(e as Error).message}`);
+      toast.error(`Export of ${selected} failed`, (e as Error).message);
     } finally {
       setExportBusy(false);
     }
@@ -677,6 +699,7 @@ function FilterBar({
           Clear
         </Button>
       )}
+      <span className="text-[11px] text-faint">filters the whole table, server-side</span>
     </div>
   );
 }
@@ -700,11 +723,22 @@ function RowDetailDrawer({
 }) {
   // Full values for cells the grid truncated, lazy-fetched by rowid.
   const [full, setFull] = useState<Record<string, unknown>>({});
+  const panelRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Dialog focus contract: move focus into the drawer on open, hand it back to
+  // the invoking row (or whatever was focused) on close.
+  useEffect(() => {
+    const invoker = document.activeElement as HTMLElement | null;
+    panelRef.current?.focus();
+    return () => {
+      if (invoker?.isConnected) invoker.focus();
+    };
+  }, []);
 
   useEffect(() => {
     if (rowid == null) return;
@@ -733,7 +767,14 @@ function RowDetailDrawer({
         onClick={onClose}
         className="fixed inset-0 z-40 bg-black/50"
       />
-      <aside className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col border-l border-line bg-surface shadow-xl">
+      <aside
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${table} row ${rowid ?? 'detail'}`}
+        tabIndex={-1}
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col border-l border-line bg-surface shadow-xl focus-visible:outline-none"
+      >
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="font-mono text-sm text-fg">{table} · row detail</h2>
           <button

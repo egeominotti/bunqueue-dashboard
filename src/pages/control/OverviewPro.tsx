@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
 import { Card } from '@/components/ui/Card';
@@ -10,6 +11,7 @@ import { cn } from '@/lib/cn';
 import {
   errorRate,
   formatBytes,
+  formatCompact,
   formatNumber,
   formatPercent,
   formatRelativeTime,
@@ -49,21 +51,36 @@ const EMPTY = {
   failedTotal: 0,
 };
 
+// Backlog size above which the Waiting card turns amber — a small standing
+// queue is normal operation, not a warning.
+const WAITING_AMBER_THRESHOLD = 100;
+
 export function OverviewPro() {
   const baseUrl = useConnectionStore((s) => s.baseUrl);
-  const token = useConnectionStore((s) => s.token);
+  // Wall-clock time of the last poll that succeeded, so the degraded banner can
+  // say how stale the displayed data actually is.
+  const lastOkAt = useRef<number | null>(null);
 
   const { data, error, loading, refetch } = usePolledData(async () => {
     // One /dashboard + one /queues/summary — not an N-queue fan-out. Summary
     // carries every queue's waiting/active/completed/failed counts, so the
     // Queue Health cards need no per-queue queueDetail calls.
     const [overview, summary] = await Promise.all([bq.overview(), bq.queuesSummary()]);
-    const details: QueueHealth[] = summary
+    // Show the WORST queues, not the first six the server happens to list:
+    // failed desc, then waiting desc. (Summary carries no per-queue DLQ count,
+    // so dlq can't participate in the ranking without an N-queue fan-out.)
+    const details: QueueHealth[] = [...summary]
+      .sort(
+        (a, b) =>
+          (b.counts?.failed ?? 0) - (a.counts?.failed ?? 0) ||
+          (b.counts?.waiting ?? 0) - (a.counts?.waiting ?? 0)
+      )
       .slice(0, 6)
       .map((q) => ({ name: q.name, paused: q.paused, counts: q.counts }));
     // Failed jobs summed across queues — unlike stats.totalFailed (a session
     // counter that resets on every server restart), these are recorded jobs.
     const failedTotal = summary.reduce((a, q) => a + (q.counts?.failed ?? 0), 0);
+    lastOkAt.current = Date.now();
     return { overview, queuesTotal: summary.length, details, failedTotal };
   }, []);
 
@@ -115,6 +132,12 @@ export function OverviewPro() {
             </div>
             <div className="truncate font-mono text-xs text-muted">
               {host} · uptime {uptime} · {ram} RAM
+              {degraded && (
+                <>
+                  {' '}
+                  · last updated {lastOkAt.current ? formatRelativeTime(lastOkAt.current) : 'never'}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -128,59 +151,64 @@ export function OverviewPro() {
         </span>
       </div>
 
-      {/* Row 1 */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <StatCard label="Completed" value={formatNumber(stats.completed)} tone="green" />
-        <StatCard
-          label="Failed"
-          value={formatNumber(failedTotal)}
-          tone={failedTotal ? 'red' : 'default'}
-        />
-        <StatCard label="Waiting" value={formatNumber(stats.waiting)} tone="amber" />
-        <StatCard label="Active" value={formatNumber(stats.active)} tone="blue" />
+      {/* Primary health row — the "is something wrong" signals, full-size cards. */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard
           label="Error Rate"
           value={rate == null ? '—' : formatPercent(rate)}
           tone={rate == null ? 'default' : rate > 0.05 ? 'red' : 'green'}
+          hint="failed / processed"
+        />
+        <StatCard
+          label="Failed"
+          value={formatNumber(failedTotal)}
+          tone={failedTotal ? 'red' : 'default'}
+          hint="recorded across queues"
         />
         <StatCard
           label="DLQ"
           value={formatNumber(stats.dlq)}
           tone={stats.dlq ? 'red' : 'default'}
+          hint="dead-lettered jobs"
         />
       </div>
 
-      {/* Row 2 */}
+      {/* Secondary row — throughput & inventory, compact. Uptime/RAM live in the
+          banner above; the old API Keys card carried no operational signal. */}
       <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+        <StatCard label="Completed" value={formatNumber(stats.completed)} tone="green" compact />
+        <StatCard label="Active" value={formatNumber(stats.active)} tone="blue" compact />
+        <StatCard
+          label="Waiting"
+          value={formatNumber(stats.waiting)}
+          tone={stats.waiting > WAITING_AMBER_THRESHOLD ? 'amber' : 'default'}
+          compact
+        />
         <StatCard
           label="Push/sec"
           value={throughput.pushPerSec.toFixed(1)}
           tone="accent"
-          hint="jobs/sec"
+          hint={`${formatCompact(stats.totalPushed)} since restart`}
+          compact
         />
         <StatCard
           label="Pull/sec"
           value={throughput.pullPerSec.toFixed(1)}
           tone="accent"
-          hint="jobs/sec"
+          hint={`${formatCompact(stats.totalPulled)} since restart`}
+          compact
         />
         <StatCard
           label="Queues"
           value={formatNumber(queuesTotal)}
           hint={`${crons.total} cron active`}
+          compact
         />
-        <StatCard
-          label="Total Pushed"
-          value={formatNumber(stats.totalPushed)}
-          hint="since restart"
-        />
-        <StatCard label="API Keys" value={token ? 1 : 0} hint={token ? 'token set' : 'no auth'} />
-        <StatCard label="Uptime" value={uptime} hint={`${ram} RAM`} />
       </div>
 
-      {/* Queue Health */}
+      {/* Queue Health — ranked worst-first (see the sort in the fetcher). */}
       <div className="mt-8">
-        <SectionHeading title="Queue Health" to="/queues" />
+        <SectionHeading title="Queue Health — most loaded" to="/queues" />
         {details.length === 0 ? (
           <Card>
             <p className="py-4 text-center text-sm text-faint">No queues yet.</p>
@@ -228,13 +256,20 @@ export function OverviewPro() {
 }
 
 function RecentActivity() {
-  const { events } = useActivityStream();
+  const { events, connected } = useActivityStream();
   return (
     <div className="mt-8">
       <SectionHeading title="Recent Activity" to="/logs" />
       <Card padded={false}>
+        {!connected && events.length > 0 && (
+          <p className="border-b border-line px-5 py-2 text-xs text-warning">
+            Event stream disconnected — reconnecting…
+          </p>
+        )}
         {events.length === 0 ? (
-          <p className="py-8 text-center text-sm text-faint">Waiting for live activity…</p>
+          <p className="py-8 text-center text-sm text-faint">
+            {connected ? 'Waiting for live activity…' : 'Connecting to the event stream…'}
+          </p>
         ) : (
           <ul className="divide-y divide-line">
             {events.slice(0, 8).map((e) => (

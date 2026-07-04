@@ -6,7 +6,6 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Field, Input, Select } from '@/components/ui/form';
 import { IconEye } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { api } from '@/lib/api';
 
 const REFRESH_OPTIONS = [
   ['1000', '1 second'],
@@ -47,6 +46,7 @@ export function Settings() {
   const [tok, setTok] = useState(token);
   const [agentTok, setAgentTok] = useState(agentToken);
   const [showToken, setShowToken] = useState(false);
+  const [showAgentToken, setShowAgentToken] = useState(false);
   const [urlError, setUrlError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -64,12 +64,24 @@ export function Settings() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  // Tests the values currently in the form (not the saved store), so you can
+  // verify a new URL/token before committing it with Save.
   const test = async () => {
+    const base = url.trim().replace(/\/+$/, '');
+    if (!isValidBaseUrl(base || '/')) {
+      setResult({ ok: false, msg: "Must be an http(s) URL or a path starting with '/'." });
+      return;
+    }
     setTesting(true);
     setResult(null);
     const t0 = performance.now();
     try {
-      const health = (await api.health()) as { ok?: boolean; version?: string };
+      const res = await fetch(`${base}/health`, {
+        headers: tok.trim() ? { Authorization: `Bearer ${tok.trim()}` } : undefined,
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // /health's `ok` is a health flag, not a request-success flag (strict:false).
+      const health = (await res.json()) as { ok?: boolean; version?: string };
       const ms = Math.round(performance.now() - t0);
       setResult({
         ok: health.ok !== false,
@@ -130,12 +142,22 @@ export function Settings() {
               label="Agent token (optional)"
               hint="Only if the control agent runs with AGENT_TOKEN. Memory only — or set VITE_BUNQUEUE_AGENT_TOKEN."
             >
-              <Input
-                type={showToken ? 'text' : 'password'}
-                value={agentTok}
-                onChange={(e) => setAgentTok(e.target.value)}
-                placeholder="only if AGENT_TOKEN is set"
-              />
+              <div className="relative">
+                <Input
+                  type={showAgentToken ? 'text' : 'password'}
+                  value={agentTok}
+                  onChange={(e) => setAgentTok(e.target.value)}
+                  placeholder="only if AGENT_TOKEN is set"
+                  className="pr-10"
+                />
+                <IconButton
+                  aria-label={showAgentToken ? 'Hide agent token' : 'Show agent token'}
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2"
+                  onClick={() => setShowAgentToken((v) => !v)}
+                >
+                  <IconEye className="size-4" />
+                </IconButton>
+              </div>
             </Field>
             <div className="flex flex-wrap items-center gap-3">
               <Button variant="accent" onClick={save}>
@@ -151,6 +173,10 @@ export function Settings() {
                 </span>
               )}
             </div>
+            <p className="-mt-1 text-xs text-faint">
+              Test checks the values above as typed. Saving repoints every page at the new server
+              immediately.
+            </p>
           </div>
         </Card>
 

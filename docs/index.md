@@ -22,12 +22,12 @@ import { withBase } from 'vitepress'
 <p class="lp-sub">A free, open source web UI that <strong>fully drives</strong> a bunqueue server: queues, jobs, dead-letter queue, cron, webhooks, workers and live activity — plus start / stop / restart of the server process itself. It talks only to bunqueue's public HTTP API and a tiny loopback control agent.</p>
 
 <p class="lp-ctas">
-<a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/">Open the live demo</a>
+<a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">Open the live demo</a>
 <a class="lp-btn" href="./quickstart">Quick start</a>
 <a class="lp-btn" href="https://github.com/egeominotti/bunqueue-dashboard">GitHub</a>
 </p>
 
-<a class="lp-window" href="https://egeominotti.github.io/bunqueue-dashboard/" aria-label="Open the live demo of the bunqueue dashboard">
+<a class="lp-window" href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer" aria-label="Open the live demo of the bunqueue dashboard">
 <span class="lp-window-bar"><span class="lp-dot"></span><span class="lp-dot"></span><span class="lp-dot"></span><span class="lp-live">● live demo — click to drive it</span></span>
 
 ![The bunqueue dashboard overview: stat cards, queue health grid and a live activity feed](./screenshots/overview.png){.lp-window-shot}
@@ -160,7 +160,7 @@ An in-app assistant that drives the same API through tools — bring your own ke
 
 ## See it in action {.lp-title}
 
-<p class="lp-lead">A real control surface, not a read-only viewer — every screen in this tour is a live page you can drive in the <a href="https://egeominotti.github.io/bunqueue-dashboard/">demo</a>.</p>
+<p class="lp-lead">A real control surface, not a read-only viewer — every screen in this tour is a live page you can drive in the <a href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">demo</a>.</p>
 
 <video class="lp-video" :src="withBase('/tour.mp4')" autoplay muted loop playsinline preload="metadata" aria-label="A guided tour of the bunqueue dashboard: overview, queues, jobs, DLQ, flows, the SQLite inspector, and the AI Copilot"></video>
 
@@ -345,7 +345,7 @@ In memory only. Server tokens, agent tokens, S3 keys and webhook targets are del
 
 ### Can I try it without a bunqueue server?
 
-Yes — the <a href="https://egeominotti.github.io/bunqueue-dashboard/">live demo</a> runs the real app against fixture data in your browser. Every page works, no backend required.
+Yes — the <a href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">live demo</a> runs the real app against fixture data in your browser. Every page works, no backend required.
 
 </article>
 
@@ -382,7 +382,7 @@ No telemetry. The only optional egress is the AI Copilot: if you enable it, requ
 ## Drive your queue server from the browser
 
 <p class="lp-ctas">
-<a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/">Open the live demo</a>
+<a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">Open the live demo</a>
 <a class="lp-btn" href="./quickstart">Quick start</a>
 </p>
 

@@ -51,6 +51,13 @@ export function EnvVarsEditor({
 
   const used = new Set(rows.map((r) => r.key.trim()).filter(Boolean));
   const dupes = rows.map((r) => r.key.trim()).filter((k, i, a) => k && a.indexOf(k) !== i);
+  // Soft heuristic only — a space/'='/lowercase key is almost always a typo,
+  // but nothing here blocks saving (the server accepts any string).
+  const suspicious = [
+    ...new Set(
+      rows.map((r) => r.key.trim()).filter((k) => k && (/[\s=]/.test(k) || /[a-z]/.test(k)))
+    ),
+  ];
 
   return (
     <div className="flex flex-col gap-2">
@@ -102,6 +109,13 @@ export function EnvVarsEditor({
       {dupes.length > 0 && (
         <p className="text-xs text-warning">
           Duplicate key{dupes.length > 1 ? 's' : ''} — the last value wins: {dupes.join(', ')}
+        </p>
+      )}
+
+      {suspicious.length > 0 && (
+        <p className="text-xs text-faint">
+          Unusual key{suspicious.length > 1 ? 's' : ''} — env names are usually UPPER_SNAKE_CASE
+          with no spaces or "=": {suspicious.join(', ')}. Saved as-is.
         </p>
       )}
 

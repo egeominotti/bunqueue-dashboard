@@ -34,6 +34,12 @@ export function ServerControl() {
   );
   const vitals = serverUp ? ((health ?? null) as HealthVitals | null) : null;
 
+  // Spell out the blast radius in stop/restart confirms: live connection counts
+  // when /health has them, so the operator knows what a kill actually severs.
+  const blastRadius = vitals?.connections
+    ? ` This drops ${vitals.connections.tcp ?? 0} TCP / ${vitals.connections.ws ?? 0} WS connections; in-flight jobs are interrupted.`
+    : ' In-flight jobs are interrupted.';
+
   const run = async (label: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
     setBusy(label);
@@ -91,7 +97,10 @@ export function ServerControl() {
       />
 
       {actionError && (
-        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-danger">
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-danger"
+        >
           {actionError}
         </div>
       )}
@@ -111,9 +120,15 @@ export function ServerControl() {
         transitioning={transitioning}
         busy={busy}
         onStart={() => run('starting', () => bq.control.start())}
-        onStop={() => run('stopping', () => bq.control.stop(), 'Stop the bunqueue server?')}
+        onStop={() =>
+          run('stopping', () => bq.control.stop(), `Stop the bunqueue server?${blastRadius}`)
+        }
         onRestart={() =>
-          run('restarting', () => bq.control.restart(), 'Restart the bunqueue server?')
+          run(
+            'restarting',
+            () => bq.control.restart(),
+            `Restart the bunqueue server?${blastRadius}`
+          )
         }
       />
 
@@ -171,14 +186,15 @@ function ConfigCard({
         .sort()
         .map((k) => [k, o[k]])
     );
-  const pending =
-    running &&
-    rc != null &&
-    (rc.command !== value.command ||
-      rc.httpPort !== value.httpPort ||
-      rc.tcpPort !== value.tcpPort ||
-      rc.dataPath !== value.dataPath ||
-      envKey(rc.extraEnv) !== envKey(value.extraEnv));
+  const changed: string[] = [];
+  if (rc != null) {
+    if (rc.command !== value.command) changed.push('command');
+    if (rc.httpPort !== value.httpPort) changed.push('HTTP port');
+    if (rc.tcpPort !== value.tcpPort) changed.push('TCP port');
+    if (rc.dataPath !== value.dataPath) changed.push('data path');
+    if (envKey(rc.extraEnv) !== envKey(value.extraEnv)) changed.push('environment variables');
+  }
+  const pending = running && changed.length > 0;
 
   const busy = transitioning || restarting;
 
@@ -218,7 +234,10 @@ function ConfigCard({
       setErr(invalid);
       return;
     }
-    if (!window.confirm('Save configuration and restart the server to apply it?')) return;
+    // Name exactly which fields differ from the live process, so the operator
+    // knows what this restart applies (not just "something changed").
+    const what = changed.length > 0 ? ` Changed: ${changed.join(', ')}.` : '';
+    if (!window.confirm(`Save configuration and restart the server to apply it?${what}`)) return;
     setErr(null);
     setRestarting(true);
     try {
@@ -241,7 +260,14 @@ function ConfigCard({
           ? 'Ports and data path apply on the next restart — edit freely, then restart.'
           : 'Edit and save; the config is used the next time the server starts.'}
       </p>
-      <div className="flex flex-col gap-3">
+      {/* A real <form> so Enter in any field saves (submit → save()). */}
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
         <Field
           label="Command"
           hint="The exact command the agent runs to launch bunqueue. It receives HTTP_PORT, TCP_PORT and BUNQUEUE_DATA_PATH in its environment. The default needs a global 'bunqueue' binary — or point it at a local entry, e.g. bun run /path/to/bunqueue/src/main.ts."
@@ -296,7 +322,7 @@ function ConfigCard({
           />
         </Field>
         <div className="flex flex-wrap items-center gap-3">
-          <Button variant="accent" size="sm" disabled={busy} onClick={save}>
+          <Button type="submit" variant="accent" size="sm" disabled={busy}>
             Save config
           </Button>
           {running && (
@@ -307,10 +333,18 @@ function ConfigCard({
           {pending && !saved && (
             <span className="text-xs text-warning">Restart to apply changes</span>
           )}
-          {saved && <span className="text-xs text-success">Saved</span>}
-          {err && <span className="text-xs text-danger">{err}</span>}
+          {saved && (
+            <span role="status" className="text-xs text-success">
+              Saved
+            </span>
+          )}
+          {err && (
+            <span role="status" className="text-xs text-danger">
+              {err}
+            </span>
+          )}
         </div>
-      </div>
+      </form>
     </Card>
   );
 }

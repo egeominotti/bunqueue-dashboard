@@ -1,4 +1,5 @@
 import { type ChangeEvent, useEffect, useState } from 'react';
+import { getBaseUrl } from '@/components/dashboard/stores/connectionStore';
 import { AreaChart } from '@/components/ui/AreaChart';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -116,7 +117,14 @@ export function Benchmark() {
   );
   const cleanup = async () => {
     const q = draft.queue.trim();
-    if (cleaning || !q || !window.confirm(`Remove benchmark jobs from "${q}"?`)) return;
+    if (cleaning || !q) return;
+    // Echo the live counts so the confirm says what is actually being deleted
+    // (only when the polled counts are for this exact queue).
+    const countsNote =
+      c && pollQueue === q
+        ? ` Currently ${formatNumber(c.waiting ?? 0)} waiting / ${formatNumber(c.completed ?? 0)} completed.`
+        : '';
+    if (!window.confirm(`Remove benchmark jobs from "${q}"?${countsNote}`)) return;
     setCleaning(true);
     setCleanResult(null);
     try {
@@ -212,7 +220,18 @@ export function Benchmark() {
               <IconPause className="size-3.5" /> Stop
             </Button>
           ) : (
-            <Button variant="success" size="sm" onClick={() => bench.run(toConfig(draft))}>
+            <Button
+              variant="success"
+              size="sm"
+              onClick={() => {
+                // One confirm, stating the real target — this enqueues genuine
+                // jobs, not a simulation.
+                const cfg = toConfig(draft);
+                const q = cfg.queue.trim() || DEFAULT_CONFIG.queue;
+                if (!window.confirm(`Enqueue real jobs into "${q}" on ${getBaseUrl()}?`)) return;
+                bench.run(cfg);
+              }}
+            >
               <IconPlay className="size-3.5" /> Run benchmark
             </Button>
           )

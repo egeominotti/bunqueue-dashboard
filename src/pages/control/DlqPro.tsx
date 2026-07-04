@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -20,6 +20,7 @@ const FANOUT_LIMIT = 6;
 const PAGE_SIZE = 25;
 
 export function DlqPro() {
+  const [params, setParams] = useSearchParams();
   const [queue, setQueue] = useState('');
   const [reason, setReason] = useState('all');
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
@@ -27,6 +28,7 @@ export function DlqPro() {
   const [page, setPage] = useState(0);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [expandedErrors, setExpandedErrors] = useState<Set<string>>(new Set());
 
   // The queue list (per-queue DLQ counts + grand total + dropdown) changes
   // slowly, so poll it on its own slow cadence instead of on the fast DLQ poll.
@@ -150,6 +152,9 @@ export function DlqPro() {
     setQueue(name);
     setPage(0);
     setReason('all');
+    // Keep the selection shareable/deep-linkable (replace: selection churn
+    // must not pollute history).
+    setParams(name ? { queue: name } : {}, { replace: true });
   };
 
   const byReason = data?.stats?.byReason ?? {};
@@ -163,17 +168,31 @@ export function DlqPro() {
     [queues]
   );
 
-  // First load: jump straight to the biggest non-empty DLQ instead of parking
-  // the user on a "Select a queue" prompt (DlqControl already does this).
+  // First load: honor a ?queue= deep link (e.g. QueueDetailPro's DLQ jump-off),
+  // else jump straight to the biggest non-empty DLQ instead of parking the user
+  // on a "Select a queue" prompt (DlqControl already does this).
   // Once per mount, so a deliberate reset back to "Select a queue…" sticks.
   const autoPicked = useRef(false);
+  const urlQueue = params.get('queue');
   useEffect(() => {
-    if (autoPicked.current || queue || dlqQueues.length === 0) return;
+    if (autoPicked.current || queue) return;
+    if (urlQueue) {
+      if (queues.some((q) => q.name === urlQueue)) {
+        autoPicked.current = true;
+        setQueue(urlQueue);
+        setPage(0);
+        setReason('all');
+        return;
+      }
+      // Unknown/stale ?queue=: wait for the queue list before falling back.
+      if (queues.length === 0) return;
+    }
+    if (dlqQueues.length === 0) return;
     autoPicked.current = true;
     setQueue(dlqQueues[0].name);
     setPage(0);
     setReason('all');
-  }, [queue, dlqQueues]);
+  }, [queue, queues, dlqQueues, urlQueue]);
 
   // Reason/search filter the currently-loaded page (the server paginates but has
   // no reason/id filter). Sort within the page too.
@@ -358,7 +377,7 @@ export function DlqPro() {
         </IconButton>
       </div>
       {msg && (
-        <div className={cn('mb-3 text-sm', msg.ok ? 'text-success' : 'text-danger')}>
+        <div role="status" className={cn('mb-3 text-sm', msg.ok ? 'text-success' : 'text-danger')}>
           {msg.text}
         </div>
       )}
@@ -386,11 +405,19 @@ export function DlqPro() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-                <th className="px-5 py-3 font-medium">Job ID</th>
-                <th className="px-5 py-3 font-medium">Reason</th>
-                <th className="px-5 py-3 font-medium">Error</th>
-                <th className="px-5 py-3 text-right font-medium">Entered</th>
-                <th className="w-16 px-5 py-3" />
+                <th scope="col" className="px-5 py-3 font-medium">
+                  Job ID
+                </th>
+                <th scope="col" className="px-5 py-3 font-medium">
+                  Reason
+                </th>
+                <th scope="col" className="px-5 py-3 font-medium">
+                  Error
+                </th>
+                <th scope="col" className="px-5 py-3 text-right font-medium">
+                  Entered
+                </th>
+                <th scope="col" className="w-16 px-5 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -412,7 +439,32 @@ export function DlqPro() {
                       {e.reason}
                     </span>
                   </td>
-                  <td className="max-w-md px-5 py-3 text-xs text-danger/80">{e.error || '—'}</td>
+                  <td className="max-w-md px-5 py-3 text-xs text-danger/80">
+                    {e.error ? (
+                      // Long errors collapse to two lines; click (or hover for
+                      // the title tooltip) reveals the full text in place.
+                      <button
+                        type="button"
+                        title={e.error}
+                        onClick={() =>
+                          setExpandedErrors((s) => {
+                            const n = new Set(s);
+                            const k = `${e.job.id}-${e.enteredAt}`;
+                            n.has(k) ? n.delete(k) : n.add(k);
+                            return n;
+                          })
+                        }
+                        className={cn(
+                          'block w-full break-words text-left',
+                          !expandedErrors.has(`${e.job.id}-${e.enteredAt}`) && 'line-clamp-2'
+                        )}
+                      >
+                        {e.error}
+                      </button>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
                   <td className="px-5 py-3 text-right text-faint">
                     {formatRelativeTime(e.enteredAt)}
                   </td>

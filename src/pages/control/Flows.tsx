@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
-import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { bq } from '@/lib/bq';
+import { BqError, bq } from '@/lib/bq';
 import type { JobFull } from '@/lib/bqTypes';
 import { cn } from '@/lib/cn';
 import { isDemo } from '@/lib/demo/isDemo';
@@ -77,6 +77,8 @@ function pushRecentFlow(list: RecentFlow[], entry: RecentFlow): RecentFlow[] {
 interface Graph {
   jobs: Map<string, JobFull>;
   edges: FlowEdge[];
+  /** True when the walk stopped at MAX_NODES/MAX_DEPTH before exhausting the flow. */
+  truncated: boolean;
 }
 
 /** Climb parentId to the flow's true root so pasting any node shows the whole flow. */
@@ -92,8 +94,10 @@ async function findRoot(id: string): Promise<string> {
         cur = parent;
         continue;
       }
-    } catch {
-      /* unreachable / missing: stop climbing */
+    } catch (e) {
+      // The seed id itself failing must surface (404 → "job not found");
+      // a failure mid-climb just stops the climb at the last reachable node.
+      if (hops === 0) throw e;
     }
     break;
   }
@@ -106,6 +110,7 @@ async function walkFlow(rootId: string): Promise<Graph> {
   const edges: FlowEdge[] = [];
   const seenEdge = new Set<string>();
   const queue: { id: string; depth: number }[] = [{ id: rootId, depth: 0 }];
+  let truncated = false;
 
   while (queue.length && jobs.size < MAX_NODES) {
     const { id, depth } = queue.shift() as { id: string; depth: number };
@@ -118,7 +123,12 @@ async function walkFlow(rootId: string): Promise<Graph> {
       /* keep a placeholder node so a dangling reference still renders */
     }
     jobs.set(id, job ?? ({ id, state: 'unknown' } as JobFull));
-    if (!job || depth >= MAX_DEPTH) continue;
+    if (!job) continue;
+    if (depth >= MAX_DEPTH) {
+      // This node has neighbours we won't walk — the graph is incomplete.
+      if ((job.childrenIds?.length ?? 0) + (job.dependsOn?.length ?? 0) > 0) truncated = true;
+      continue;
+    }
 
     const addEdge = (from: string, to: string, kind: FlowEdge['kind'], next: string) => {
       const k = `${from}->${to}:${kind}`;
@@ -131,7 +141,9 @@ async function walkFlow(rootId: string): Promise<Graph> {
     for (const c of job.childrenIds ?? []) addEdge(id, c, 'child', c);
     for (const d of job.dependsOn ?? []) addEdge(d, id, 'depends', d);
   }
-  return { jobs, edges };
+  // Nodes still queued but never fetched = the MAX_NODES cap cut the walk short.
+  if (queue.some((e) => !jobs.has(e.id))) truncated = true;
+  return { jobs, edges, truncated };
 }
 
 function edgePath(x1: number, y1: number, x2: number, y2: number): string {
@@ -146,7 +158,7 @@ export function Flows() {
   const [graph, setGraph] = useState<Graph | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Error | null>(null);
   const [recent, setRecent] = useState<RecentFlow[]>(readRecentFlows);
   const reqId = useRef(0);
 
@@ -171,7 +183,7 @@ export function Flows() {
       }
     } catch (e) {
       if (mine !== reqId.current) return;
-      setError((e as Error).message || 'Failed to load flow');
+      setError(e instanceof Error ? e : new Error('Failed to load flow'));
       setGraph(null);
     } finally {
       if (mine === reqId.current) setLoading(false);
@@ -234,7 +246,15 @@ export function Flows() {
         </p>
       </Card>
 
-      {error && <OfflineBanner onRetry={() => load(input || rootParam)} />}
+      {/* A BqError means the server answered (e.g. 404 job not found) — show the
+          real message; the amber "not connected" banner is only honest for
+          network-level failures where no response came back at all. */}
+      {error &&
+        (error instanceof BqError ? (
+          <ErrorState error={error} onRetry={() => load(input || rootParam)} />
+        ) : (
+          <OfflineBanner onRetry={() => load(input || rootParam)} />
+        ))}
       {loading && !graph && <LoadingState label="Loading flow…" />}
 
       {!loading && !graph && !error && (
@@ -347,6 +367,11 @@ export function Flows() {
               <p className="text-sm text-muted">Click a node to inspect it.</p>
             )}
             <div className="mt-4 border-t border-line pt-3 text-xs text-faint">
+              {graph.truncated && (
+                <div className="mb-1 text-warning">
+                  Graph truncated at {MAX_NODES} nodes / depth {MAX_DEPTH} — not the whole flow.
+                </div>
+              )}
               <div className="mb-1">
                 {graph.jobs.size} node{graph.jobs.size === 1 ? '' : 's'} · {graph.edges.length} edge
                 {graph.edges.length === 1 ? '' : 's'}

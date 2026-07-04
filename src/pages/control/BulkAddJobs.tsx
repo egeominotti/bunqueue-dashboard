@@ -147,6 +147,12 @@ export function BulkAddJobs() {
   const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Loading a file replaces the textarea wholesale — don't silently blow away
+    // something the operator already pasted or edited.
+    if (text.trim() !== '' && !window.confirm(`Replace the current input with "${file.name}"?`)) {
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => setText(String(reader.result ?? ''));
     reader.onerror = () => setResult({ ok: false, msg: 'Could not read file' });
@@ -173,11 +179,15 @@ export function BulkAddJobs() {
       setResult({ ok: false, msg: `Too many jobs (${items.length}). Limit is ${MAX_JOBS}.` });
       return;
     }
+    // maxAttempts/backoff/timeout are durations/counts — negative values are
+    // never meaningful, so clamp to 0. Priority is left alone: lower/negative
+    // priority is a valid server concept.
+    const nonNeg = (n: number | undefined) => (n != null && n < 0 ? 0 : n);
     const def: Defaults = {
       priority: numDefault(priority),
-      maxAttempts: numDefault(maxAttempts),
-      backoff: numDefault(backoff),
-      timeout: numDefault(timeout),
+      maxAttempts: nonNeg(numDefault(maxAttempts)),
+      backoff: nonNeg(numDefault(backoff)),
+      timeout: nonNeg(numDefault(timeout)),
     };
     const bodies = items.map((el) => coerceBody(el, def, mode));
     setBusy(true);
@@ -287,6 +297,7 @@ export function BulkAddJobs() {
               <Field label="Max attempts">
                 <Input
                   type="number"
+                  min={0}
                   value={maxAttempts}
                   onChange={(e) => setMaxAttempts(e.target.value)}
                   placeholder="3"
@@ -295,6 +306,7 @@ export function BulkAddJobs() {
               <Field label="Backoff (ms)">
                 <Input
                   type="number"
+                  min={0}
                   value={backoff}
                   onChange={(e) => setBackoff(e.target.value)}
                   placeholder="1000"
@@ -303,6 +315,7 @@ export function BulkAddJobs() {
               <Field label="Timeout (ms)">
                 <Input
                   type="number"
+                  min={0}
                   value={timeout}
                   onChange={(e) => setTimeout(e.target.value)}
                   placeholder="—"
@@ -319,7 +332,10 @@ export function BulkAddJobs() {
               </Button>
             </div>
             {result && (
-              <span className={result.ok ? 'text-sm text-success' : 'text-sm text-danger'}>
+              <span
+                role="status"
+                className={result.ok ? 'text-sm text-success' : 'text-sm text-danger'}
+              >
                 {result.msg}
               </span>
             )}

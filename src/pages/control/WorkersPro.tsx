@@ -12,6 +12,14 @@ import { usePolledData } from '@/lib/usePolledData';
 
 const MAX_ROWS = 100;
 
+const STALE_EXPLAINER = 'No heartbeat recently — derived from lastSeen';
+
+type SortKey = 'failed' | 'lastSeen';
+interface Sort {
+  key: SortKey;
+  dir: 'asc' | 'desc';
+}
+
 export function WorkersPro() {
   // /workers wraps its payload: { ok, data: { workers } } — unwrap here so the
   // page renders a plain list.
@@ -21,11 +29,24 @@ export function WorkersPro() {
   }, []);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // null = server order (registration order); clicking a sortable header sorts.
+  const [sort, setSort] = useState<Sort | null>(null);
 
   if (loading && !data && !error) return <LoadingState label="Loading workers…" />;
 
   const workers = data ?? [];
-  const rows = workers.slice(0, MAX_ROWS);
+  const sorted = sort
+    ? [...workers].sort((a, b) => {
+        const va = sort.key === 'failed' ? (a.failedJobs ?? 0) : (a.lastSeen ?? 0);
+        const vb = sort.key === 'failed' ? (b.failedJobs ?? 0) : (b.lastSeen ?? 0);
+        return sort.dir === 'asc' ? va - vb : vb - va;
+      })
+    : workers;
+  const rows = sorted.slice(0, MAX_ROWS);
+  const toggleSort = (key: SortKey) =>
+    setSort((s) =>
+      s?.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }
+    );
   const activeWorkers = workers.filter((w) => w.status === 'active').length;
   const staleWorkers = workers.length - activeWorkers;
   const activeJobs = workers.reduce((sum, w) => sum + (w.activeJobs ?? 0), 0);
@@ -62,12 +83,14 @@ export function WorkersPro() {
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Total" value={formatNumber(workers.length)} compact />
         <StatCard label="Active" value={formatNumber(activeWorkers)} tone="green" compact />
-        <StatCard
-          label="Stale"
-          value={formatNumber(staleWorkers)}
-          tone={staleWorkers ? 'amber' : 'default'}
-          compact
-        />
+        <div title={STALE_EXPLAINER}>
+          <StatCard
+            label="Stale"
+            value={formatNumber(staleWorkers)}
+            tone={staleWorkers ? 'amber' : 'default'}
+            compact
+          />
+        </div>
         <StatCard label="Active Jobs" value={formatNumber(activeJobs)} tone="blue" compact />
       </div>
 
@@ -93,8 +116,20 @@ export function WorkersPro() {
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 text-right font-medium">Active</th>
                 <th className="px-5 py-3 text-right font-medium">Processed</th>
-                <th className="px-5 py-3 text-right font-medium">Failed</th>
-                <th className="px-5 py-3 text-right font-medium">Last Seen</th>
+                <th className="px-5 py-3 text-right font-medium">
+                  <SortButton
+                    label="Failed"
+                    active={sort?.key === 'failed' ? sort.dir : null}
+                    onClick={() => toggleSort('failed')}
+                  />
+                </th>
+                <th className="px-5 py-3 text-right font-medium">
+                  <SortButton
+                    label="Last Seen"
+                    active={sort?.key === 'lastSeen' ? sort.dir : null}
+                    onClick={() => toggleSort('lastSeen')}
+                  />
+                </th>
                 <th className="w-16 px-5 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
@@ -110,6 +145,7 @@ export function WorkersPro() {
                   </td>
                   <td className="px-5 py-3">
                     <span
+                      title={w.status === 'active' ? undefined : STALE_EXPLAINER}
                       className={cn(
                         'rounded-full px-2 py-0.5 text-[11px] font-medium',
                         w.status === 'active'
@@ -156,5 +192,31 @@ export function WorkersPro() {
         </p>
       )}
     </div>
+  );
+}
+
+/** Sortable column header: click toggles desc → asc; inherits the th typography. */
+function SortButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: 'asc' | 'desc' | null;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`Sort by ${label}`}
+      className={cn(
+        'inline-flex items-center gap-1 uppercase tracking-wider transition-colors hover:text-fg',
+        active ? 'text-fg' : 'text-faint'
+      )}
+    >
+      {label}
+      <span aria-hidden="true">{active === 'desc' ? '↓' : active === 'asc' ? '↑' : ''}</span>
+    </button>
   );
 }

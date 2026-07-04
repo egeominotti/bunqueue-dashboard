@@ -14,6 +14,9 @@ import { depthTrend, useThroughputSeries } from '@/lib/useThroughputSeries';
 const X_LABELS = ['-60s', '-45s', '-30s', '-15s', 'now'];
 const PAGE_SIZE = 15;
 const OPS = ['push', 'pull', 'ack'] as const;
+// p99 above this (ms) is highlighted amber — a single-digit p99 is healthy, not
+// a warning, so the column stays neutral below it.
+const P99_WARN_MS = 100;
 
 // Safe zeroed overview so the page renders its full layout when the server is
 // unreachable (down, or embedded with no HTTP) instead of a blocking error.
@@ -205,10 +208,8 @@ export function MetricsPro() {
               />
             </div>
           )}
-          <div className="mt-2 flex justify-between font-mono text-[11px] text-faint">
-            <span>{formatCompact(stats.completed)} completed</span>
-            <span>{formatNumber(failedTotal)} failed</span>
-          </div>
+          {/* No completed/failed footer here — the Total Completed / Total Failed
+              hero cards above already show those exact counts. */}
         </Card>
 
         <Card>
@@ -267,7 +268,14 @@ export function MetricsPro() {
                     <td className="px-5 py-3 text-right tnum text-muted">{fmtMs(avg)}</td>
                     <td className="px-5 py-3 text-right tnum text-muted">{fmtMs(p?.p50)}</td>
                     <td className="px-5 py-3 text-right tnum text-muted">{fmtMs(p?.p95)}</td>
-                    <td className="px-5 py-3 text-right tnum text-warning">{fmtMs(p?.p99)}</td>
+                    <td
+                      className={cn(
+                        'px-5 py-3 text-right tnum',
+                        (p?.p99 ?? 0) > P99_WARN_MS ? 'text-warning' : 'text-muted'
+                      )}
+                    >
+                      {fmtMs(p?.p99)}
+                    </td>
                   </tr>
                 );
               })}

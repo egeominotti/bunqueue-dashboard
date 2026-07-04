@@ -15,6 +15,45 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.25] - 2026-07-04
+
+### Fixed
+- **"Open the live demo" did nothing on the docs site.** The demo app lives on
+  the same origin as the docs (different path prefix), so VitePress's SPA
+  router intercepted the click and silently no-op'd. All demo links now open
+  in a new tab (`target="_blank" rel="noreferrer"`), which the router leaves
+  alone — and is the right behavior from docs to app anyway.
+
+### Changed
+- **UI/UX pass across every section** (from a four-auditor review of all 24
+  pages; ~49 fixes). Highlights:
+  - **Overview**: primary health row (Error Rate / Failed / DLQ) separated
+    from secondary throughput cards; Queue Health sorts worst-first; the
+    activity feed distinguishes connecting / idle / disconnected; the stale
+    banner shows "last updated Xs ago".
+  - **Queues**: sortable columns; queue→DLQ links keep the queue context
+    (`/dlq?queue=`); Jobs and DLQ selections sync to the URL (shareable,
+    back-restorable); "queue not found" links back; config cards show a
+    Retry instead of vanishing on a failed fetch.
+  - **Logs**: Follow/Pause with "N new" resume counter, failure reasons shown
+    on failed events, job IDs linked + copyable, absolute time on hover.
+  - **Alerts**: per-metric threshold units (%, ms, jobs), channel routing
+    honestly marked "in-app only", queue disabled for global-only p99,
+    guidance when notifications are blocked.
+  - **Control**: stop/restart confirms state the blast radius (live TCP/WS
+    counts); DLQ purge requires typing the queue name; Benchmark confirms the
+    target queue + server before enqueuing real load; Job Inspector shows the
+    error first on failed jobs, de-duplicates the Data card and puts actions
+    first on mobile; Enter submits the server config and inline job actions;
+    webhook URLs validated; optimistic webhook toggle.
+  - **Management/shell**: honest S3 wording ("Check server storage", "Local
+    draft"); Settings tests the values as typed and each token has its own
+    show/hide; Database drawer is a real dialog with focus management and
+    exports also toast; Copilot declares its data egress, closes on Escape
+    and announces streamed replies; command palette reachable on mobile.
+  - Charts gained y-scale labels and screen-reader summaries; inline action
+    results announce via `role="status"`; table headers carry `scope="col"`.
+
 ## [0.0.24] - 2026-07-04
 
 ### Fixed
@@ -546,7 +585,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.24...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.25...HEAD
+[0.0.25]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.24...v0.0.25
 [0.0.24]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.23...v0.0.24
 [0.0.23]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.22...v0.0.23
 [0.0.22]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.21...v0.0.22

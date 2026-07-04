@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
@@ -31,13 +32,35 @@ export function Webhooks() {
     }
   };
 
+  // Optimistic enable/disable: flip the switch immediately, then let the server
+  // confirm. On failure the override is dropped (switch rolls back) and the
+  // error surfaces as a toast.
+  const [optimistic, setOptimistic] = useState<Record<string, boolean>>({});
+  const toggleEnabled = async (id: string, next: boolean) => {
+    setOptimistic((m) => ({ ...m, [id]: next }));
+    try {
+      await bq.setWebhookEnabled(id, next);
+      await refetch();
+    } catch (e) {
+      toast.error('Webhook toggle failed', (e as Error).message);
+    } finally {
+      setOptimistic((m) => {
+        const { [id]: _dropped, ...rest } = m;
+        return rest;
+      });
+    }
+  };
+
   return (
     <div>
       <PageHeader title="Webhooks" description="HTTP callbacks fired on job events." live />
 
       {error && <OfflineBanner onRetry={refetch} />}
       {actErr && (
-        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-danger">
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-danger"
+        >
           {actErr}
         </div>
       )}
@@ -98,9 +121,9 @@ export function Webhooks() {
                     </td>
                     <td className="px-5 py-3">
                       <Toggle
-                        checked={w.enabled}
-                        label={`${w.enabled ? 'Disable' : 'Enable'} webhook`}
-                        onChange={(v) => act(() => bq.setWebhookEnabled(w.id, v))}
+                        checked={optimistic[w.id] ?? w.enabled}
+                        label={`${(optimistic[w.id] ?? w.enabled) ? 'Disable' : 'Enable'} webhook`}
+                        onChange={(v) => toggleEnabled(w.id, v)}
                       />
                     </td>
                     <td className="px-5 py-3 text-right">
@@ -146,8 +169,22 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
   const submit = async () => {
     if (busy) return; // a double-click would register the webhook twice
     setErr(null);
-    if (!url.trim() || events.length === 0) {
+    const u = url.trim();
+    if (!u || events.length === 0) {
       setErr('URL and at least one event are required');
+      return;
+    }
+    // The server calls this URL blind — catch a pasted hostname/typo here
+    // instead of shipping a webhook that can never fire.
+    const validUrl = (() => {
+      try {
+        return /^https?:$/.test(new URL(u).protocol);
+      } catch {
+        return false;
+      }
+    })();
+    if (!validUrl) {
+      setErr('URL must be a valid http:// or https:// address');
       return;
     }
     setBusy(true);

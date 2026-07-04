@@ -73,13 +73,18 @@ export function StallForm({
     <Card>
       <CardHeader title="Stall detection" />
       <div className="grid grid-cols-2 gap-3">
+        {/* Single accessible label: the Toggle already carries "enabled"
+            (aria-label); the visual text is hidden from AT so screen readers
+            don't announce it twice. */}
         <div className="col-span-2 flex items-center gap-2">
           <Toggle
             checked={c.enabled}
             onChange={(v) => setC({ ...c, enabled: v })}
             label="enabled"
           />
-          <span className="text-sm text-muted">enabled</span>
+          <span className="text-sm text-muted" aria-hidden="true">
+            enabled
+          </span>
         </div>
         <Field label="Stall interval (ms)">
           <Input
@@ -163,7 +168,9 @@ export function DlqConfigForm({
             onChange={(v) => setC({ ...c, autoRetry: v })}
             label="auto-retry"
           />
-          <span className="text-sm text-muted">auto-retry</span>
+          <span className="text-sm text-muted" aria-hidden="true">
+            auto-retry
+          </span>
         </div>
         <Field label="Retry interval (ms)">
           <Input

@@ -4,8 +4,10 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import type { JobFull } from '@/lib/bqTypes';
 
 /**
- * Editable JSON view of a job's payload. Parses locally (inline error on bad
- * JSON) and hands the parsed value to the parent, which performs the actual
+ * The inspector's single Data surface: an editable JSON view of the job's
+ * payload (the textarea doubles as the read view — no separate read-only card).
+ * Parses locally (inline error on bad JSON) and hands the parsed value to the
+ * parent, which performs the actual
  * `PUT /jobs/:id/data` (bq.updateJobData) through its shared act() flow so
  * success/failure surfaces in the inspector's single status line and the job is
  * reloaded. The textarea re-seeds whenever the loaded job's data changes.
@@ -49,7 +51,7 @@ export function JobDataEditor({
   return (
     <Card>
       <CardHeader
-        title="Edit data"
+        title="Data"
         action={
           <Button size="sm" disabled={busy} onClick={save}>
             Save data

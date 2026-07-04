@@ -50,9 +50,12 @@ function retryJobByState(j: JobFull): Promise<unknown> {
 }
 
 export function JobsPro() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [queue, setQueue] = useState(params.get('queue') ?? '');
-  const [status, setStatus] = useState<StatusFilter>('all');
+  const [status, setStatus] = useState<StatusFilter>(() => {
+    const s = params.get('status') as StatusFilter | null;
+    return s && STATUS.includes(s) ? s : 'all';
+  });
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -109,6 +112,16 @@ export function JobsPro() {
 
   const resetPage = () => setPage(0);
 
+  // Keep queue+status in the URL (replace, not push) so a filtered view is
+  // shareable and survives back-navigation. Page is deliberately left out —
+  // offsets go stale as jobs drain.
+  const syncUrl = (q: string, s: StatusFilter) => {
+    const next: Record<string, string> = {};
+    if (q) next.queue = q;
+    if (s !== 'all') next.status = s;
+    setParams(next, { replace: true });
+  };
+
   // A different page/queue/status shows different jobs — a selection made on
   // the old view must not silently carry over to rows it never referred to.
   // biome-ignore lint/correctness/useExhaustiveDependencies: clear on view change
@@ -140,8 +153,10 @@ export function JobsPro() {
     try {
       await fn();
       setActionMsg({ ok: true, text: `${label} ✓` });
+      toast.success(`${label} ✓`, job.id);
     } catch (e) {
       setActionMsg({ ok: false, text: `${label} failed: ${(e as Error).message}` });
+      toast.error(`${label} failed`, (e as Error).message);
     } finally {
       setBusyIds((s) => {
         const n = new Set(s);
@@ -167,10 +182,10 @@ export function JobsPro() {
     const results = await Promise.allSettled(targets.map(fn));
     const okCount = results.filter((r) => r.status === 'fulfilled').length;
     const failCount = results.length - okCount;
-    setActionMsg({
-      ok: failCount === 0,
-      text: `${label}: ${okCount} succeeded${failCount ? `, ${failCount} not eligible / failed` : ''}`,
-    });
+    const text = `${label}: ${okCount} succeeded${failCount ? `, ${failCount} not eligible / failed` : ''}`;
+    setActionMsg({ ok: failCount === 0, text });
+    if (failCount === 0) toast.success(text);
+    else toast.error(text);
     setSelected(new Set());
     setBulkBusy(false);
     refetch();
@@ -298,6 +313,7 @@ export function JobsPro() {
             onChange={(e) => {
               setQueue(e.target.value);
               resetPage();
+              syncUrl(e.target.value, status);
             }}
           >
             {(summary ?? []).map((x) => (
@@ -313,6 +329,7 @@ export function JobsPro() {
           onChange={(v) => {
             setStatus(v);
             resetPage();
+            syncUrl(queue, v);
           }}
         />
         <div className="relative ml-auto min-w-56 flex-1 md:max-w-xs">
@@ -368,7 +385,10 @@ export function JobsPro() {
       )}
 
       {actionMsg && (
-        <div className={cn('mb-3 text-sm', actionMsg.ok ? 'text-success' : 'text-danger')}>
+        <div
+          role="status"
+          className={cn('mb-3 text-sm', actionMsg.ok ? 'text-success' : 'text-danger')}
+        >
           {actionMsg.text}
         </div>
       )}
@@ -379,11 +399,20 @@ export function JobsPro() {
         <LoadingState label="Loading jobs…" />
       ) : (
         <>
+          {/* The stat cards above are server-wide; say what the table itself shows. */}
+          {queue && (
+            <div className="mb-2 flex items-center gap-2 text-sm">
+              <span className="text-faint">Jobs in queue</span>
+              <span className="rounded-md bg-surface-2 px-2 py-0.5 font-mono text-xs text-fg">
+                {queue}
+              </span>
+            </div>
+          )}
           <div className="overflow-x-auto rounded-xl border border-line bg-surface">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-                  <th className="w-10 px-5 py-3">
+                  <th scope="col" className="w-10 px-5 py-3">
                     <input
                       type="checkbox"
                       checked={allSelected}
@@ -392,12 +421,24 @@ export function JobsPro() {
                       className="accent-accent"
                     />
                   </th>
-                  <th className="px-5 py-3 font-medium">Job ID</th>
-                  <th className="px-5 py-3 font-medium">Status</th>
-                  <th className="px-5 py-3 font-medium">Priority</th>
-                  <th className="px-5 py-3 text-right font-medium">Created</th>
-                  <th className="px-5 py-3 text-right font-medium">Duration</th>
-                  <th className="w-28 px-5 py-3 text-right font-medium">Actions</th>
+                  <th scope="col" className="px-5 py-3 font-medium">
+                    Job ID
+                  </th>
+                  <th scope="col" className="px-5 py-3 font-medium">
+                    Status
+                  </th>
+                  <th scope="col" className="px-5 py-3 font-medium">
+                    Priority
+                  </th>
+                  <th scope="col" className="px-5 py-3 text-right font-medium">
+                    Created
+                  </th>
+                  <th scope="col" className="px-5 py-3 text-right font-medium">
+                    Duration
+                  </th>
+                  <th scope="col" className="w-28 px-5 py-3 text-right font-medium">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>

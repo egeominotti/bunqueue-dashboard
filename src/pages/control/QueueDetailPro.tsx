@@ -4,7 +4,7 @@ import { toast } from '@/components/dashboard/stores/toastStore';
 import { AreaChart } from '@/components/ui/AreaChart';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconArrowRight, IconChevronLeft } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
@@ -139,7 +139,7 @@ export function QueueDetailPro() {
               Jobs <IconArrowRight className="size-3.5" />
             </Link>
             <Link
-              to="/dlq"
+              to={`/dlq?queue=${encodeURIComponent(name)}`}
               className="flex items-center gap-1 rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
             >
               DLQ <IconArrowRight className="size-3.5" />
@@ -156,7 +156,20 @@ export function QueueDetailPro() {
       {loading && !data && !error ? (
         <LoadingState label={`Loading ${name}…`} />
       ) : !detail || !c ? (
-        !error && <p className="text-sm text-faint">Queue not found.</p>
+        !error && (
+          <EmptyState
+            title="Queue not found"
+            hint={`No queue named "${name}" exists — it may have been obliterated, or the link is stale.`}
+            action={
+              <Link
+                to="/queues"
+                className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+              >
+                Back to queues
+              </Link>
+            }
+          />
+        )
       ) : (
         <>
           <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -165,7 +178,10 @@ export function QueueDetailPro() {
               tone={detail.paused ? 'amber' : 'green'}
             />
             {msg && (
-              <span className={msg.ok ? 'text-xs text-success' : 'text-xs text-danger'}>
+              <span
+                role="status"
+                className={msg.ok ? 'text-xs text-success' : 'text-xs text-danger'}
+              >
                 {msg.text}
               </span>
             )}
@@ -222,7 +238,7 @@ export function QueueDetailPro() {
           <LimitsCards queue={name} busy={busy} run={run} />
 
           <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {data.stall && (
+            {data.stall ? (
               <StallForm
                 key={name}
                 queue={name}
@@ -232,8 +248,10 @@ export function QueueDetailPro() {
                   toast.success('Stall config saved', name);
                 }}
               />
+            ) : (
+              <ConfigLoadError title="Stall detection" onRetry={refetch} />
             )}
-            {data.dlq && (
+            {data.dlq ? (
               <DlqConfigForm
                 key={name}
                 queue={name}
@@ -243,6 +261,8 @@ export function QueueDetailPro() {
                   toast.success('DLQ config saved', name);
                 }}
               />
+            ) : (
+              <ConfigLoadError title="DLQ policy" onRetry={refetch} />
             )}
           </div>
 
@@ -260,10 +280,18 @@ export function QueueDetailPro() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-                    <th className="px-5 py-3 font-medium">ID</th>
-                    <th className="px-5 py-3 font-medium">State</th>
-                    <th className="px-5 py-3 text-right font-medium">Attempts</th>
-                    <th className="px-5 py-3 text-right font-medium">Duration</th>
+                    <th scope="col" className="px-5 py-3 font-medium">
+                      ID
+                    </th>
+                    <th scope="col" className="px-5 py-3 font-medium">
+                      State
+                    </th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">
+                      Attempts
+                    </th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">
+                      Duration
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -306,5 +334,18 @@ export function QueueDetailPro() {
         </>
       )}
     </div>
+  );
+}
+
+/** Shown in place of a config form when its GET failed — the form must not silently vanish. */
+function ConfigLoadError({ title, onRetry }: { title: string; onRetry: () => void }) {
+  return (
+    <Card>
+      <CardHeader title={title} />
+      <p className="mb-3 text-sm text-muted">Couldn't load this queue's config.</p>
+      <Button size="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    </Card>
   );
 }

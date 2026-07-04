@@ -11,16 +11,17 @@ import { bq } from '@/lib/bq';
 export function S3BackupPro() {
   const s3 = useS3Store();
   const [test, setTest] = useState<{ ok: boolean; msg: string } | null>(null);
-  const [saved, setSaved] = useState(false);
   const configured = s3.bucket.trim() !== '';
 
-  const testConnection = async () => {
+  const checkServerStorage = async () => {
     setTest(null);
     try {
       const r = await bq.storage();
       setTest({
         ok: !r.data?.diskFull,
-        msg: r.data?.diskFull ? 'Server disk is full' : 'Server storage reachable',
+        msg: r.data?.diskFull
+          ? 'Server disk is full'
+          : 'Server disk healthy — this does not validate the S3 credentials',
       });
     } catch (e) {
       setTest({ ok: false, msg: (e as Error).message });
@@ -52,7 +53,7 @@ export function S3BackupPro() {
               : 'rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-warning'
           }
         >
-          {configured ? 'Ready' : 'Configure'}
+          {configured ? 'Local draft' : 'Configure'}
         </span>
       </div>
 
@@ -115,6 +116,7 @@ export function S3BackupPro() {
               value={s3.schedule}
               onChange={(e) => s3.set({ schedule: e.target.value as BackupSchedule })}
               className="mt-1.5"
+              title="Local note only — actual scheduling requires server-side S3 config"
             >
               <option value="disabled">Disabled</option>
               <option value="6h">Every 6 hours</option>
@@ -131,20 +133,11 @@ export function S3BackupPro() {
           </Field>
         </div>
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          <Button
-            variant="accent"
-            onClick={() => {
-              setSaved(true);
-              setTimeout(() => setSaved(false), 2000);
-            }}
-          >
-            Save Configuration
-          </Button>
-          <Button onClick={testConnection}>Test Connection</Button>
+          <Button onClick={checkServerStorage}>Check server storage</Button>
           <Button disabled title="Trigger a manual backup — requires server-side S3 config">
             Backup Now
           </Button>
-          {saved && <span className="text-xs text-success">Saved locally (keys excluded)</span>}
+          <span className="text-xs text-faint">Saved locally as you type (keys excluded).</span>
           {test && (
             <span className={test.ok ? 'text-xs text-success' : 'text-xs text-danger'}>
               {test.msg}

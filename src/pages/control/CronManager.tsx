@@ -8,6 +8,7 @@ import { IconCron, IconTrash } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { bq, type CreateCronBody } from '@/lib/bq';
+import { cn } from '@/lib/cn';
 import { nextCronRuns } from '@/lib/cronPreview';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
@@ -40,7 +41,10 @@ export function CronManager() {
       {error && <OfflineBanner onRetry={refetch} />}
       <PageHeader title="Cron Manager" description="Schedule and manage repeatable jobs." live />
       {actErr && (
-        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-danger">
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-2 text-sm text-danger"
+        >
           {actErr}
         </div>
       )}
@@ -66,12 +70,22 @@ export function CronManager() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-                  <th className="px-5 py-3 font-medium">Name</th>
-                  <th className="px-5 py-3 font-medium">Queue</th>
-                  <th className="px-5 py-3 font-medium">Schedule</th>
-                  <th className="px-5 py-3 font-medium">Next Run</th>
-                  <th className="px-5 py-3 text-right font-medium">Runs</th>
-                  <th className="w-12 px-5 py-3" />
+                  <th scope="col" className="px-5 py-3 font-medium">
+                    Name
+                  </th>
+                  <th scope="col" className="px-5 py-3 font-medium">
+                    Queue
+                  </th>
+                  <th scope="col" className="px-5 py-3 font-medium">
+                    Schedule
+                  </th>
+                  <th scope="col" className="px-5 py-3 font-medium">
+                    Next Run
+                  </th>
+                  <th scope="col" className="px-5 py-3 text-right font-medium">
+                    Runs
+                  </th>
+                  <th scope="col" className="w-12 px-5 py-3" />
                 </tr>
               </thead>
               <tbody>
@@ -110,6 +124,26 @@ export function CronManager() {
       )}
     </div>
   );
+}
+
+/** "30000" → "every 30s"; non-round intervals get a ≈ prefix ("≈ every 1.5m"). */
+function everyPreview(raw: string): string | null {
+  const ms = Number(raw);
+  if (!Number.isInteger(ms) || ms <= 0) return null;
+  if (ms < 1000) return `every ${ms}ms`;
+  const units = [
+    [86_400_000, 'd'],
+    [3_600_000, 'h'],
+    [60_000, 'm'],
+    [1000, 's'],
+  ] as const;
+  for (const [size, suffix] of units) {
+    if (ms >= size) {
+      const v = ms / size;
+      return `${Number.isInteger(v) ? '' : '≈ '}every ${Math.round(v * 10) / 10}${suffix}`;
+    }
+  }
+  return null;
 }
 
 function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void> }) {
@@ -223,16 +257,26 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
             </Field>
           </div>
         ) : (
-          <div className="w-40">
-            <Field label="Every (ms)">
-              <Input
-                type="number"
-                value={every}
-                onChange={(e) => setEvery(e.target.value)}
-                placeholder="30000"
-              />
-            </Field>
-          </div>
+          <>
+            <div className="w-40">
+              <Field label="Every (ms)">
+                <Input
+                  type="number"
+                  value={every}
+                  onChange={(e) => setEvery(e.target.value)}
+                  placeholder="30000"
+                />
+              </Field>
+            </div>
+            {/* Human reading of the raw milliseconds — mirrors the cron-mode next-runs preview. */}
+            {every.trim() !== '' && (
+              <span
+                className={cn('pb-2 text-xs', everyPreview(every) ? 'text-muted' : 'text-danger')}
+              >
+                {everyPreview(every) ?? 'not a valid interval'}
+              </span>
+            )}
+          </>
         )}
       </div>
       {mode === 'cron' && schedule.trim() && preview && (
@@ -259,10 +303,13 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
         </div>
       )}
       <Field label="Data (JSON)">
-        <Input
+        {/* Raw textarea (no ui-kit Textarea exists): same control styling as Input. */}
+        <textarea
           value={dataText}
           onChange={(e) => setDataText(e.target.value)}
-          className="font-mono"
+          rows={3}
+          spellCheck={false}
+          className="w-full rounded-lg border border-line bg-surface-2 px-3 py-2 font-mono text-sm text-fg placeholder:text-faint transition-colors focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
         />
       </Field>
       <div>
@@ -315,8 +362,16 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
         <Button type="submit" variant="accent" size="sm" disabled={busy}>
           {busy ? 'Creating…' : 'Create'}
         </Button>
-        {err && <span className="text-xs text-danger">{err}</span>}
-        {created && <span className="text-xs text-success">Cron created ✓</span>}
+        {err && (
+          <span role="status" className="text-xs text-danger">
+            {err}
+          </span>
+        )}
+        {created && (
+          <span role="status" className="text-xs text-success">
+            Cron created ✓
+          </span>
+        )}
       </div>
     </form>
   );

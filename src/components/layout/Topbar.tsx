@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { IconMenu } from '@/components/ui/icons';
+import { IconMenu, IconSearch } from '@/components/ui/icons';
 import { isDemo } from '@/lib/demo/isDemo';
 
 const DEMO = isDemo();
@@ -81,6 +81,15 @@ export function Topbar({ onMenu }: { onMenu?: () => void }) {
             Live demo
           </span>
         )}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event('command-palette:open'))}
+          title="Command palette"
+          aria-label="Open command palette"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:hidden"
+        >
+          <IconSearch className="size-5" />
+        </button>
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event('command-palette:open'))}

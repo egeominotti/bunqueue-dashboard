@@ -148,6 +148,29 @@ export function JobInspector() {
   const err = job ? lastError(job) : null;
   const hasStack = (job?.stacktrace?.length ?? 0) > 0;
   const hasChildren = (job?.childrenIds?.length ?? 0) > 0;
+  // Failure-first: for a failed (DLQ'd) job the error IS the story — render it
+  // above Data/Result instead of burying it below the payload.
+  const failureFirst = state === 'failed';
+  const errorCard =
+    job && (err || hasStack) ? (
+      <Card>
+        <CardHeader title="Error" />
+        {err && (
+          <div className="mb-3">
+            <p className="text-sm text-danger">{err.message}</p>
+            <p className="mt-1 text-[11px] text-faint">
+              {err.attempt != null ? `Attempt ${err.attempt} · ` : ''}
+              {formatDateTime(err.timestamp)}
+            </p>
+          </div>
+        )}
+        {hasStack && (
+          <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-3 font-mono text-xs text-danger/90">
+            {job.stacktrace?.join('\n')}
+          </pre>
+        )}
+      </Card>
+    ) : null;
 
   return (
     <div>
@@ -192,6 +215,7 @@ export function JobInspector() {
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <Select
           value={lookupBy}
+          aria-label="Lookup mode"
           onChange={(e) => setLookupBy(e.target.value as LookupMode)}
           className="w-40"
         >
@@ -202,6 +226,7 @@ export function JobInspector() {
           <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
           <input
             value={idInput}
+            aria-label={lookupBy === 'custom' ? 'Custom job ID' : 'Job ID'}
             onChange={(e) => setIdInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && lookup(idInput)}
             placeholder={
@@ -218,7 +243,10 @@ export function JobInspector() {
       </div>
 
       {msg && (
-        <div className={msg.ok ? 'mb-4 text-sm text-success' : 'mb-4 text-sm text-danger'}>
+        <div
+          role="status"
+          className={msg.ok ? 'mb-4 text-sm text-success' : 'mb-4 text-sm text-danger'}
+        >
           {msg.text}
         </div>
       )}
@@ -266,7 +294,7 @@ export function JobInspector() {
               </dl>
             </Card>
 
-            <JsonCard title="Data" value={job.data} filename={`job-${job.id}-data`} />
+            {failureFirst && errorCard}
 
             <JobDataEditor
               data={job.data}
@@ -292,25 +320,7 @@ export function JobInspector() {
               </Card>
             )}
 
-            {(err || hasStack) && (
-              <Card>
-                <CardHeader title="Error" />
-                {err && (
-                  <div className="mb-3">
-                    <p className="text-sm text-danger">{err.message}</p>
-                    <p className="mt-1 text-[11px] text-faint">
-                      {err.attempt != null ? `Attempt ${err.attempt} · ` : ''}
-                      {formatDateTime(err.timestamp)}
-                    </p>
-                  </div>
-                )}
-                {hasStack && (
-                  <pre className="max-h-80 overflow-auto whitespace-pre-wrap rounded-lg bg-surface-2 p-3 font-mono text-xs text-danger/90">
-                    {job.stacktrace?.join('\n')}
-                  </pre>
-                )}
-              </Card>
-            )}
+            {!failureFirst && errorCard}
 
             <JobLogs key={`logs-${job.id}`} jobId={job.id} />
             {hasChildren && <JobChildren key={`children-${job.id}`} jobId={job.id} />}
@@ -318,7 +328,12 @@ export function JobInspector() {
             <JobBackoff job={job} />
           </div>
 
-          <JobActionsPanel job={job} busy={busy} act={act} />
+          {/* On mobile the single column stacks in source order — pull the
+              actions up so they sit right under the header, not below every
+              read-only card. lg restores the right-rail position. */}
+          <div className="order-first lg:order-none">
+            <JobActionsPanel job={job} busy={busy} act={act} />
+          </div>
         </div>
       )}
     </div>
@@ -355,14 +370,5 @@ function JsonToolbar({ value, filename }: { value: unknown; filename: string }) 
         <IconDownload className="size-3.5" />
       </IconButton>
     </div>
-  );
-}
-
-function JsonCard({ title, value, filename }: { title: string; value: unknown; filename: string }) {
-  return (
-    <Card>
-      <CardHeader title={title} action={<JsonToolbar value={value} filename={filename} />} />
-      <Json value={value} />
-    </Card>
   );
 }

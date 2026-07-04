@@ -19,6 +19,20 @@ const CHANNELS: ChannelType[] = ['email', 'webhook', 'slack'];
 const METRICS = Object.keys(METRIC_LABELS) as Metric[];
 const OPERATORS: Operator[] = ['>=', '>', '<=', '<'];
 
+// Threshold unit per metric — mirrors how useAlertEngine resolves each value
+// (error_rate is a 0–100 percentage, p99_latency is milliseconds, the rest are
+// job counts).
+const METRIC_UNITS: Record<Metric, { unit: string; placeholder: string }> = {
+  error_rate: { unit: '% (0–100)', placeholder: 'e.g. 5' },
+  p99_latency: { unit: 'ms', placeholder: 'e.g. 250' },
+  waiting: { unit: 'jobs', placeholder: 'e.g. 100' },
+  failed: { unit: 'jobs', placeholder: 'e.g. 10' },
+  dlq: { unit: 'jobs', placeholder: 'e.g. 1' },
+};
+
+const CHANNEL_NOT_WIRED =
+  'bunqueue OSS has no delivery backend — alerts fire as in-app toast + desktop notification only';
+
 function initialPermission(): NotificationPermission | 'unsupported' {
   if (typeof Notification === 'undefined') return 'unsupported';
   return Notification.permission;
@@ -51,6 +65,10 @@ export function Alerts() {
               </span>
             ) : permission === 'unsupported' ? (
               <span className="text-sm text-faint">Notifications unsupported</span>
+            ) : permission === 'denied' ? (
+              <span className="text-sm text-faint">
+                Desktop alerts blocked — allow notifications in browser settings
+              </span>
             ) : (
               <Button size="sm" onClick={requestPermission}>
                 Enable desktop notifications
@@ -126,7 +144,16 @@ export function Alerts() {
                 <li key={c.id} className="flex items-center justify-between py-2.5">
                   <div>
                     <div className="text-sm font-medium capitalize text-fg">{c.type}</div>
-                    <div className="font-mono text-xs text-faint">{c.target}</div>
+                    {/* Webhook/slack targets are secret URLs and are not persisted
+                        across reloads (see persistedAlertsState) — cue a re-entry
+                        instead of rendering a silently blank cell. */}
+                    {c.target ? (
+                      <div className="font-mono text-xs text-faint">{c.target}</div>
+                    ) : (
+                      <div className="text-xs italic text-warning">
+                        target not persisted (secret) — remove and re-add to restore it
+                      </div>
+                    )}
                   </div>
                   <IconButton aria-label="Remove channel" onClick={() => removeChannel(c.id)}>
                     <IconTrash className="size-3.5" />
@@ -181,6 +208,12 @@ export function Alerts() {
                     <td className="px-5 py-3">
                       <span className="rounded-md bg-surface-2 px-2 py-0.5 text-xs capitalize text-muted">
                         {r.channel}
+                      </span>
+                      <span
+                        className="ml-1.5 text-[10px] uppercase tracking-wider text-faint"
+                        title={CHANNEL_NOT_WIRED}
+                      >
+                        not wired
                       </span>
                     </td>
                     <td className="px-5 py-3">
@@ -292,18 +325,29 @@ function RuleForm({
           ))}
         </Select>
       </Field>
-      <Field label="Threshold">
+      <Field label="Threshold" hint={METRIC_UNITS[metric].unit}>
         <Input
           type="number"
           value={threshold}
           onChange={(e) => setThreshold(e.target.value)}
-          placeholder="55"
+          placeholder={METRIC_UNITS[metric].placeholder}
         />
       </Field>
-      <Field label="Queue (optional)">
-        <Input value={queue} onChange={(e) => setQueue(e.target.value)} placeholder="All queues" />
+      {/* p99 latency is exposed per TCP operation, not per queue — the engine
+          evaluates it globally, so a queue scope would be silently ignored. */}
+      <Field
+        label="Queue (optional)"
+        hint={metric === 'p99_latency' ? 'global only — latency is not per queue' : undefined}
+      >
+        <Input
+          value={queue}
+          onChange={(e) => setQueue(e.target.value)}
+          disabled={metric === 'p99_latency'}
+          placeholder={metric === 'p99_latency' ? 'Global' : 'All queues'}
+          className="disabled:cursor-not-allowed disabled:opacity-40"
+        />
       </Field>
-      <Field label="Channel">
+      <Field label="Channel" hint="delivery not wired — in-app only">
         <Select value={channel} onChange={(e) => setChannel(e.target.value as ChannelType)}>
           {CHANNELS.map((c) => (
             <option key={c} value={c}>
@@ -322,7 +366,9 @@ function RuleForm({
               metric,
               operator,
               threshold: Number(threshold),
-              queue,
+              // A queue typed before switching to p99_latency would be silently
+              // ignored by the engine — store the honest (global) scope instead.
+              queue: metric === 'p99_latency' ? '' : queue,
               channel,
               enabled: true,
             })
