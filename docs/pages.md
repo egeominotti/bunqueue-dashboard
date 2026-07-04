@@ -75,17 +75,17 @@ keep working.
 `src/components/layout/Sidebar.tsx` (`NAV`, also consumed by the Cmd/Ctrl-K
 command palette) groups nav items into four sections plus the root Overview:
 
-- **Queues** — Queues (QueuesOverview) · Jobs (JobsPro) · Dead Letter Queue
+- **Queues**: Queues (QueuesOverview) · Jobs (JobsPro) · Dead Letter Queue
   (DlqPro) · Cron Jobs (CronManager) · Flows.
-- **Monitoring** — Metrics (MetricsPro) · Workers (WorkersPro) · Logs
+- **Monitoring**: Metrics (MetricsPro) · Workers (WorkersPro) · Logs
   (LogsPro) · Alerts.
-- **Control** — Server · Add Job · Bulk Add · Job Inspector · Queue Control ·
+- **Control**: Server · Add Job · Bulk Add · Job Inspector · Queue Control ·
   DLQ Control · Webhooks · Diagnostics · Benchmark, all Pro, all `bq`.
-- **Management** — Database · MCP · Usage (UsagePro) · S3 Backup (S3BackupPro)
+- **Management**: Database · MCP · Usage (UsagePro) · S3 Backup (S3BackupPro)
   · Settings (classic).
 
 There are still **three DLQ pages** (`DlqPro` at `/dlq`, `DlqControl` at
-`/dlq-control`, classic `Dlq` at `/dlq-classic`) — intentional per the additive
+`/dlq-control`, classic `Dlq` at `/dlq-classic`), intentional per the additive
 rule, not an oversight: `/dlq` is the cross-queue dashboard, `/dlq-control` the
 single-queue triage surface.
 
@@ -117,7 +117,7 @@ single-queue triage surface.
 | `/queues/:name` | `QueueDetailPro` | Single-queue drill-in on the same building blocks as `QueueControl`, plus obliterate, a live backlog-depth sparkline, recent jobs, and jump-off links to this queue's Jobs and DLQ views. |
 | `/jobs` | `JobsPro` | Single-queue, server-paginated job explorer: queue + status filters, stat cards, checkbox multi-select. Row and bulk actions are state-gated via the shared `actionGates`; bulk actions run `Promise.allSettled` and report "`N` succeeded, `M` failed" honestly. |
 | `/metrics` | `MetricsPro` | Live throughput area chart (rolling 60s via `useThroughputSeries`), error/success-rate gauge, server-overview Kv list, per-queue counts table. Latency strip reads the real per-operation percentiles (`push`/`pull`/`ack` × p50/p95/p99). |
-| `/logs` | `LogsPro` | Paginated, filterable (queue/status/search) view over the same live SSE stream `useActivityStream` drives on `OverviewPro` — a fuller UI over the identical 250-event ring buffer, not a separate data source. |
+| `/logs` | `LogsPro` | Paginated, filterable (queue/status/search) view over the same live SSE stream `useActivityStream` drives on `OverviewPro`, a fuller UI over the identical 250-event ring buffer, not a separate data source. |
 | `/workers` | `WorkersPro` | Registered-workers table over `bq.workers()`, with active/stale status and a confirmed per-row Unregister. Caps at 100 rows with a truncation hint. |
 | `/usage` | `UsagePro` | Cumulative totals, error rate, runtime, and an honest Storage health card from `bq.storage()` (red "Disk full, writes suspended" when `diskFull`). Renders uptime correctly (`stats.uptime` is ms). |
 | `/s3` | `S3BackupPro` | Local-only (`s3Store`) form to assemble S3-compatible backup settings; bunqueue OSS reads these from **server environment variables**, so this page cannot push them to the server. "Test Connection" calls `bq.storage()`; "Backup Now" is permanently disabled (no server endpoint). |
@@ -128,14 +128,14 @@ single-queue triage surface.
 channels; the rules are evaluated **in the browser** by `useAlertEngine`
 (mounted app-wide via `AlertEngine`): 15s poll, edge-triggered breach
 detection, per-rule cooldown, in-app toast + optional desktop Notification.
-Delivery channels (email/webhook/slack) have **no backend** in bunqueue OSS —
+Delivery channels (email/webhook/slack) have **no backend** in bunqueue OSS, so
 see [known-issues.md](known-issues.md) for the real limits.
 
 ## First-gen view pages (Classic, `api`)
 
 These predate the Pro pages and are kept intact per the additive rule. All are
 off-nav (`-classic` routes) and superseded by a Pro page; several render wrong
-data by design of the old client — see
+data by design of the old client, so see
 [known-issues.md](known-issues.md) before treating anything below as a fresh bug.
 
 | Route | Page | Behaviour |
@@ -144,9 +144,9 @@ data by design of the old client — see
 | `/queues-classic` | `Queues` | Full queue list with client-side name search; header cards only sum the current page. |
 | `/queues-classic/:name` | `QueueDetail` | Single-queue drill-in: pause/resume/drain/obliterate, counts, recent jobs, embeds `pages/queue/QueueConfig.tsx`. |
 | `/jobs-classic` | `Jobs` | Same shape as `JobsPro` minus multi-select/bulk; Duration/Name columns are dead (reads fields real jobs don't have); polls the full queue list every 3s. |
-| `/dlq-classic` | `Dlq` | Single-queue DLQ table reading the **flat, uncorrected** `DlqEntry` type — renders wrong for real entries and crashes on a non-empty DLQ (`{e.attempts}` as a React child). |
-| `/cron-classic` | `Cron` | List + delete only (no create form — use `/cron`). |
-| `/metrics-classic` | `Metrics` | Kv dumps of the raw `/dashboard` payload (latency/collections/totals/memory) — useful for inspecting the raw shape. |
+| `/dlq-classic` | `Dlq` | Single-queue DLQ table reading the **flat, uncorrected** `DlqEntry` type, which renders wrong for real entries and crashes on a non-empty DLQ (`{e.attempts}` as a React child). |
+| `/cron-classic` | `Cron` | List + delete only (no create form, use `/cron`). |
+| `/metrics-classic` | `Metrics` | Kv dumps of the raw `/dashboard` payload (latency/collections/totals/memory), useful for inspecting the raw shape. |
 | `/workers-classic` | `Workers` | Registered-workers table, no status/unregister. |
 | `/logs-classic` | `Logs` | Same SSE feed as `LogsPro`, no pagination, "Job Name" column permanently "unknown". |
 | `/usage-classic` | `Usage` | Cumulative totals + runtime + storage; storage row reads a shape `/storage` doesn't return (always "Healthy") and uptime is ×1000 too large. |

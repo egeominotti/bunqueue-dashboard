@@ -17,7 +17,7 @@ dashboard running on sample data with no server needed.
 
 ## The one-liner: run from npm
 
-No clone, no build — the
+No clone, no build, the
 [`bunqueue-dashboard` npm package](https://www.npmjs.com/package/bunqueue-dashboard)
 ships the prebuilt dashboard with **zero dependencies**:
 

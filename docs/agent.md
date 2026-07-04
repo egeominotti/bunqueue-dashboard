@@ -45,7 +45,7 @@ request to `http://127.0.0.1:6800` (CSRF → RCE). Defenses:
 3. **Host allowlist (DNS-rebinding defense)**, the Origin gate can't see a
    *same-origin* request (a page whose DNS was rebound to `127.0.0.1` sends no
    `Origin`), so the agent also rejects `403` any request whose `Host` header is
-   a hostname outside the allowlist — an attacker domain rebound to loopback
+   a hostname outside the allowlist, so an attacker domain rebound to loopback
    fails it, while `Host: localhost` / `127.0.0.1` pass. A missing `Host` (a
    non-browser caller) is trusted.
 4. **Optional bearer token**, set `AGENT_TOKEN` to require it on state-changing
@@ -61,7 +61,7 @@ Env: `AGENT_ALLOWED_ORIGINS` (comma-separated; merged with dev defaults
 > loopback hostnames plus the hostnames of your allowed origins. If you reach the
 > agent (or the standalone binary) via a `/etc/hosts` alias or a same-host
 > reverse proxy that forwards `Host: <your-domain>`, add that hostname to
-> `AGENT_ALLOWED_HOSTS` (comma-separated, bracket IPv6 literals) — otherwise the
+> `AGENT_ALLOWED_HOSTS` (comma-separated, bracket IPv6 literals), otherwise the
 > request is `403`ed as a rebinding attempt. The plain `bun run agent`
 > (`agent/index.ts`) always binds `127.0.0.1` with the Host gate on, so
 > `AGENT_ALLOWED_HOSTS` is its only lever. Only the **standalone binary**

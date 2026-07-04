@@ -127,6 +127,21 @@
   }
 }
 
+/* iOS Safari zooms the page whenever a focused form control resolves below 16px.
+   The fluid rem root above puts text-sm/text-xs controls under that threshold on
+   phones, so pin form controls to 16px below the sm breakpoint. This also makes
+   the small JSON/data editors legible on mobile. */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    /* !important is required: Tailwind's text-sm/text-xs are class selectors and
+       outspecify a bare element rule, so without it the controls stay < 16px and
+       Safari still zooms. */
+    font-size: 16px !important;
+  }
+}
+
 /* Respect the OS "reduce motion" preference: neutralize animations and
    transitions (spinners, the live "ping" dot, hover motion) for users who ask
    for it, while keeping content fully visible. */

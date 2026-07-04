@@ -20,7 +20,7 @@ The all-in-one server (`scripts/serve.ts`) does three jobs in one process:
 Pick one:
 
 ```bash
-# A) Install from npm (needs Bun) — zero-dependency package.
+# A) Install from npm (needs Bun), zero-dependency package.
 bun add -g bunqueue-dashboard        # then: bunqueue-dashboard
 # one-off, no install:  bunx bunqueue-dashboard
 

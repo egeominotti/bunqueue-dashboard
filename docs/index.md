@@ -1,13 +1,13 @@
 ---
 title: "Web dashboard for bunqueue with full queue control and server lifecycle"
-description: "bunqueue dashboard is a free, open source web UI that fully drives a bunqueue server: queues, jobs, dead-letter queue, cron, webhooks, workers, live activity — and the server process itself. Try the live demo, no server required."
+description: "bunqueue dashboard is a free, open source web UI that fully drives a bunqueue server: queues, jobs, dead-letter queue, cron, webhooks, workers, live activity, and the server process itself. Try the live demo, no server required."
 layout: home
 ---
 
 <script setup>
 // Public assets and raw-HTML srcs are NOT base-rewritten by VitePress (only
-// markdown links/images are), so the tour video must be resolved explicitly —
-// the docs deploy under /bunqueue-dashboard/docs/ on Pages.
+// markdown links/images are), so the tour video must be resolved explicitly,
+// because the docs deploy under /bunqueue-dashboard/docs/ on Pages.
 import { withBase } from 'vitepress'
 </script>
 
@@ -19,7 +19,7 @@ import { withBase } from 'vitepress'
 
 <h1 class="lp-h1">Web dashboard for bunqueue<br>with full control and server lifecycle</h1>
 
-<p class="lp-sub">A free, open source web UI that <strong>fully drives</strong> a bunqueue server: queues, jobs, dead-letter queue, cron, webhooks, workers and live activity — plus start / stop / restart of the server process itself. It talks only to bunqueue's public HTTP API and a tiny loopback control agent.</p>
+<p class="lp-sub">A free, open source web UI that <strong>fully drives</strong> a bunqueue server: queues, jobs, dead-letter queue, cron, webhooks, workers and live activity, plus start / stop / restart of the server process itself. It talks only to bunqueue's public HTTP API and a tiny loopback control agent.</p>
 
 <p class="lp-ctas">
 <a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">Open the live demo</a>
@@ -28,7 +28,7 @@ import { withBase } from 'vitepress'
 </p>
 
 <a class="lp-window" href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer" aria-label="Open the live demo of the bunqueue dashboard">
-<span class="lp-window-bar"><span class="lp-dot"></span><span class="lp-dot"></span><span class="lp-dot"></span><span class="lp-live">● live demo — click to drive it</span></span>
+<span class="lp-window-bar"><span class="lp-dot"></span><span class="lp-dot"></span><span class="lp-dot"></span><span class="lp-live">● live demo, click to drive it</span></span>
 
 ![The bunqueue dashboard overview: stat cards, queue health grid and a live activity feed](./screenshots/overview.png){.lp-window-shot}
 
@@ -50,7 +50,7 @@ import { withBase } from 'vitepress'
 
 ## Features {.lp-title}
 
-<p class="lp-lead">Everything an operator needs to run a bunqueue server from the browser — from state-gated job actions to the process lifecycle. Every card below is a shipped page you can open in the demo right now.</p>
+<p class="lp-lead">Everything an operator needs to run a bunqueue server from the browser, from state-gated job actions right through to the process lifecycle. Every card below is a shipped page you can open in the demo right now.</p>
 
 <div class="lp-cards">
 
@@ -66,7 +66,7 @@ Add, inspect, promote, retry, requeue and cancel jobs. Every action is gated by 
 
 ### Live activity stream
 
-A Server-Sent-Events feed with automatic reconnect shows jobs flowing in real time — built on fetch so it works with bearer-token auth, unlike EventSource. <a href="./guide/logs">Live logs →</a>
+A Server-Sent-Events feed with automatic reconnect shows jobs flowing in real time. It is built on fetch, so it works with bearer-token auth, unlike EventSource. <a href="./guide/logs">Live logs →</a>
 
 </article>
 
@@ -98,7 +98,7 @@ Register endpoints with event scoping and an optional HMAC secret; watch success
 
 ### Server lifecycle
 
-The one thing HTTP can't do — start, stop, restart the bunqueue process — is delegated to a small loopback-bound agent with an Origin + Host allowlist, locked CORS and an optional bearer token. <a href="./guide/server">Server Control →</a>
+The one thing HTTP can't do, namely starting, stopping and restarting the bunqueue process, is delegated to a small loopback-bound agent with an Origin + Host allowlist, locked CORS and an optional bearer token. <a href="./guide/server">Server Control →</a>
 
 </article>
 
@@ -106,7 +106,7 @@ The one thing HTTP can't do — start, stop, restart the bunqueue process — is
 
 ### SQLite inspector
 
-Browse tables, schema and indexes, page through rows, run SELECT-only queries with EXPLAIN and CSV/JSON export — over a read-only connection, capped at 500 rows. <a href="./guide/database">Database →</a>
+Browse tables, schema and indexes, page through rows, run SELECT-only queries with EXPLAIN and CSV/JSON export, all over a read-only connection, capped at 500 rows. <a href="./guide/database">Database →</a>
 
 </article>
 
@@ -122,7 +122,7 @@ Rolling live throughput charts, error-rate gauge, per-operation latency percenti
 
 ### Client-side alerts
 
-Threshold rules on queue depth, failures, error rate and latency — evaluated in the browser, with in-app toasts and desktop notifications. <a href="./user-guide">Alerts →</a>
+Threshold rules on queue depth, failures, error rate and latency, evaluated in the browser, with in-app toasts and desktop notifications. <a href="./user-guide">Alerts →</a>
 
 </article>
 
@@ -146,7 +146,7 @@ Parent / children / depends-on relationships drawn as a graph, laid out client-s
 
 ### AI Copilot <em class="lp-tag">experimental</em>
 
-An in-app assistant that drives the same API through tools — bring your own key, requests go straight from your browser to your provider. <a href="./guide/copilot">Copilot →</a>
+An in-app assistant that drives the same API through tools. Bring your own key, and requests go straight from your browser to your provider. <a href="./guide/copilot">Copilot →</a>
 
 </article>
 
@@ -160,7 +160,7 @@ An in-app assistant that drives the same API through tools — bring your own ke
 
 ## See it in action {.lp-title}
 
-<p class="lp-lead">A real control surface, not a read-only viewer — every screen in this tour is a live page you can drive in the <a href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">demo</a>.</p>
+<p class="lp-lead">A real control surface, not a read-only viewer, so every screen in this tour is a live page you can drive in the <a href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">demo</a>.</p>
 
 <video class="lp-video" :src="withBase('/tour.mp4')" autoplay muted loop playsinline preload="metadata" aria-label="A guided tour of the bunqueue dashboard: overview, queues, jobs, DLQ, flows, the SQLite inspector, and the AI Copilot"></video>
 
@@ -217,7 +217,7 @@ bunx bunqueue-dashboard
 
 ### Point it at your server
 
-Set the server URL and bearer token from the Settings page (tokens stay in memory — never written to localStorage) or via `BUNQUEUE_URL` / `VITE_BUNQUEUE_URL`.
+Set the server URL and bearer token from the Settings page (tokens stay in memory, never written to localStorage) or via `BUNQUEUE_URL` / `VITE_BUNQUEUE_URL`.
 
 </div>
 <div class="lp-step-media">
@@ -267,18 +267,18 @@ Explore jobs, triage the DLQ, schedule cron, watch live activity. Destructive ac
 
 ## How to install {.lp-title}
 
-<p class="lp-lead">Four ways to run it — pick the one that fits. All of them serve the same app.</p>
+<p class="lp-lead">Four ways to run it, pick the one that fits. All of them serve the same app.</p>
 
 ::: code-group
 
 ```bash [npm (recommended)]
 bunx bunqueue-dashboard
-# → http://127.0.0.1:8080 — SPA + /api proxy + control agent, zero dependencies
+# → http://127.0.0.1:8080, serves the SPA plus the /api proxy and control agent, zero dependencies
 ```
 
 ```bash [Standalone binary]
 # Download the binary for your platform from the GitHub Releases page,
-# then make it executable and run it — nothing else to install:
+# then make it executable and run it, nothing else to install:
 chmod +x bunqueue-dashboard-v*-darwin-arm64
 ./bunqueue-dashboard-v*-darwin-arm64
 # → http://localhost:8080
@@ -286,7 +286,7 @@ chmod +x bunqueue-dashboard-v*-darwin-arm64
 
 ```bash [Docker]
 docker run --rm -p 8080:80 ghcr.io/egeominotti/bunqueue-dashboard:edge
-# → http://localhost:8080 — set the server URL from the Settings page
+# → http://localhost:8080, set the server URL from the Settings page
 ```
 
 ```bash [From source]
@@ -313,7 +313,7 @@ bun start
 
 ### What is this, and why not just curl the API?
 
-A complete operator surface over bunqueue's HTTP API: scheduling, triage, limits, live activity and process lifecycle in one UI, with every job action gated by the job's real state — instead of hand-rolled curl scripts and guesswork about which action a job will accept.
+A complete operator surface over bunqueue's HTTP API: scheduling, triage, limits, live activity and process lifecycle in one UI, with every job action gated by the job's real state, instead of hand-rolled curl scripts and guesswork about which action a job will accept.
 
 </article>
 
@@ -321,7 +321,7 @@ A complete operator surface over bunqueue's HTTP API: scheduling, triage, limits
 
 ### Does it touch my server's code or data?
 
-No. It never imports or modifies bunqueue source — it speaks only to the public HTTP API. The SQLite inspector opens its own read-only connection and accepts SELECT-style statements only, so it cannot write even if asked to.
+No. It never imports or modifies bunqueue source. It speaks only to the public HTTP API. The SQLite inspector opens its own read-only connection and accepts SELECT-style statements only, so it cannot write even if asked to.
 
 </article>
 
@@ -337,7 +337,7 @@ The agent can spawn processes, so it's locked down: bound to 127.0.0.1, an Origi
 
 ### Where do my tokens and secrets live?
 
-In memory only. Server tokens, agent tokens, S3 keys and webhook targets are deliberately excluded from localStorage — re-enter them per session or supply them via environment variables.
+In memory only. Server tokens, agent tokens, S3 keys and webhook targets are deliberately excluded from localStorage, so re-enter them per session or supply them via environment variables.
 
 </article>
 
@@ -345,7 +345,7 @@ In memory only. Server tokens, agent tokens, S3 keys and webhook targets are del
 
 ### Can I try it without a bunqueue server?
 
-Yes — the <a href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">live demo</a> runs the real app against fixture data in your browser. Every page works, no backend required.
+Yes, the <a href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">live demo</a> runs the real app against fixture data in your browser. Every page works, no backend required.
 
 </article>
 
@@ -361,7 +361,7 @@ Four ways: the zero-dependency npm package (`bunx bunqueue-dashboard`), a standa
 
 ### What doesn't it do?
 
-Alerts are evaluated in the browser while a tab is open — it's not away-from-desk paging. S3 backup is configured by the server's environment, not from the UI. Every other verified gap is listed, with file references, on the <a href="./known-issues">known issues</a> page.
+Alerts are evaluated in the browser while a tab is open, so it's not away-from-desk paging. S3 backup is configured by the server's environment, not from the UI. Every other verified gap is listed, with file references, on the <a href="./known-issues">known issues</a> page.
 
 </article>
 

@@ -52,7 +52,7 @@ function titleFor(pathname: string): string {
   return 'bunqueue';
 }
 
-export function Topbar({ onMenu }: { onMenu?: () => void }) {
+export function Topbar({ onMenu, navOpen = false }: { onMenu?: () => void; navOpen?: boolean }) {
   const { pathname } = useLocation();
   return (
     <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b border-line bg-bg/80 px-4 backdrop-blur sm:px-6 lg:px-8">
@@ -60,6 +60,8 @@ export function Topbar({ onMenu }: { onMenu?: () => void }) {
         <button
           type="button"
           aria-label="Open navigation"
+          aria-expanded={navOpen}
+          aria-controls="app-nav"
           onClick={onMenu}
           className="-ml-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 lg:hidden"
         >

@@ -15,6 +15,30 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.26] - 2026-07-04
+
+### Fixed
+- **DLQ Control entries table clipped its action column on mobile.** The wrapper
+  used `overflow-hidden` (unlike every sibling table), so at ~390px the Retry and
+  Inspect buttons were cut off with no way to scroll to them. It now uses
+  `overflow-x-auto` and scrolls horizontally, matching the DLQ/Jobs tables.
+- **iOS Safari zoomed the page when focusing a form field.** The fluid rem type
+  scale put inputs/selects/textareas under 16px on phones, which triggers
+  Safari's zoom-on-focus. Controls are now pinned to 16px below the `sm`
+  breakpoint (this also makes the small JSON/data editors legible on mobile).
+- **The Copilot launcher covered the bottom row on scrolled pages.** The fixed
+  button overlapped pagination "Next" and last-row content; the main scroll area
+  now reserves bottom padding so nothing hides behind it.
+
+### Changed
+- **Mobile nav drawer is now accessible.** Opening it moves focus into the
+  drawer and traps Tab within it, closing restores focus to the opener, page
+  content behind the overlay no longer scrolls, and the hamburger exposes
+  `aria-expanded` / `aria-controls` to assistive tech.
+- **Docs prose reads naturally.** Replaced em-dash punctuation across the docs
+  site with commas and plain sentences (landing, pages, known-issues, agent,
+  quickstart, deploy guides).
+
 ## [0.0.25] - 2026-07-04
 
 ### Fixed
@@ -585,7 +609,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.25...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.26...HEAD
+[0.0.26]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.25...v0.0.26
 [0.0.25]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.24...v0.0.25
 [0.0.24]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.23...v0.0.24
 [0.0.23]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.22...v0.0.23

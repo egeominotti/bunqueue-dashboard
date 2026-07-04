@@ -28,7 +28,7 @@ A security + gate pass resolved these, no longer present:
 - **Alert channel secrets no longer persisted.** `alertsStore` kept `webhook`/
   `slack` targets (secret URLs) in `localStorage`; they're now memory-only.
 - **`agent/` and `scripts/` are typechecked** by the build gate
-  (`tsconfig.agent.json`) — the npm bin and agent code used to ship with no
+  (`tsconfig.agent.json`), whereas the npm bin and agent code used to ship with no
   typecheck.
 
 A performance + pagination pass resolved these, no longer present:
@@ -37,7 +37,7 @@ A performance + pagination pass resolved these, no longer present:
   (was 22), DlqPro (was N+2) now issue 2 to 3 requests per poll via
   `GET /queues/summary`; JobsPro is single-queue server-paginated (was up to 25
   `jobs/list` per poll). `usePolledData` is now self-scheduling (at most one
-  fetch in flight, no pile-ups) and **pauses while the tab is hidden** — except
+  fetch in flight, no pile-ups) and **pauses while the tab is hidden**, except
   the **first** fetch, which always runs (same for `useThroughputSeries`'s first
   sample): a page opened in a background tab used to sit on "Loading…" (and the
   sidebar on "connecting") until focused.
@@ -287,10 +287,10 @@ additive rule (the primary Pro routes are unaffected):
 - **Alerts are evaluated client-side, with real limits.** `useAlertEngine` now
   evaluates the rules in the browser (in-app toast + optional desktop
   Notification on each fresh threshold crossing), but: (1) it only runs **while a
-  tab is open** (even backgrounded) — it is not away-from-desk paging; the
+  tab is open** (even backgrounded), so it is not away-from-desk paging; the
   email/webhook/slack **delivery channels still have no backend** (bunqueue OSS
-  has no alerting engine — wire them into your own monitoring or hosted bunqueue
-  Cloud); (2) the **`p99_latency`** metric is **global only** — bunqueue exposes
+  has no alerting engine, so wire them into your own monitoring or hosted bunqueue
+  Cloud); (2) the **`p99_latency`** metric is **global only**, because bunqueue exposes
   latency percentiles keyed by TCP operation (push/pull/ack), not per queue, so a
   queue-scoped p99 rule evaluates the global max operation p99, not that queue's
   job latency.

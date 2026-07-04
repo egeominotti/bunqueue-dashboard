@@ -136,6 +136,7 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
         />
       )}
       <aside
+        id="app-nav"
         className={cn(
           'flex w-60 shrink-0 flex-col border-r border-line bg-sidebar',
           // Off-canvas drawer below lg; static column at lg and up. `invisible`
