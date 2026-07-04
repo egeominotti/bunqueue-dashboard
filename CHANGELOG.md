@@ -15,6 +15,12 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.29] - 2026-07-04
+
+### Changed
+- **Queue detail: "Recent jobs" now sits above "Jobs by priority."** Recent
+  activity reads first, with the priority histogram directly beneath it.
+
 ## [0.0.28] - 2026-07-04
 
 ### Fixed
@@ -657,7 +663,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.28...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.29...HEAD
+[0.0.29]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.28...v0.0.29
 [0.0.28]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.27...v0.0.28
 [0.0.27]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.26...v0.0.27
 [0.0.26]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.25...v0.0.26

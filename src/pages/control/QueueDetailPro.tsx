@@ -199,6 +199,72 @@ export function QueueDetailPro() {
             ))}
           </div>
 
+          <Card padded={false} className="mb-6">
+            <div className="flex items-center justify-between px-5 py-3">
+              <h2 className="text-base font-semibold text-fg">Recent jobs</h2>
+              <Link
+                to={`/jobs?queue=${encodeURIComponent(name)}`}
+                className="flex items-center gap-1 text-sm text-muted hover:text-fg"
+              >
+                View all <IconArrowRight className="size-3.5" />
+              </Link>
+            </div>
+            <div className="overflow-x-auto border-t border-line">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
+                    <th scope="col" className="px-5 py-3 font-medium">
+                      ID
+                    </th>
+                    <th scope="col" className="px-5 py-3 font-medium">
+                      State
+                    </th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">
+                      Attempts
+                    </th>
+                    <th scope="col" className="px-5 py-3 text-right font-medium">
+                      Duration
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.jobs.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-10 text-center text-sm text-faint">
+                        No recent jobs.
+                      </td>
+                    </tr>
+                  ) : (
+                    data.jobs.map((j) => (
+                      <tr
+                        key={j.id}
+                        className="border-b border-line last:border-0 hover:bg-surface-2/40"
+                      >
+                        <td className="px-5 py-3">
+                          <Link
+                            to={`/job?id=${encodeURIComponent(j.id)}`}
+                            className="font-mono text-xs text-accent hover:underline"
+                          >
+                            {j.id}
+                          </Link>
+                        </td>
+                        <td className="px-5 py-3 text-muted">{j.state ?? '—'}</td>
+                        <td className="px-5 py-3 text-right tnum text-muted">
+                          {j.attempts ?? 0} / {j.maxAttempts ?? '?'}
+                        </td>
+                        <td className="px-5 py-3 text-right tnum text-muted">
+                          {formatDuration(
+                            j.startedAt && j.completedAt ? j.completedAt - j.startedAt : undefined
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
           <PriorityHistogram counts={detail.priorityCounts} />
 
           <Card className="mb-6">
@@ -267,72 +333,6 @@ export function QueueDetailPro() {
               <ConfigLoadError title="DLQ policy" onRetry={refetch} />
             )}
           </div>
-
-          <Card padded={false}>
-            <div className="flex items-center justify-between px-5 py-3">
-              <h2 className="text-base font-semibold text-fg">Recent jobs</h2>
-              <Link
-                to={`/jobs?queue=${encodeURIComponent(name)}`}
-                className="flex items-center gap-1 text-sm text-muted hover:text-fg"
-              >
-                View all <IconArrowRight className="size-3.5" />
-              </Link>
-            </div>
-            <div className="overflow-x-auto border-t border-line">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-                    <th scope="col" className="px-5 py-3 font-medium">
-                      ID
-                    </th>
-                    <th scope="col" className="px-5 py-3 font-medium">
-                      State
-                    </th>
-                    <th scope="col" className="px-5 py-3 text-right font-medium">
-                      Attempts
-                    </th>
-                    <th scope="col" className="px-5 py-3 text-right font-medium">
-                      Duration
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.jobs.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-5 py-10 text-center text-sm text-faint">
-                        No recent jobs.
-                      </td>
-                    </tr>
-                  ) : (
-                    data.jobs.map((j) => (
-                      <tr
-                        key={j.id}
-                        className="border-b border-line last:border-0 hover:bg-surface-2/40"
-                      >
-                        <td className="px-5 py-3">
-                          <Link
-                            to={`/job?id=${encodeURIComponent(j.id)}`}
-                            className="font-mono text-xs text-accent hover:underline"
-                          >
-                            {j.id}
-                          </Link>
-                        </td>
-                        <td className="px-5 py-3 text-muted">{j.state ?? '—'}</td>
-                        <td className="px-5 py-3 text-right tnum text-muted">
-                          {j.attempts ?? 0} / {j.maxAttempts ?? '?'}
-                        </td>
-                        <td className="px-5 py-3 text-right tnum text-muted">
-                          {formatDuration(
-                            j.startedAt && j.completedAt ? j.completedAt - j.startedAt : undefined
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
         </>
       )}
     </div>
