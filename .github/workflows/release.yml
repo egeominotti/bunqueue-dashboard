@@ -130,10 +130,15 @@ jobs:
           ls -la bunqueue-dashboard-*
 
       # SHA256SUMS lets anyone verify a downloaded artifact's integrity
-      # (`sha256sum -c SHA256SUMS`).
+      # (`sha256sum -c SHA256SUMS`). The two globs MUST stay disjoint — the zip
+      # is bunqueue-dashboard-v<ver>.zip (no dash after the version) and the
+      # binaries are bunqueue-dashboard-v<ver>-<platform>. A pattern matching
+      # both (e.g. `bunqueue-dashboard-v*`) duplicates the zip: a doubled line
+      # here, and in the release step below a concurrent double upload of the
+      # same asset that races and fails the publish (broke v0.0.22).
       - name: Generate checksums
         if: steps.ver.outputs.publish == 'true'
-        run: sha256sum bunqueue-dashboard-*.zip bunqueue-dashboard-v* > SHA256SUMS
+        run: sha256sum bunqueue-dashboard-*.zip bunqueue-dashboard-v*-* > SHA256SUMS
 
       # Signed, verifiable build provenance (SLSA) for every published artifact,
       # so downloads can be checked with `gh attestation verify <file> --repo …`.
@@ -143,7 +148,7 @@ jobs:
         with:
           subject-path: |
             bunqueue-dashboard-*.zip
-            bunqueue-dashboard-v*
+            bunqueue-dashboard-v*-*
 
       - name: Publish GitHub Release
         if: steps.ver.outputs.publish == 'true'
@@ -156,7 +161,7 @@ jobs:
           generate_release_notes: true
           files: |
             bunqueue-dashboard-*.zip
-            bunqueue-dashboard-v*
+            bunqueue-dashboard-v*-*
             SHA256SUMS
           fail_on_unmatched_files: true
 

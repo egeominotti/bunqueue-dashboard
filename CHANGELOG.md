@@ -44,6 +44,14 @@ the GitHub Release body.
 - **Coverage floors raised** to lines ≥ 70% / functions ≥ 58% (from 62%/55%),
   matching the new measured totals (72.7% / 60.3%).
 
+### Fixed
+- **Release publish race.** `release.yml`'s asset globs overlapped
+  (`bunqueue-dashboard-*.zip` and `bunqueue-dashboard-v*` both matched the
+  zip), so the same asset was uploaded twice concurrently — the race broke the
+  first v0.0.22 publish (draft left without the zip) and duplicated the zip
+  line in every release's `SHA256SUMS`. The globs are now disjoint
+  (`bunqueue-dashboard-v*-*` matches only the platform binaries).
+
 ## [0.0.21] - 2026-07-04
 
 ### Added
