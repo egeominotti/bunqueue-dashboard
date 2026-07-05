@@ -12,7 +12,26 @@
  * separately in the UI rather than reinterpreted here.
  */
 
-const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+// Month names resolve to their 1-based cron value (jan→1 … dec→12), so the
+// leading '' pads index 0 — resolveName returns the array index, and cron
+// months are 1-based (a 0-indexed table made `jan` fail the min=1 range check
+// and shifted every other name one month early). A non-empty 3-char slice can
+// never match the '' slot. Weekday names stay 0-based (cron DOW: sun=0).
+const MONTHS = [
+  '',
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'may',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'oct',
+  'nov',
+  'dec',
+];
 const DOW = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 interface ParsedField {

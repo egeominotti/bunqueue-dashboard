@@ -59,6 +59,20 @@ describe('nextCronRuns — schedules', () => {
     for (const r of runs) expect(new Date(r).getDate()).toBe(1);
   });
 
+  test('month names resolve to the right month (jan=1 … dec=12)', () => {
+    // Regression: a 0-indexed MONTHS table rejected `jan` outright (0 < min 1)
+    // and shifted every other name one month early (feb→Jan, dec→Nov).
+    const jan = nextCronRuns('0 0 1 jan *', 1, FROM);
+    expect(jan.valid).toBe(true);
+    expect(new Date(jan.runs[0]).getMonth()).toBe(0); // January
+    const feb = nextCronRuns('0 0 1 feb *', 1, FROM);
+    expect(feb.valid).toBe(true);
+    expect(new Date(feb.runs[0]).getMonth()).toBe(1); // February
+    const dec = nextCronRuns('0 0 1 dec *', 1, FROM);
+    expect(dec.valid).toBe(true);
+    expect(new Date(dec.runs[0]).getMonth()).toBe(11); // December
+  });
+
   test('step in day-of-month (*/5) restricts to every 5th day — not every day', () => {
     const { valid, runs } = nextCronRuns('0 0 */5 * *', 6, FROM);
     expect(valid).toBe(true);

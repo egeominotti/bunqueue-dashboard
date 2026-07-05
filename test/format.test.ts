@@ -3,6 +3,7 @@ import {
   errorRate,
   formatBytes,
   formatDuration,
+  formatMs,
   formatNumber,
   formatPercent,
   formatRelativeTime,
@@ -60,9 +61,30 @@ describe('formatDuration', () => {
     expect(formatDuration(119700)).toBe('2m 0s');
     expect(formatDuration(119400)).toBe('1m 59s');
   });
+  test('a sub-1000 value that rounds up promotes to seconds (no "1000ms")', () => {
+    expect(formatDuration(999.6)).toBe('1.0s');
+    expect(formatDuration(999.4)).toBe('999ms');
+    expect(formatDuration(1000)).toBe('1.0s');
+  });
   test('unknown → "—"', () => {
     expect(formatDuration(undefined)).toBe('—');
     expect(formatDuration(-5)).toBe('—');
+  });
+});
+
+describe('formatMs', () => {
+  test('sub-second keeps a unit; ≥1s switches to seconds', () => {
+    expect(formatMs(5)).toBe('5.0ms');
+    expect(formatMs(42)).toBe('42ms');
+    expect(formatMs(1500)).toBe('1.50s');
+  });
+  test('a value that rounds to "1000ms" promotes to seconds', () => {
+    expect(formatMs(999.6)).toBe('1.00s');
+    expect(formatMs(999.4)).toBe('999ms');
+  });
+  test('nullish → "—"', () => {
+    expect(formatMs(undefined)).toBe('—');
+    expect(formatMs(Number.NaN)).toBe('—');
   });
 });
 

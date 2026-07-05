@@ -123,10 +123,12 @@ export async function sendMessage(text: string): Promise<void> {
     }
   } catch (e) {
     if ((e as Error).name === 'AbortError') {
-      // A suspended mutating tool must not fire later from a stale card.
-      store.cancelPending();
+      // abortActive() already cleared pending + busy for the turn it stopped
+      // (and a suspended mutating tool was declined there, before ac.abort()).
+      // Do NOT repeat cancelPending()/setBusy(false) here: a newer turn may have
+      // started in between, and doing so would decline ITS confirmations and
+      // release ITS busy lock. Only close this turn's own (by-id) bubble.
       store.finishAssistant(assistantId);
-      store.setBusy(false);
       if (activeAbort === ac) activeAbort = null;
       return;
     }
@@ -137,6 +139,10 @@ export async function sendMessage(text: string): Promise<void> {
     assistantId,
     failed ? { error: friendly(failed, config.provider) } : undefined
   );
-  store.setBusy(false);
-  if (activeAbort === ac) activeAbort = null;
+  // Only release the shared busy lock if this turn is still the active one — a
+  // turn superseded via abortActive() must not flip a newer turn's busy.
+  if (activeAbort === ac) {
+    store.setBusy(false);
+    activeAbort = null;
+  }
 }

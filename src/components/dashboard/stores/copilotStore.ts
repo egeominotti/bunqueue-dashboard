@@ -26,6 +26,9 @@ export interface ChatMessage {
   content: string;
   tools?: ToolEvent[];
   error?: boolean;
+  /** Set once the turn settles (completed, errored, or aborted) — distinguishes
+   *  a still-streaming empty assistant ("Thinking…") from one that ended empty. */
+  done?: boolean;
 }
 
 export interface PendingConfirm {
@@ -129,6 +132,7 @@ export const useCopilotStore = create<CopilotState>()(
         set((s) => ({
           messages: patchMessage(s.messages, id, (m) => ({
             ...m,
+            done: true,
             error: !!opts?.error,
             content: opts?.error ? m.content || opts.error : m.content,
           })),

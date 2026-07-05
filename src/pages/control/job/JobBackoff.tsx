@@ -13,7 +13,10 @@ function previewDelays(job: JobFull): { attempt: number; delayMs: number }[] {
   const maxDelay = cfg?.maxDelay ?? DEFAULT_MAX_BACKOFF;
   const base = cfg?.delay ?? job.backoff ?? 1000;
   const rows: { attempt: number; delayMs: number }[] = [];
-  for (let k = made; k < maxAttempts && rows.length < MAX_ROWS; k++) {
+  // Backoff applies before RETRIES, not the first attempt. A never-run job
+  // (made=0) must start at attempt 2 — its first execution has no backoff
+  // delay, only the job's own `delay` option gates it.
+  for (let k = Math.max(made, 1); k < maxAttempts && rows.length < MAX_ROWS; k++) {
     const raw = cfg?.type === 'fixed' ? base : base * 2 ** k;
     rows.push({ attempt: k + 1, delayMs: Math.min(raw, maxDelay) });
   }

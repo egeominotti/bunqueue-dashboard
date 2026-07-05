@@ -7,7 +7,7 @@ import { StatusDot } from '@/components/ui/StatusBadge';
 import { bq } from '@/lib/bq';
 import { formatNumber } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
-import { DlqConfigForm, StallForm } from './queue/ConfigForms';
+import { ConfigLoadError, DlqConfigForm, StallForm } from './queue/ConfigForms';
 import { LifecycleCard, LimitsCards } from './queue/QueueActions';
 
 const COUNT_KEYS = ['waiting', 'active', 'completed', 'failed', 'delayed', 'paused'] as const;
@@ -101,21 +101,25 @@ export function QueueControl() {
           <LimitsCards queue={queue} busy={busy} run={run} />
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {data.stall && (
+            {data.stall ? (
               <StallForm
                 key={queue}
                 queue={queue}
                 config={data.stall}
                 onSaved={() => setMsg({ ok: true, text: 'Stall config saved ✓' })}
               />
+            ) : (
+              <ConfigLoadError title="Stall detection" onRetry={refetch} />
             )}
-            {data.dlq && (
+            {data.dlq ? (
               <DlqConfigForm
                 key={queue}
                 queue={queue}
                 config={data.dlq}
                 onSaved={() => setMsg({ ok: true, text: 'DLQ config saved ✓' })}
               />
+            ) : (
+              <ConfigLoadError title="DLQ policy" onRetry={refetch} />
             )}
           </div>
         </>

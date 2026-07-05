@@ -28,7 +28,14 @@ type ColMeta = Record<string, { type: string; primaryKey: boolean }>;
 
 function csvEscape(v: unknown): string {
   const s = v == null ? '' : String(v);
-  return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+  // Neutralize spreadsheet formula injection on TEXT cells only (a real number
+  // can't be a formula, so it keeps numeric fidelity) — mirrors lib/exportFile.ts.
+  // A string cell starting with = + - @ is evaluated by Excel/Sheets on open;
+  // prefix with a ' so it stays literal text.
+  const safe = typeof v === 'string' && /^[=+\-@]/.test(v) ? `'${v}` : s;
+  // Quote on comma, quote, CR, or LF — a bare \r is a record separator to
+  // RFC-4180 parsers and would otherwise split the row.
+  return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 function toCsv(columns: string[], rows: unknown[][]): string {
   return [columns.map(csvEscape).join(','), ...rows.map((r) => r.map(csvEscape).join(','))].join(
@@ -547,6 +554,7 @@ export function Database() {
 
                 {tab === 'data' && selected && (
                   <FilterBar
+                    key={selected}
                     columns={data?.columns ?? schema?.columns.map((c) => c.name) ?? []}
                     filter={filter}
                     onChange={(f) => {
@@ -740,15 +748,19 @@ function RowDetailDrawer({
     };
   }, []);
 
+  // Stable key of the truncated columns for this row. `columns`/`truncated` are
+  // fresh array refs on every 6s poll, so depending on them re-fetched every
+  // cell each tick; the truncated set for a fixed row doesn't change between polls.
+  const truncatedKey = columns.filter((_, i) => truncated[i]).join('\u0001');
   useEffect(() => {
-    if (rowid == null) return;
+    if (rowid == null || !truncatedKey) return;
+    const cols = truncatedKey.split('\u0001');
     let cancelled = false;
     (async () => {
-      for (let i = 0; i < columns.length; i++) {
-        if (!truncated[i]) continue;
+      for (const col of cols) {
         try {
-          const r = await bq.db.cell(table, rowid, columns[i]);
-          if (!cancelled) setFull((f) => ({ ...f, [columns[i]]: r.value }));
+          const r = await bq.db.cell(table, rowid, col);
+          if (!cancelled) setFull((f) => ({ ...f, [col]: r.value }));
         } catch {
           /* leave the truncated grid value in place */
         }
@@ -757,7 +769,7 @@ function RowDetailDrawer({
     return () => {
       cancelled = true;
     };
-  }, [table, rowid, columns, truncated]);
+  }, [table, rowid, truncatedKey]);
 
   return (
     <>

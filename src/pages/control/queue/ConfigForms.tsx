@@ -13,17 +13,37 @@ import type { DlqConfig, StallConfig } from '@/lib/bqTypes';
  * serialized value preserves in-progress edits while still switching to a new
  * queue's config (or an externally-changed value) when it actually differs.
  */
-function useSyncedConfig<T>(config: T): [T, (v: T) => void] {
+/** Order-insensitive value signature so a save's echo can be recognized
+ *  regardless of the key order the server serializes it back in. */
+function configSig(v: unknown): string {
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    const o = v as Record<string, unknown>;
+    return JSON.stringify(
+      Object.keys(o)
+        .sort()
+        .map((k) => [k, o[k]])
+    );
+  }
+  return JSON.stringify(v);
+}
+
+function useSyncedConfig<T>(config: T): [T, (v: T) => void, (saved: unknown) => void] {
   const [c, setC] = useState(config);
-  const lastServer = useRef(JSON.stringify(config));
+  const lastServer = useRef(configSig(config));
   useEffect(() => {
-    const next = JSON.stringify(config);
+    const next = configSig(config);
     if (next !== lastServer.current) {
       lastServer.current = next;
       setC(config);
     }
   }, [config]);
-  return [c, setC];
+  // Advance the baseline to a just-saved value so the server's echo of OUR OWN
+  // save on the next poll isn't treated as an external change that wipes an
+  // immediate re-edit (edit → Save → re-edit was clobbered within one poll).
+  const markSaved = (saved: unknown) => {
+    lastServer.current = configSig(saved);
+  };
+  return [c, setC, markSaved];
 }
 
 /**
@@ -65,7 +85,7 @@ export function StallForm({
   config: StallConfig;
   onSaved: () => void;
 }) {
-  const [c, setC] = useSyncedConfig<StallDraft>(config);
+  const [c, setC, markSaved] = useSyncedConfig<StallDraft>(config);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -125,7 +145,9 @@ export function StallForm({
             setSaved(false);
             try {
               setErr(null);
-              await bq.setStallConfig(queue, { ...c, stallInterval, maxStalls, gracePeriod });
+              const payload = { ...c, stallInterval, maxStalls, gracePeriod };
+              await bq.setStallConfig(queue, payload);
+              markSaved(payload);
               onSaved();
               setSaved(true);
               window.setTimeout(() => setSaved(false), 2000);
@@ -154,7 +176,7 @@ export function DlqConfigForm({
   config: DlqConfig;
   onSaved: () => void;
 }) {
-  const [c, setC] = useSyncedConfig<DlqDraft>(config);
+  const [c, setC, markSaved] = useSyncedConfig<DlqDraft>(config);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -220,13 +242,9 @@ export function DlqConfigForm({
             setSaved(false);
             try {
               setErr(null);
-              await bq.setDlqConfig(queue, {
-                ...c,
-                autoRetryInterval,
-                maxAutoRetries,
-                maxAge,
-                maxEntries,
-              });
+              const payload = { ...c, autoRetryInterval, maxAutoRetries, maxAge, maxEntries };
+              await bq.setDlqConfig(queue, payload);
+              markSaved(payload);
               onSaved();
               setSaved(true);
               window.setTimeout(() => setSaved(false), 2000);
@@ -242,6 +260,22 @@ export function DlqConfigForm({
         {saved && <span className="text-xs text-success">Saved ✓</span>}
         {err && <span className="text-xs text-danger">{err}</span>}
       </div>
+    </Card>
+  );
+}
+
+/**
+ * Shown in place of a config form when its GET failed — the form must not
+ * silently vanish (both QueueControl and QueueDetailPro render it on a null config).
+ */
+export function ConfigLoadError({ title, onRetry }: { title: string; onRetry: () => void }) {
+  return (
+    <Card>
+      <CardHeader title={title} />
+      <p className="mb-3 text-sm text-muted">Couldn't load this queue's config.</p>
+      <Button size="sm" onClick={onRetry}>
+        Retry
+      </Button>
     </Card>
   );
 }

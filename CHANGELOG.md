@@ -15,6 +15,57 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.30] - 2026-07-05
+
+### Fixed
+- **Cron preview accepted the wrong month for named months.** The live schedule
+  preview rejected `jan` as invalid and shifted every other month name one early
+  (`feb` previewed January, `dec` previewed November) — a 0-indexed month table
+  against cron's 1-based months. Names now resolve correctly (jan=1 … dec=12).
+- **The Job Inspector could save an edited payload to the wrong job.** Editing
+  the Data field, then looking up a different job with a byte-identical payload,
+  kept the unsaved edit and let Save write it to the new job. The editor is now
+  keyed per job id.
+- **The Database inspector kept a stale filter across table switches.** Choosing
+  a filter column/value on one table then switching to another left the old
+  inputs in place, causing a "no such column" error or a silent wrong-table
+  filter; the filter bar now resets per table.
+- **Queue Control's config forms vanished silently when their load failed.** A
+  failed stall/DLQ-config fetch removed the whole form with no message; it now
+  shows a retry card, matching Queue Detail.
+- **A save then immediate re-edit of a queue's stall/DLQ config was clobbered**
+  by the save's own echo on the next poll. The form now recognizes its own
+  just-saved value and preserves the re-edit.
+- **CSV export from the Database inspector** now quotes a bare carriage return
+  (which was splitting a row) and neutralizes spreadsheet formula injection on
+  text cells (a value starting with `= + - @`), while keeping real numbers numeric.
+- **A queue with no processed jobs showed an error rate of "0.00%"** instead of
+  "—" (0% from zero data is a claim, not a measurement).
+- **Bulk job actions no longer overstate the confirm count.** A mixed-state
+  selection now confirms and acts on only the eligible rows.
+- **The backoff preview no longer implies a delay before a job's first run**
+  (attempt 1 is the initial execution — backoff applies only to retries).
+- **Duration and latency readouts no longer render "1000ms"** where rounding
+  tipped a value to a full second; they show "1.0s" / "1.00s".
+- **The DLQ retry/purge failure toast** read "Retri failed" / "Purg failed"; it
+  now reads "Retry failed" / "Purge failed".
+- **The live activity stream** splits SSE frames on the earliest boundary, so a
+  mixed CRLF/LF stream can't merge two events into one.
+- **Copilot:** stopping a turn before its first token no longer leaves a
+  permanent "Thinking…" bubble, and a stopped turn's late teardown can no longer
+  cancel a newly-started turn's confirmations or release its busy lock.
+- **Demo mode** (`?demo` / `#demo` local preview) no longer loses its call-to-action
+  and the Flows default graph after the first navigation drops the query string.
+
+### Changed
+- **Shared `ConfigLoadError`** extracted to the config-forms module so Queue
+  Control and Queue Detail render one component.
+- **The Database row-detail drawer** fetches each truncated cell once instead of
+  re-fetching every truncated cell on every 6s poll.
+- Added regression tests (cron month names, duration/latency rounding, SSE frame
+  boundaries). The one remaining Biome warning (`useActivityStream` effect deps)
+  is now a documented intentional-reconnect ignore, so `check` is fully clean.
+
 ## [0.0.29] - 2026-07-04
 
 ### Changed
@@ -663,7 +714,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.29...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.30...HEAD
+[0.0.30]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.29...v0.0.30
 [0.0.29]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.28...v0.0.29
 [0.0.28]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.27...v0.0.28
 [0.0.27]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.26...v0.0.27

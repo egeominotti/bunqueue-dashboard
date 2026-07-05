@@ -297,6 +297,7 @@ export function JobInspector() {
             {failureFirst && errorCard}
 
             <JobDataEditor
+              key={`data-${job.id}`}
               data={job.data}
               busy={busy}
               onSave={(parsed) => act('Data', () => bq.updateJobData(job.id, parsed))}

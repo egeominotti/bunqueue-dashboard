@@ -61,7 +61,9 @@ export function formatRelativeTime(ts: number | undefined | null, now = Date.now
 /** Duration in ms → "820ms", "1.4s", "2m 3s", or "—" when unknown. */
 export function formatDuration(ms: number | undefined | null): string {
   if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
-  if (ms < 1000) return `${Math.round(ms)}ms`;
+  // Round before the unit test so e.g. 999.6 reads "1.0s", not "1000ms".
+  const rounded = Math.round(ms);
+  if (rounded < 1000) return `${rounded}ms`;
   const s = ms / 1000;
   // toFixed(1) renders anything ≥ 59.95 as "60.0" — hand those to the minutes branch.
   if (s < 59.95) return `${s.toFixed(1)}s`;
@@ -105,7 +107,10 @@ export function formatCompact(n: number | undefined | null): string {
 export function formatMs(v: number | undefined | null): string {
   if (v == null || !Number.isFinite(v)) return '—';
   if (v >= 1000) return `${(v / 1000).toFixed(2)}s`;
-  return `${v.toFixed(v < 10 ? 1 : 0)}ms`;
+  const digits = v < 10 ? 1 : 0;
+  // 999.6 rounds to "1000" at 0 decimals — promote to seconds so it reads "1.00s".
+  if (Number(v.toFixed(digits)) >= 1000) return `${(v / 1000).toFixed(2)}s`;
+  return `${v.toFixed(digits)}ms`;
 }
 
 // ESC-led CSI sequences (colors, cursor moves) plus stray single-char

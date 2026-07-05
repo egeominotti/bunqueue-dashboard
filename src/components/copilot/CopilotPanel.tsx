@@ -339,7 +339,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
           </div>
         )}
         {!message.content && !isUser && (message.tools?.length ?? 0) === 0 && (
-          <div className="text-sm text-faint">Thinking…</div>
+          <div className="text-sm text-faint">{message.done ? 'Stopped.' : 'Thinking…'}</div>
         )}
       </div>
     </div>

@@ -170,11 +170,13 @@ export function JobsPro() {
   const runBulk = async (
     label: string,
     fn: (job: JobFull) => Promise<unknown>,
-    // Built from the ACTUAL target count, so the confirm can't overstate what
-    // the action will touch (selection may include rows filtered out of view).
+    // Only ELIGIBLE selected rows are targeted, so the confirm count matches
+    // what actually runs (a mixed-state selection no longer overstates it) and
+    // ineligible rows aren't attempted just to be rejected.
+    eligible: (job: JobFull) => boolean,
     confirmText?: (count: number) => string
   ) => {
-    const targets = rows.filter((r) => selected.has(r.id));
+    const targets = rows.filter((r) => selected.has(r.id) && eligible(r));
     if (targets.length === 0) return;
     if (confirmText && !window.confirm(confirmText(targets.length))) return;
     setBulkBusy(true);
@@ -182,7 +184,7 @@ export function JobsPro() {
     const results = await Promise.allSettled(targets.map(fn));
     const okCount = results.filter((r) => r.status === 'fulfilled').length;
     const failCount = results.length - okCount;
-    const text = `${label}: ${okCount} succeeded${failCount ? `, ${failCount} not eligible / failed` : ''}`;
+    const text = `${label}: ${okCount} succeeded${failCount ? `, ${failCount} failed` : ''}`;
     setActionMsg({ ok: failCount === 0, text });
     if (failCount === 0) toast.success(text);
     else toast.error(text);
@@ -191,16 +193,25 @@ export function JobsPro() {
     refetch();
   };
 
+  // Per-action eligibility, shared by the button-enable check and runBulk's
+  // target filter so the two can't drift.
+  const eligibleFor = {
+    retry: (j: JobFull) => {
+      const g = actionGates(j.state);
+      return g.retryActive || g.retryDlq;
+    },
+    promote: (j: JobFull) => actionGates(j.state).promote,
+    requeue: (j: JobFull) => actionGates(j.state).requeueCompleted,
+    fail: (j: JobFull) => actionGates(j.state).fail,
+    cancel: (j: JobFull) => actionGates(j.state).cancel,
+  };
   const selectedRows = rows.filter((r) => selected.has(r.id));
   const canBulk = {
-    retry: selectedRows.some((r) => {
-      const g = actionGates(r.state);
-      return g.retryActive || g.retryDlq;
-    }),
-    promote: selectedRows.some((r) => actionGates(r.state).promote),
-    requeue: selectedRows.some((r) => actionGates(r.state).requeueCompleted),
-    fail: selectedRows.some((r) => actionGates(r.state).fail),
-    cancel: selectedRows.some((r) => actionGates(r.state).cancel),
+    retry: selectedRows.some(eligibleFor.retry),
+    promote: selectedRows.some(eligibleFor.promote),
+    requeue: selectedRows.some(eligibleFor.requeue),
+    fail: selectedRows.some(eligibleFor.fail),
+    cancel: selectedRows.some(eligibleFor.cancel),
   };
 
   const exportRows = () => {
@@ -230,35 +241,24 @@ export function JobsPro() {
     ]);
   };
 
-  const bulkRetry = () => runBulk('Retry', retryJobByState);
-  const bulkPromote = () =>
-    runBulk('Promote', (j) =>
-      actionGates(j.state).promote
-        ? bq.promoteJob(j.id)
-        : Promise.reject(new Error(`"${j.state ?? 'unknown'}" is not delayed`))
-    );
+  // Targets are pre-filtered to eligible rows by runBulk, so each fn is a direct
+  // call — no per-job state guard needed (it can never receive an ineligible job).
+  const bulkRetry = () => runBulk('Retry', retryJobByState, eligibleFor.retry);
+  const bulkPromote = () => runBulk('Promote', (j) => bq.promoteJob(j.id), eligibleFor.promote);
   const bulkRequeue = () =>
-    runBulk('Requeue', (j) =>
-      actionGates(j.state).requeueCompleted
-        ? bq.retryCompleted(j.queue ?? '', j.id)
-        : Promise.reject(new Error(`"${j.state ?? 'unknown'}" is not completed`))
-    );
+    runBulk('Requeue', (j) => bq.retryCompleted(j.queue ?? '', j.id), eligibleFor.requeue);
   const bulkFail = () =>
     runBulk(
       'Fail',
-      (j) =>
-        actionGates(j.state).fail
-          ? bq.failJob(j.id)
-          : Promise.reject(new Error(`"${j.state ?? 'unknown'}" is not active`)),
+      (j) => bq.failJob(j.id),
+      eligibleFor.fail,
       (n) => `Force-fail ${n} job(s)?`
     );
   const bulkCancel = () =>
     runBulk(
       'Cancel',
-      (j) =>
-        actionGates(j.state).cancel
-          ? bq.cancelJob(j.id)
-          : Promise.reject(new Error(`"${j.state ?? 'unknown'}" cannot be cancelled`)),
+      (j) => bq.cancelJob(j.id),
+      eligibleFor.cancel,
       (n) => `Cancel ${n} job(s)? This cannot be undone.`
     );
 

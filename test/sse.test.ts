@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { frameIndicatesConnected, parseFrame } from '../src/lib/sse';
+import { frameIndicatesConnected, parseFrame, streamEvents } from '../src/lib/sse';
 
 describe('parseFrame', () => {
   test('parses an event with JSON data', () => {
@@ -62,6 +62,55 @@ describe('frameIndicatesConnected', () => {
       const f = parseFrame(raw);
       expect(f).not.toBeNull();
       expect(frameIndicatesConnected(f as NonNullable<typeof f>)).toBe(true);
+    }
+  });
+});
+
+describe('streamEvents frame boundaries', () => {
+  function mockFetchOnce(body: string) {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(body));
+        controller.close();
+      },
+    });
+    const orig = globalThis.fetch;
+    globalThis.fetch = (() =>
+      Promise.resolve(new Response(stream, { status: 200 }))) as typeof fetch;
+    return () => {
+      globalThis.fetch = orig;
+    };
+  }
+
+  test('splits on the EARLIEST boundary when \\r\\n\\r\\n precedes \\n\\n (no frame merge)', async () => {
+    // Regression: a `indexOf('\\n\\n') || indexOf('\\r\\n\\r\\n')` short-circuit picked
+    // the later \\n\\n over the earlier \\r\\n\\r\\n, gluing two events into one.
+    const restore = mockFetchOnce('data: {"jobId":"1"}\r\n\r\ndata: {"jobId":"2"}\n\n');
+    try {
+      const ids: string[] = [];
+      await streamEvents(
+        '/events',
+        (f) => ids.push((f.data as { jobId: string }).jobId),
+        new AbortController().signal
+      );
+      expect(ids).toEqual(['1', '2']);
+    } finally {
+      restore();
+    }
+  });
+
+  test('handles plain \\n\\n framing', async () => {
+    const restore = mockFetchOnce('data: {"jobId":"a"}\n\ndata: {"jobId":"b"}\n\n');
+    try {
+      const ids: string[] = [];
+      await streamEvents(
+        '/events',
+        (f) => ids.push((f.data as { jobId: string }).jobId),
+        new AbortController().signal
+      );
+      expect(ids).toEqual(['a', 'b']);
+    } finally {
+      restore();
     }
   });
 });

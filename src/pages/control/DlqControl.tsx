@@ -92,7 +92,11 @@ export function DlqControl() {
     } catch (e) {
       const text = (e as Error).message;
       setMsg({ ok: false, text });
-      toast.error(`${verb.replace(/ed$/, '')} failed`, text);
+      // `verb` is past tense for the success line ("Retried 5 entries"); the
+      // failure title wants the present tense (a naive /ed$/ strip yields
+      // "Retri"/"Purg").
+      const action = verb === 'Purged' ? 'Purge' : 'Retry';
+      toast.error(`${action} failed`, text);
     } finally {
       setBusy(false);
     }

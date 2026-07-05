@@ -80,13 +80,25 @@ export async function streamEvents(
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
 
-      let sep: number;
-      // Frames are separated by a blank line (\n\n). Tolerate \r\n too.
-      // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic stream scan
-      while ((sep = buffer.indexOf('\n\n')) !== -1 || (sep = buffer.indexOf('\r\n\r\n')) !== -1) {
-        const isCrlf = buffer[sep] === '\r';
+      // Frames are separated by a blank line (\n\n). Tolerate \r\n too. Take the
+      // EARLIEST boundary each pass — a naive `\n\n || \r\n\r\n` short-circuit
+      // could pick a later \n\n over an earlier \r\n\r\n and merge two frames.
+      while (true) {
+        const lf = buffer.indexOf('\n\n');
+        const crlf = buffer.indexOf('\r\n\r\n');
+        let sep: number;
+        let width: number;
+        if (lf !== -1 && (crlf === -1 || lf <= crlf)) {
+          sep = lf;
+          width = 2;
+        } else if (crlf !== -1) {
+          sep = crlf;
+          width = 4;
+        } else {
+          break;
+        }
         const raw = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + (isCrlf ? 4 : 2));
+        buffer = buffer.slice(sep + width);
         const frame = parseFrame(raw.replace(/\r/g, ''));
         if (frame) onFrame(frame);
       }

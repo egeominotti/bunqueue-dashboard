@@ -15,7 +15,7 @@ import { cn } from '@/lib/cn';
 import { errorRate, formatDuration, formatNumber, formatPercent } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 import { depthTrend } from '@/lib/useThroughputSeries';
-import { DlqConfigForm, StallForm } from './queue/ConfigForms';
+import { ConfigLoadError, DlqConfigForm, StallForm } from './queue/ConfigForms';
 import { LifecycleCard, LimitsCards } from './queue/QueueActions';
 
 const COUNT_KEYS = ['waiting', 'active', 'completed', 'failed', 'delayed', 'paused'] as const;
@@ -116,7 +116,9 @@ export function QueueDetailPro() {
 
   const detail = data?.detail;
   const c = detail?.counts;
-  const rate = c ? (errorRate(c.completed ?? 0, c.failed ?? 0) ?? 0) : 0;
+  // Keep null when nothing has been processed — "0.00%" from zero data is a
+  // claim, not a measurement (errorRate's contract; OverviewPro follows it too).
+  const rate = c ? errorRate(c.completed ?? 0, c.failed ?? 0) : null;
   const trend = depthTrend(depth);
 
   return (
@@ -298,7 +300,7 @@ export function QueueDetailPro() {
             )}
             <div className="mt-1 flex items-center justify-between text-xs text-faint">
               <span>waiting + active + delayed</span>
-              <span className="tnum">Error rate {formatPercent(rate)}</span>
+              <span className="tnum">Error rate {rate == null ? '—' : formatPercent(rate)}</span>
             </div>
           </Card>
 
@@ -370,19 +372,6 @@ function PriorityHistogram({ counts }: { counts: Record<string, number> }) {
         ))}
       </div>
       <p className="mt-2 text-xs text-faint">Higher p = higher priority. Waiting jobs only.</p>
-    </Card>
-  );
-}
-
-/** Shown in place of a config form when its GET failed — the form must not silently vanish. */
-function ConfigLoadError({ title, onRetry }: { title: string; onRetry: () => void }) {
-  return (
-    <Card>
-      <CardHeader title={title} />
-      <p className="mb-3 text-sm text-muted">Couldn't load this queue's config.</p>
-      <Button size="sm" onClick={onRetry}>
-        Retry
-      </Button>
     </Card>
   );
 }
