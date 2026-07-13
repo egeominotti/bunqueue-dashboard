@@ -64,7 +64,7 @@ jobs:
 
       - name: Configure Pages
         id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           # Best-effort: try to provision Pages (build type = GitHub Actions) on
           # the first run. With the default GITHUB_TOKEN this can be a no-op —
