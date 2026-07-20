@@ -15,6 +15,34 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.31] - 2026-07-20
+
+### Fixed
+- **Classic pages now follow the current bunqueue API contract.** Storage reads
+  the nested `data` payload, DLQ rows use their nested job and attempt records,
+  job names come from payload data, durations use the current timestamps,
+  uptime is converted from milliseconds, queue totals are global rather than
+  page-local, and log rows identify their event.
+- **Classic job actions no longer silently fail or offer invalid cancellation.**
+  Cancellation is state-gated and surfaces request failures, while queue
+  discovery refreshes periodically.
+- **Standalone database queries retain their five-second safety timeout.** The
+  query worker is embedded as a second executable entry point on local and
+  release builds; worker startup failures can no longer fall back to a blocking
+  synchronous query.
+- **Dependency audit is clean.** VitePress and Vite were upgraded to versions
+  that remove the vulnerable transitive Vite/esbuild packages.
+- Updated the architecture, API mapping, page guide, deployment snippets, and
+  known-issues documentation to match the corrected behavior.
+
+### Changed
+- **Copilot provider SDKs load on demand.** The Copilot panel's minified lazy
+  chunk drops from about 685 kB to 182 kB, with unused providers split into
+  separate chunks.
+- Documentation builds now isolate Node's local-storage state and suppress the
+  known lazy Mermaid/VitePress chunk warning while preserving bundle checks.
+- Added regression coverage for database queries through the disposable worker.
+
 ## [0.0.30] - 2026-07-05
 
 ### Fixed
@@ -714,7 +742,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.30...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.31...HEAD
+[0.0.31]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.30...v0.0.31
 [0.0.30]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.29...v0.0.30
 [0.0.29]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.28...v0.0.29
 [0.0.28]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.27...v0.0.28

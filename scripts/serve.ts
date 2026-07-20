@@ -20,6 +20,7 @@
  */
 import { logger } from '../agent/logger';
 import { ProcessManager } from '../agent/manager';
+import { setQueryWorkerUrl } from '../agent/db';
 import {
   createFetchHandler,
   isHostAllowed,
@@ -27,6 +28,16 @@ import {
   resolveAllowedOrigins,
 } from '../agent/server';
 import { ASSETS } from './embedded.gen';
+
+// Bun emits secondary TypeScript entrypoints under /$bunfs/root as JavaScript.
+// Point db.ts at that embedded path in a compiled executable; when this npm bin
+// runs from source, use the real TypeScript module beside agent/db.ts.
+const compiled = import.meta.url.includes('/$bunfs/');
+setQueryWorkerUrl(
+  compiled
+    ? new URL('/$bunfs/root/agent/dbQueryWorker.js', 'file:///').href
+    : new URL('../agent/dbQueryWorker.ts', import.meta.url).href
+);
 
 const PORT = Number(process.env.PORT) || 8080;
 // Bind loopback by default: the /api proxy forwards to bunqueue's admin API, so

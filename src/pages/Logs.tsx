@@ -105,7 +105,7 @@ export function Logs() {
             <thead>
               <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
                 <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium">Job Name</th>
+                <th className="px-5 py-3 font-medium">Event</th>
                 <th className="px-5 py-3 font-medium">Queue</th>
                 <th className="px-5 py-3 text-right font-medium">Timestamp</th>
                 <th className="px-5 py-3 text-right font-medium">ID</th>
@@ -120,7 +120,7 @@ export function Logs() {
                   <td className="px-5 py-3">
                     <StatusBadge status={e.status} />
                   </td>
-                  <td className="px-5 py-3 text-fg">{e.name || 'unknown'}</td>
+                  <td className="px-5 py-3 text-fg">{e.event || 'job event'}</td>
                   <td className="px-5 py-3">
                     <span className="rounded-md bg-surface-2 px-2 py-0.5 font-mono text-xs text-muted">
                       {e.queue || '—'}

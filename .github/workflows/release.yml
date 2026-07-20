@@ -125,7 +125,7 @@ jobs:
             suffix="${target#bun-}"
             out="bunqueue-dashboard-${{ steps.ver.outputs.tag }}-${suffix}"
             if [ "$target" = "bun-windows-x64" ]; then out="${out}.exe"; fi
-            bun build scripts/serve.ts --compile --minify --target="$target" --outfile "$out"
+            bun build scripts/serve.ts agent/dbQueryWorker.ts --compile --minify --target="$target" --outfile "$out"
           done
           ls -la bunqueue-dashboard-*
 

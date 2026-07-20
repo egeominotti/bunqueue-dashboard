@@ -48,7 +48,6 @@ export interface StorageStatus {
   diskFull?: boolean;
   error?: string | null;
   since?: number | null;
-  path?: string;
   [key: string]: unknown;
 }
 
@@ -139,7 +138,6 @@ export type JobState =
 /** A job as returned by GET /queues/:q/jobs/list and GET /jobs/:id. */
 export interface Job {
   id: string;
-  name?: string;
   queue?: string;
   state?: JobState;
   status?: JobState;
@@ -151,24 +149,36 @@ export interface Job {
   progress?: number;
   createdAt?: number;
   runAt?: number;
+  startedAt?: number | null;
+  completedAt?: number | null;
+  /** @deprecated Legacy BullMQ-style aliases; bunqueue returns startedAt/completedAt. */
   processedOn?: number;
+  /** @deprecated Legacy BullMQ-style aliases; bunqueue returns startedAt/completedAt. */
   finishedOn?: number;
   failedReason?: string;
   stacktrace?: string[];
   [key: string]: unknown;
 }
 
+export interface DlqAttempt {
+  attempt: number;
+  startedAt: number;
+  failedAt: number;
+  reason: string;
+  error: string | null;
+  duration: number;
+}
+
 export interface DlqEntry {
-  id: string;
-  jobId?: string;
-  queue?: string;
-  name?: string;
-  reason?: string;
-  error?: string;
-  data?: unknown;
-  attempts?: number;
-  enteredAt?: number;
-  failedAt?: number;
+  job: Job;
+  enteredAt: number;
+  reason: string;
+  error: string | null;
+  attempts?: DlqAttempt[];
+  retryCount?: number;
+  lastRetryAt?: number | null;
+  nextRetryAt?: number | null;
+  expiresAt?: number | null;
   [key: string]: unknown;
 }
 

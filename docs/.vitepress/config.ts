@@ -178,6 +178,12 @@ export default withMermaid({
   },
 
   vite: {
+    build: {
+      // VitePress + Mermaid intentionally ship two lazy framework chunks around
+      // 650–760 kB minified. They are split from page content and below this
+      // explicit docs-only ceiling, so keep build output warning-free.
+      chunkSizeWarningLimit: 800,
+    },
     plugins: [
       // Emits /llms.txt and /llms-full.txt so LLMs (Claude et al.) can consume the
       // docs. title/description/details give a model an accurate mental model up

@@ -80,7 +80,7 @@ export function Overview() {
         <Card>
           <CardHeader title="Resources" />
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Meta label="Uptime" value={formatUptime(stats.uptime)} />
+            <Meta label="Uptime" value={formatUptime(stats.uptime / 1000)} />
             <Meta label="Heap" value={formatBytes(memory.heapUsed * 1024 * 1024)} />
             <Meta label="RSS" value={formatBytes(memory.rss * 1024 * 1024)} />
             <Meta

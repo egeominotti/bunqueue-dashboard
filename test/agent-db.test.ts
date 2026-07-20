@@ -10,6 +10,7 @@ import {
   dbTables,
   MAX_ROWS,
   MissingDbError,
+  queryWithTimeout,
 } from '../agent/db';
 
 const PATH = `/tmp/bq-agent-db-test-${process.pid}.db`;
@@ -113,6 +114,12 @@ describe('agent db inspector', () => {
     expect(r.columns).toEqual(['id']);
     expect(r.ms).toBeGreaterThanOrEqual(0);
     expect(MAX_ROWS).toBe(500);
+  });
+
+  test('runs queries through the disposable timeout worker', async () => {
+    const r = await queryWithTimeout(PATH, 'SELECT 42 AS answer');
+    expect(r.columns).toEqual(['answer']);
+    expect(r.rows).toEqual([[42]]);
   });
 
   test('write / DDL / ATTACH statements are rejected before execution', () => {

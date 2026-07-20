@@ -25,9 +25,8 @@ suggests, so trust this table over guessing from the server source alone.
 | `GET /queues/summary` | `[{ name, paused, counts:{waiting,active,completed,failed,delayed} }]` | **bare array**, no `{ ok }` envelope at all; one round-trip for every queue's full counts (see [pages.md](pages.md) / A5 in the project changelog) |
 
 - **DLQ entry** = `{ job, enteredAt, reason, error, attempts[] }`. The job is
-  **nested**; there is no top-level `id`/`name`. Use `entry.job.id`. (The
-  classic `lib/types.ts` `DlqEntry` gets this wrong, see
-  [known-issues.md](known-issues.md).)
+  **nested**; there is no top-level `id`/`name`. Both clients use
+  `entry.job.id` and model the attempt history as an array.
 - **Jobs** have **no `name`** field, and expose **`startedAt` / `completedAt`**
   (not `processedOn` / `finishedOn`). Duration = `completedAt − startedAt`.
   A job's *result* is **not** embedded on the job object, it's only
@@ -62,11 +61,9 @@ response), treating that as a thrown error would break any page rendering a
 than request-success, follow that pattern (`srv(path, init, false)`) rather
 than special-casing it in a page.
 
-`lib/api.ts` (the classic client) does **not** implement this check, it only
-throws on non-2xx HTTP status. Classic pages that call an always-200 mutating
-endpoint (e.g. `Jobs.tsx`'s per-row Cancel via `api.cancelJob`) can still show
-a false "success" for a logically-failed action. Not retrofitted, per the
-additive rule, new pages use `bq`.
+`lib/api.ts` (the classic client) implements the same logical-failure check,
+with `strict:false` for health/storage responses whose `ok` field represents
+health rather than request success.
 
 ## Job action gating
 

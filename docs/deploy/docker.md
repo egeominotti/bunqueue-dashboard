@@ -66,7 +66,7 @@ bunqueue server directly, so that server needs CORS for the dashboard's origin.
 To avoid CORS entirely, serve the dashboard and proxy `/api/*` to bunqueue from
 the **same** origin. Extend the Caddyfile:
 
-```caddyfile
+```txt
 :80 {
 	root * /usr/share/caddy
 	encode gzip zstd

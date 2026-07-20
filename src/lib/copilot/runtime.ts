@@ -106,7 +106,7 @@ export async function sendMessage(text: string): Promise<void> {
 
   let failed: string | null = null;
   try {
-    const model = createModel(config);
+    const model = await createModel(config);
     const result = streamText({
       model,
       system: SYSTEM,

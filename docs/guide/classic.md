@@ -29,9 +29,8 @@ been superseded by a Pro page at the plain path (the classic version moved to a
 
 **Differences vs the Pro page ([`/`](/guide/overview)):** OverviewPro adds a connection banner, a per-queue health grid, and a live Recent Activity feed.
 
-::: warning Known issue
-Uptime renders ~1000× too large (milliseconds passed to a seconds-based formatter), the "36d" shown is really about 53 minutes. See [Known issues](/known-issues).
-:::
+Uptime converts the server's millisecond counter before formatting, matching
+the Pro overview.
 
 ## Queues (classic)
 
@@ -43,9 +42,8 @@ Uptime renders ~1000× too large (milliseconds passed to a seconds-based formatt
 
 **Differences vs the Pro page:** [`/queues`](/guide/queues) (QueuesOverview) fetches the full list in one `bq.queuesSummary()` call and adds inline pause/resume; this classic page is paginated and read-only.
 
-::: tip Known limitation
-The header cards and search only cover the current 20-row page, not all queues (see [Known issues](/known-issues)).
-:::
+The search filters the current 20-row page; the header cards use global
+dashboard totals and therefore remain stable while paging.
 
 ## Jobs (classic)
 
@@ -55,9 +53,9 @@ The header cards and search only cover the current 20-row page, not all queues (
 
 **What it shows.** A cross-queue job explorer over the bunqueue HTTP API: six stat cards (in the screenshot: 47,157 total, 41,300 waiting, 5,854 completed, 3 failed, 0.05% error rate) above a merged job table, here mostly completed `notifications` and `emails` jobs plus one waiting `maintenance` job. Filter with the queue dropdown and the All/Waiting/Active/Completed/Failed segments, search by job ID, and cancel a job with the trash icon (confirm prompt). "All Queues" fans out over the first 25 queues, 40 jobs each, newest-first, capped at 100 rows; arriving via `?queue=` preselects a queue.
 
-::: warning Known limitations
-The Name column is always "unknown", the Duration column always renders a placeholder dash, and searching by name is dead, real jobs carry none of the fields this page reads (see [Known issues](/known-issues)).
-:::
+The optional Name value comes from `job.data.name`, Duration uses the server's
+`startedAt`/`completedAt` timestamps, and Cancel is enabled only for states the
+server accepts. The queue picker refreshes every 30 seconds.
 
 **Differences vs the Pro page:** [`/jobs`](/guide/jobs) (JobsPro) is the replacement, single-queue, server-paginated, with multi-select bulk actions and correct Name/Duration.
 
@@ -69,9 +67,9 @@ The Name column is always "unknown", the Duration column always renders a placeh
 
 **What it shows.** The first-generation dead-letter view: a queue selector (with per-queue DLQ counts), a "DLQ Entries" stat card, a paginated entries table (Job ID, Name, Reason, Attempts, Failed), and Retry all / Purge buttons with confirmation prompts. It polls the bunqueue HTTP API via the legacy `api` client.
 
-::: danger Known bug, broken for real entries
-`api.ts` models a flat `DlqEntry` shape the server never returns (entries are nested `{ job, enteredAt, reason, attempts[] }`). With a non-empty DLQ the page crashes rendering the `attempts` array, the screenshot shows exactly that: the error boundary ("Something went wrong … Objects are not valid as a React child") with a Reload button, instead of the seeded queues' entries.
-:::
+The client and table use the server's nested
+`{ job, enteredAt, reason, attempts[] }` shape, including the nested job id,
+attempt count and latest failure time.
 
 **Differences vs the Pro pages:** use [`/dlq`](/guide/dlq) (DlqPro, cross-queue dashboard with filters and per-row retry) or [`/dlq-control`](/guide/dlq-control) (single-queue actions), both read the correct nested shape and work.
 
@@ -113,9 +111,9 @@ Note: the percentile list once rendered broken values (`[object Object]`/zeros);
 
 ![Logs (classic)](../screenshots/classic-logs.png)
 
-**What it shows.** A live activity feed of job events streamed over SSE from the bunqueue API, the same stream the Pro Logs page uses. Six stat cards count events since the page opened (Total, Completed, Failed, Waiting, Active) plus a rolling Throughput rate (2.8/s in the screenshot). Below, a table lists each event's status badge, job name, queue, relative timestamp, and job ID, 10 per page. Filter with the queue dropdown (list refreshed every 30 s), the All/Waiting/Active/Completed/Failed segments, or the search box (matches job ID, name, or queue). In the screenshot, seeded `emails` and `notifications` jobs cycle through Waiting → Active → Completed. Counters reset on reload, this is a session view, not history.
+**What it shows.** A live activity feed of job events streamed over SSE from the bunqueue API, the same stream the Pro Logs page uses. Six stat cards count events since the page opened (Total, Completed, Failed, Waiting, Active) plus a rolling Throughput rate (2.8/s in the screenshot). Below, a table lists each event's status badge, event type, queue, relative timestamp, and job ID, 10 per page. Filter with the queue dropdown (list refreshed every 30 s), the All/Waiting/Active/Completed/Failed segments, or the search box (matches job ID or queue). In the screenshot, seeded `emails` and `notifications` jobs cycle through Waiting → Active → Completed. Counters reset on reload, this is a session view, not history.
 
-**Differences vs the Pro page:** [`/logs`](/guide/logs) adds an event-type column (working around this page's known bug: Job Name here is permanently "unknown" because SSE events carry no name) and export/clear controls.
+**Differences vs the Pro page:** [`/logs`](/guide/logs) adds richer failure details plus export/clear controls; both views use event type because SSE events do not carry job names.
 
 ## Usage (classic)
 
@@ -123,13 +121,9 @@ Note: the percentile list once rendered broken values (`[object Object]`/zeros);
 
 ![Usage (classic)](../screenshots/classic-usage.png)
 
-**What it shows.** A read-only snapshot of cumulative server usage, polled live from the bunqueue HTTP API via a single `api.overview()` call. Four stat cards give lifetime totals, in the screenshot the seeded demo workload shows 5,600 jobs pushed, 5,890 completed (green), 3 failed (red), 5,896 pulled (blue). Below them, a **Runtime** card lists uptime, heap used (79.0 MB), RSS (436.0 MB), workers ("2 active / 2") and cron jobs (3), and a **Storage** card shows Status and Path. There is nothing to click; if the server is unreachable the page renders zeroed values with an offline banner instead of an error.
+**What it shows.** A read-only snapshot of cumulative server usage, polled live from the bunqueue HTTP API via a single `api.overview()` call. Four stat cards give lifetime totals, in the screenshot the seeded demo workload shows 5,600 jobs pushed, 5,890 completed (green), 3 failed (red), 5,896 pulled (blue). Below them, a **Runtime** card lists uptime, heap used (79.0 MB), RSS (436.0 MB), workers ("2 active / 2") and cron jobs (3), and a **Storage** card shows honest disk-full state and when it began. There is nothing to click; if the server is unreachable the page renders zeroed values with an offline banner instead of an error.
 
-::: warning Two known bugs
-See [Known issues](/known-issues): the Storage card reads a response shape `/storage` never returns, so Status is always "Healthy" (masking a real disk-full condition) and Path always shows a dash placeholder; and uptime is milliseconds fed to a seconds formatter, so the screenshot's "37d 11h 31m" is really about 54 minutes.
-:::
-
-**Differences vs the Pro page:** [`/usage`](/guide/usage) (UsagePro) fixes both issues, honest disk-full detection and correct uptime, and adds an error-rate figure.
+**Differences vs the Pro page:** [`/usage`](/guide/usage) (UsagePro) adds an error-rate figure and a more prominent storage warning.
 
 ## S3 Backup (classic)
 
@@ -137,11 +131,7 @@ See [Known issues](/known-issues): the Storage card reads a response shape `/sto
 
 ![S3 Backup (classic)](../screenshots/classic-s3.png)
 
-**What it shows.** A read-only reference for bunqueue's S3 snapshot backups. A banner reminds you that backups are configured on the **server via environment variables** and cannot be toggled from the dashboard. Two cards follow: **Storage status** (polls `GET /storage` on the bunqueue API, the screenshot shows Disk "Healthy" and an empty Path) and **Configuration (server env)**, a static cheat-sheet of the eight variables that actually control backups (`S3_BACKUP_ENABLED`, `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, access/secret keys, `S3_BACKUP_INTERVAL`, `S3_BACKUP_RETENTION`) with defaults. There is nothing to click, use it as a lookup while editing your server's env.
-
-::: warning Known issue
-The classic `api.ts` client misreads the `/storage` response shape, so Disk always reads "Healthy" (even when the disk is full) and Path always shows a dash placeholder; `/storage` returns no path at all.
-:::
+**What it shows.** A read-only reference for bunqueue's S3 snapshot backups. A banner reminds you that backups are configured on the **server via environment variables** and cannot be toggled from the dashboard. Two cards follow: **Storage status** (polls `GET /storage` on the bunqueue API and reports Disk plus any server Error) and **Configuration (server env)**, a static cheat-sheet of the eight variables that actually control backups (`S3_BACKUP_ENABLED`, `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, access/secret keys, `S3_BACKUP_INTERVAL`, `S3_BACKUP_RETENTION`) with defaults. There is nothing to click, use it as a lookup while editing your server's env.
 
 **Differences vs the Pro page:** [`/s3`](/guide/s3) (S3BackupPro) adds a local-only config-builder form, a working "Test Connection", and an honest storage check via `bq.storage()`.
 

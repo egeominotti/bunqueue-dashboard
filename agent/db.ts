@@ -436,24 +436,28 @@ function translateError(e: unknown): Error {
 /**
  * Time-boxed, off-thread execution of an arbitrary query. Spawns a disposable
  * readonly Worker and races it against QUERY_TIMEOUT_MS so a runaway scan can't
- * freeze the agent's control endpoints. Falls back to a synchronous run when a
- * Worker cannot be created (e.g. a compiled single-file binary) — still bounded
- * in memory and statement type, just not interruptible.
+ * freeze the agent's control endpoints.
  */
+let queryWorkerUrl = new URL('./dbQueryWorker.ts', import.meta.url).href;
+
+/**
+ * The standalone executable's bundle root is scripts/serve.ts, so it supplies
+ * the embedded worker URL relative to that entrypoint. Source-mode agent runs
+ * keep the module-relative default above.
+ */
+export function setQueryWorkerUrl(url: string): void {
+  queryWorkerUrl = url;
+}
+
 export async function queryWithTimeout(path: string, sql: string): Promise<DbQueryResult> {
   let worker: Worker;
   try {
-    worker = new Worker(new URL('./dbQueryWorker.ts', import.meta.url).href, { type: 'module' });
-  } catch {
-    return dbQuery(path, sql); // no Worker available — degrade to synchronous
+    worker = new Worker(queryWorkerUrl, { type: 'module' });
+  } catch (e) {
+    throw new Error(`Query worker unavailable: ${(e as Error).message ?? String(e)}`);
   }
   try {
     return await new Promise<DbQueryResult>((resolve, reject) => {
-      // The Worker module is not always available at runtime — notably a
-      // `bun build --compile` single-file binary does not embed it, and there
-      // `new Worker(...)` does NOT throw synchronously: it resolves and then
-      // fails asynchronously via the `error` event (ModuleNotFound). Guard both
-      // paths and degrade to a synchronous run rather than failing the request.
       let settled = false;
       const timer = setTimeout(() => {
         if (settled) return;
@@ -473,15 +477,8 @@ export async function queryWithTimeout(path: string, sql: string): Promise<DbQue
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        // Worker infra itself failed to load/run (e.g. not embedded in the
-        // compiled binary). Fall back to the synchronous path — still readonly,
-        // allowlisted and row-capped, just not interruptible by the wall clock.
         ev.preventDefault?.();
-        try {
-          resolve(dbQuery(path, sql));
-        } catch (e) {
-          reject(translateError(e));
-        }
+        reject(new Error(`Query worker failed: ${ev.message || 'unknown worker error'}`));
       });
       worker.postMessage({ path, sql });
     });

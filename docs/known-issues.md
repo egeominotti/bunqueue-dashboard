@@ -83,21 +83,13 @@ history/EXPLAIN/CSV/JSON export). `scripts/dev.ts` now spawns services
 directly instead of via `bun run` wrappers, which did not forward SIGTERM and
 were the root cause of the recurring orphaned vite/agent processes.
 
-## Database inspector, known limitation
+## Database inspector, standalone timeout fixed
 
-- **In the standalone compiled binaries** (`release.yml` / `scripts/serve.ts`
-  via `bun build --compile`), the `/db/query` runner has **no wall-clock
-  timeout**. The timeout runs the query in a disposable Worker, and
-  `bun build --compile` does not embed the worker module, so `queryWithTimeout`
-  degrades to a synchronous run there (still read-only, statement-allowlisted
-  and row-capped at 500, just not interruptible). A deliberately pathological
-  scan can therefore pin the agent's thread in a compiled binary until it
-  finishes. Under `bun start` / `bun run agent` (the normal path) the Worker
-  timeout is active and aborts runaway queries at 5s. `/db` reads are protected
-  by the Origin **and Host** allowlists (the Host gate now blocks DNS-rebinding
-  reads too); the optional `AGENT_TOKEN` still gates only state changes, but the
-  browser client now sends it when configured, so a token-protected agent's
-  control actions work from the dashboard.
+- **Compiled binaries now embed the disposable query Worker.** The standalone
+  build passes both `scripts/serve.ts` and `agent/dbQueryWorker.ts` as
+  entrypoints, so `/db/query` keeps the same 5-second wall-clock timeout as
+  `bun start`. Queries remain read-only, statement-allowlisted and capped at
+  500 rows in every distribution mode.
 
 ## Stability sweep (adversarially verified, earlier change-set)
 
@@ -213,62 +205,21 @@ ship with reproducing tests (`test/agent-server.test.ts`, `test/manager.test.ts`
   whole shell, so a single render throw shows a recoverable fallback instead of
   blanking the entire app.
 
-The items below are the ones **still** open (mostly confined to the off-nav
-`*-classic` legacy pages, kept per the additive convention).
+## Classic-page correctness pass
 
-## Correctness, silent wrong data (off-nav legacy pages)
-
-- **`lib/api.ts`'s `storage()` and the classic `Usage`/`S3Backup` pages
-  disagree with the real `/storage` shape.** The server wraps the payload, `GET /storage` → `{ ok, data: { diskFull, error, since } }` (see
-  [api-mapping.md](api-mapping.md)), but `api.ts:76` types it as
-  `{ ok, status: StorageStatus }` and `S3Backup.tsx`/`Usage.tsx` read
-  `data?.status?.diskFull` / `data?.status?.path`. Neither field exists at
-  that nesting, so both pages always render "Healthy" and a blank Path, **masking a real disk-full condition**. `lib/bq.ts`'s `storage()` has the
-  correct `{ ok, data }` type and is used correctly by `S3BackupPro`'s "Test
-  Connection", the bug is confined to the classic `api.ts` path. Note
-  `/storage` never returns a `path` field either way; that row is dead
-  regardless of the wrapping fix.
-- **`lib/types.ts`'s `DlqEntry` models a shape the server doesn't return.** The
-  real DLQ entry is `{ job: Job, enteredAt, reason, error, attempts:
-  AttemptRecord[] }`, nested. `api.ts`'s `DlqEntry` declares top-level
-  `id`/`jobId`/`name`/`failedAt`, which don't exist on the real object (masked
-  by its `[key: string]: unknown` index signature, so TypeScript doesn't catch
-  it). `Dlq.tsx` (classic) renders `e.jobId ?? e.id` (→ blank), `e.name`
-  (→ always "unknown"), and uses `e.id` as the React key (→ `undefined`, duplicate-key warnings). `DlqPro`/`DlqControl` use the corrected
-  `DlqEntryFull` from `bqTypes.ts` and read `e.job.id`, they're fine.
-- **The classic `Dlq.tsx` also crashes on a non-empty DLQ**, it renders
-  `{e.attempts}` (an `AttemptRecord[]`) directly as a table cell → React
-  "Objects are not valid as a React child". Confined to `/dlq-classic`
-  (off-nav); the default `/dlq` (`DlqPro`) is unaffected.
-
-## Correctness (off-nav legacy pages, component-sweep findings, report-only)
-
-A full component sweep confirmed these in the classic pages; left as-is per the
-additive rule (the primary Pro routes are unaffected):
-
-- **`Overview.tsx` (`/overview-classic`) and `Usage.tsx` (`/usage`) render uptime
-  ~1000× too large**, `/dashboard`'s `stats.uptime` is milliseconds but both pass
-  it to the seconds-based `formatUptime` without the `/1000` the Pro pages apply.
-  Note `/usage` IS nav-reachable; fix would be a one-liner if it graduates to a
-  Pro page.
-- **`Jobs.tsx` (`/jobs-classic`) Duration column always renders a placeholder dash and Name/search are
-  dead**, it reads `processedOn`/`finishedOn` and `name`, none of which exist on
-  real jobs (see the API-shape gotchas).
-- **`Queues.tsx` (`/queues-classic`) header cards labeled as global totals only sum
-  the current 20-row page.**
-- **`Logs.tsx` (`/logs-classic`) "Job Name" column is permanently "unknown"**, SSE events carry no `name` (the Pro LogsPro now shows the event type instead).
-
-## Performance (off-nav legacy pages)
-
-- **`Jobs.tsx` (classic, `/jobs-classic`) polls the full queue list every 3s.**
-  `usePolledData(() => api.queues(500), [])` (Jobs.tsx:32) fetches up to 500 full
-  queue rows on the fast global cadence purely to feed the queue dropdown and the
-  `slice(0, 25)` fan-out list, data that changes rarely. The primary route
-  `/jobs` → `JobsPro` already throttles the equivalent to 30s
-  (`{ intervalMs: 30000 }`), so the real user path is efficient. Left as-is per
-  the additive rule (classic pages are reported, not edited in place); the fix, if
-  ever wanted, is to add `{ intervalMs: 30000 }` to that call. An efficiency pass
-  applied the same throttle to every *Pro* page (QueueControl, LogsPro, AddJob, JobsPro overview) and split the DLQ/Metrics duplicate `/dashboard` polls.
+- **Storage and DLQ shapes now match the live API.** The classic client reads
+  `/storage` from `{ ok, data }`, and `DlqEntry` uses the nested
+  `{ job, enteredAt, reason, error, attempts[] }` shape. The classic S3 page no
+  longer masks disk-full, and a non-empty classic DLQ renders instead of
+  crashing or showing blank identifiers.
+- **Classic timestamps and totals are accurate.** Overview/Usage convert uptime
+  milliseconds before formatting, Jobs uses `startedAt`/`completedAt`, and
+  Queues gets its header totals from the global dashboard summary rather than
+  the current page.
+- **Legacy Jobs and Logs no longer advertise unavailable data.** Jobs reads an
+  optional display name from job data, gates Cancel by job state, surfaces
+  cancellation errors and refreshes the queue list every 30 seconds. Logs
+  shows the SSE event type instead of a permanently unknown job name.
 
 ## UX gaps
 

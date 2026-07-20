@@ -133,23 +133,22 @@ see [known-issues.md](known-issues.md) for the real limits.
 
 ## First-gen view pages (Classic, `api`)
 
-These predate the Pro pages and are kept intact per the additive rule. All are
-off-nav (`-classic` routes) and superseded by a Pro page; several render wrong
-data by design of the old client, so see
-[known-issues.md](known-issues.md) before treating anything below as a fresh bug.
+These predate the Pro pages. All are off-nav (`-classic` routes) and
+superseded by a Pro page, but their shared API shapes and basic readouts remain
+correct and regression-safe.
 
 | Route | Page | Behaviour |
 | --- | --- | --- |
-| `/overview-classic` | `Overview` | Stat cards + throughput + resources + a compact workers/crons summary. Renders uptime ×1000 too large. |
-| `/queues-classic` | `Queues` | Full queue list with client-side name search; header cards only sum the current page. |
+| `/overview-classic` | `Overview` | Stat cards + throughput + resources + a compact workers/crons summary. |
+| `/queues-classic` | `Queues` | Paginated queue list with client-side page search and global header totals. |
 | `/queues-classic/:name` | `QueueDetail` | Single-queue drill-in: pause/resume/drain/obliterate, counts, recent jobs, embeds `pages/queue/QueueConfig.tsx`. |
-| `/jobs-classic` | `Jobs` | Same shape as `JobsPro` minus multi-select/bulk; Duration/Name columns are dead (reads fields real jobs don't have); polls the full queue list every 3s. |
-| `/dlq-classic` | `Dlq` | Single-queue DLQ table reading the **flat, uncorrected** `DlqEntry` type, which renders wrong for real entries and crashes on a non-empty DLQ (`{e.attempts}` as a React child). |
+| `/jobs-classic` | `Jobs` | Same shape as `JobsPro` minus multi-select/bulk; uses job-data display names, real timestamps, state-gated Cancel and a 30s queue-picker refresh. |
+| `/dlq-classic` | `Dlq` | Single-queue DLQ table using the real nested `{ job, enteredAt, reason, attempts[] }` shape. |
 | `/cron-classic` | `Cron` | List + delete only (no create form, use `/cron`). |
 | `/metrics-classic` | `Metrics` | Kv dumps of the raw `/dashboard` payload (latency/collections/totals/memory), useful for inspecting the raw shape. |
 | `/workers-classic` | `Workers` | Registered-workers table, no status/unregister. |
-| `/logs-classic` | `Logs` | Same SSE feed as `LogsPro`, no pagination, "Job Name" column permanently "unknown". |
-| `/usage-classic` | `Usage` | Cumulative totals + runtime + storage; storage row reads a shape `/storage` doesn't return (always "Healthy") and uptime is ×1000 too large. |
+| `/logs-classic` | `Logs` | Same SSE feed as `LogsPro`, with event type, queue, timestamp and job id. |
+| `/usage-classic` | `Usage` | Cumulative totals + runtime + honest storage health and disk-full timestamp. |
 | `/s3-classic` | `S3Backup` | Read-only storage status + a static list of the server env vars that configure S3 backup. |
 
 ## Settings

@@ -180,10 +180,10 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
     // GETs (including the /db/* inspector, which can expose job payloads) are
     // protected by the Origin allowlist alone — a drive-by cross-origin page
     // can't read the response (no ACAO for its origin), which is the real
-    // threat. Gating reads behind the token would break the dashboard itself:
-    // the browser client sends no agent token (see bq.ts `agent()`), so the
-    // whole point of loopback + allowlisted CORS is to make browser reads work
-    // without one. Non-browser local callers on loopback are trusted for reads.
+    // threat. Reads intentionally remain available without a token for local
+    // dashboards that don't configure AGENT_TOKEN; when a token is configured,
+    // the browser client does send it, but only POST/PUT require it.
+    // Non-browser local callers on loopback are trusted for reads.
     const mutating = method === 'POST' || method === 'PUT';
     if (mutating && !tokenOk(req, token)) {
       return json({ ok: false, error: 'Unauthorized' }, 401, origin);

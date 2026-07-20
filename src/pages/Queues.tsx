@@ -29,6 +29,7 @@ export function Queues() {
     () => api.queues(PAGE_SIZE, page * PAGE_SIZE),
     [page]
   );
+  const { data: overview } = usePolledData(() => api.overview(), []);
 
   const d = data ?? EMPTY;
 
@@ -40,16 +41,7 @@ export function Queues() {
 
   if (loading && !data && !error) return <LoadingState label="Loading queues…" />;
 
-  const totals = d.queues.reduce(
-    (acc, q) => {
-      acc.waiting += q.waiting;
-      acc.active += q.active;
-      acc.delayed += q.delayed;
-      acc.dlq += q.dlq;
-      return acc;
-    },
-    { waiting: 0, active: 0, delayed: 0, dlq: 0 }
-  );
+  const totals = overview?.stats;
 
   return (
     <div>
@@ -57,13 +49,28 @@ export function Queues() {
       <PageHeader title="Queues" description={`${d.total} queues`} live />
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Waiting" value={formatNumber(totals.waiting)} tone="amber" compact />
-        <StatCard label="Active" value={formatNumber(totals.active)} tone="blue" compact />
-        <StatCard label="Delayed" value={formatNumber(totals.delayed)} tone="default" compact />
+        <StatCard
+          label="Waiting"
+          value={totals ? formatNumber(totals.waiting) : '—'}
+          tone="amber"
+          compact
+        />
+        <StatCard
+          label="Active"
+          value={totals ? formatNumber(totals.active) : '—'}
+          tone="blue"
+          compact
+        />
+        <StatCard
+          label="Delayed"
+          value={totals ? formatNumber(totals.delayed) : '—'}
+          tone="default"
+          compact
+        />
         <StatCard
           label="DLQ"
-          value={formatNumber(totals.dlq)}
-          tone={totals.dlq ? 'red' : 'default'}
+          value={totals ? formatNumber(totals.dlq) : '—'}
+          tone={totals?.dlq ? 'red' : 'default'}
           compact
         />
       </div>

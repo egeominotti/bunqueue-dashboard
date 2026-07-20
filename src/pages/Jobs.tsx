@@ -16,6 +16,7 @@ import {
   formatRelativeTime,
   jobDuration,
 } from '@/lib/format';
+import { actionGates } from '@/lib/jobActions';
 import type { Job } from '@/lib/types';
 import { usePolledData } from '@/lib/usePolledData';
 
@@ -29,7 +30,7 @@ export function Jobs() {
   const [status, setStatus] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
 
-  const { data: qs } = usePolledData(() => api.queues(500), []);
+  const { data: qs } = usePolledData(() => api.queues(500), [], { intervalMs: 30000 });
   const { data: overview } = usePolledData(() => api.overview(), []);
 
   const fetcher = useCallback(async () => {
@@ -53,7 +54,9 @@ export function Jobs() {
     const term = search.trim().toLowerCase();
     const filtered = term
       ? list.filter(
-          (j) => j.id.toLowerCase().includes(term) || (j.name ?? '').toLowerCase().includes(term)
+          (j) =>
+            j.id.toLowerCase().includes(term) ||
+            ((j.data as { name?: string } | undefined)?.name ?? '').toLowerCase().includes(term)
         )
       : list;
     return filtered.slice(0, 100);
@@ -67,8 +70,8 @@ export function Jobs() {
     try {
       await api.cancelJob(id);
       refetch();
-    } catch {
-      /* ignore, next poll reflects state */
+    } catch (e) {
+      window.alert(`Cancel failed: ${(e as Error).message}`);
     }
   };
 
@@ -168,7 +171,9 @@ export function Jobs() {
                     className="border-b border-line last:border-0 hover:bg-surface-2/40"
                   >
                     <td className="px-5 py-3 font-mono text-xs text-accent/90">{j.id}</td>
-                    <td className="px-5 py-3 text-fg">{j.name || 'unknown'}</td>
+                    <td className="px-5 py-3 text-fg">
+                      {(j.data as { name?: string } | undefined)?.name || 'unnamed'}
+                    </td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">{j.queue}</td>
                     <td className="px-5 py-3">
                       <StatusBadge status={String(j.state ?? j.status ?? 'waiting')} />
@@ -178,10 +183,16 @@ export function Jobs() {
                       {formatRelativeTime(j.createdAt)}
                     </td>
                     <td className="px-5 py-3 text-right tnum text-muted">
-                      {formatDuration(jobDuration(j.processedOn, j.finishedOn))}
+                      {formatDuration(
+                        jobDuration(j.startedAt ?? undefined, j.completedAt ?? undefined)
+                      )}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <IconButton aria-label="Cancel job" onClick={() => cancel(j.id)}>
+                      <IconButton
+                        aria-label="Cancel job"
+                        disabled={!actionGates(j.state ?? j.status).cancel}
+                        onClick={() => cancel(j.id)}
+                      >
                         <IconTrash className="size-3.5" />
                       </IconButton>
                     </td>

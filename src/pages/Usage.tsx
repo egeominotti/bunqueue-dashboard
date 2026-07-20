@@ -3,7 +3,7 @@ import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { api } from '@/lib/api';
-import { formatBytes, formatNumber, formatUptime } from '@/lib/format';
+import { formatBytes, formatNumber, formatRelativeTime, formatUptime } from '@/lib/format';
 import type { StorageStatus } from '@/lib/types';
 import { usePolledData } from '@/lib/usePolledData';
 
@@ -60,7 +60,7 @@ export function Usage() {
         <Card>
           <CardHeader title="Runtime" />
           <dl className="divide-y divide-line text-sm">
-            <Row label="Uptime" value={formatUptime(stats.uptime)} />
+            <Row label="Uptime" value={formatUptime(stats.uptime / 1000)} />
             <Row label="Heap used" value={formatBytes(memory.heapUsed * 1024 * 1024)} />
             <Row label="RSS" value={formatBytes(memory.rss * 1024 * 1024)} />
             <Row label="Workers" value={`${workers.active} active / ${workers.total}`} />
@@ -71,7 +71,10 @@ export function Usage() {
           <CardHeader title="Storage" />
           <dl className="divide-y divide-line text-sm">
             <Row label="Status" value={storage.diskFull ? 'Disk full' : 'Healthy'} />
-            <Row label="Path" value={String(storage.path ?? '—')} mono />
+            <Row
+              label="Disk full since"
+              value={storage.diskFull ? formatRelativeTime(storage.since) : '—'}
+            />
             {storage.error ? <Row label="Error" value={String(storage.error)} /> : null}
           </dl>
         </Card>

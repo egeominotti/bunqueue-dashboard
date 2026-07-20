@@ -39,17 +39,19 @@ export function S3Backup() {
                 <dt className="text-muted">Disk</dt>
                 <dd
                   className={
-                    data?.status?.diskFull
+                    data?.data?.diskFull
                       ? 'font-medium text-red-400'
                       : 'font-medium text-emerald-400'
                   }
                 >
-                  {data?.status?.diskFull ? 'Full' : 'Healthy'}
+                  {data?.data?.diskFull ? 'Full' : 'Healthy'}
                 </dd>
               </div>
               <div className="flex items-center justify-between py-2.5">
-                <dt className="text-muted">Path</dt>
-                <dd className="font-mono text-xs text-fg">{String(data?.status?.path ?? '—')}</dd>
+                <dt className="text-muted">Error</dt>
+                <dd className="font-mono text-xs text-fg">
+                  {data?.data?.error ? String(data.data.error) : '—'}
+                </dd>
               </div>
             </dl>
           )}

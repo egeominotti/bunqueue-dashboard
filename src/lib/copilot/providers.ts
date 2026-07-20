@@ -1,7 +1,3 @@
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import type { LanguageModel } from 'ai';
 
 /**
@@ -99,26 +95,38 @@ export interface ModelConfig {
   model: string;
 }
 
-/** Build a v7 LanguageModel for the chosen provider, keyed with the user's key. */
-export function createModel(cfg: ModelConfig): LanguageModel {
+/**
+ * Build a v7 LanguageModel for the chosen provider, keyed with the user's key.
+ * Each provider SDK is loaded only when selected, keeping the Copilot panel and
+ * unused providers out of the same oversized lazy chunk.
+ */
+export async function createModel(cfg: ModelConfig): Promise<LanguageModel> {
   const def = providerById(cfg.provider);
   const apiKey = cfg.apiKey.trim();
   switch (def?.kind) {
-    case 'anthropic':
+    case 'anthropic': {
+      const { createAnthropic } = await import('@ai-sdk/anthropic');
       return createAnthropic({
         apiKey,
         // Required for Anthropic to accept a browser-origin request.
         headers: { 'anthropic-dangerous-direct-browser-access': 'true' },
       })(cfg.model);
-    case 'openai':
+    }
+    case 'openai': {
+      const { createOpenAI } = await import('@ai-sdk/openai');
       return createOpenAI({ apiKey })(cfg.model);
-    case 'google':
+    }
+    case 'google': {
+      const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
       return createGoogleGenerativeAI({ apiKey })(cfg.model);
-    default:
+    }
+    default: {
+      const { createOpenAICompatible } = await import('@ai-sdk/openai-compatible');
       return createOpenAICompatible({
         name: cfg.provider || 'custom',
         baseURL: (cfg.baseURL || def?.baseURL || '').replace(/\/+$/, ''),
         apiKey,
       })(cfg.model);
+    }
   }
 }

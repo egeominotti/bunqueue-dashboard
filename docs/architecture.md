@@ -119,10 +119,8 @@ flowchart LR
 Two clients, on purpose (see the additive rule in the project `CLAUDE.md`):
 
 - **`lib/api.ts`**, the original client, used only by classic pages.
-  Throws only on non-2xx HTTP status; does **not** inspect the response body
-  for a logical `ok:false` (several bunqueue endpoints return HTTP 200 even
-  on failure, see [api-mapping.md](api-mapping.md)). A few of its response
-  types don't match the server's real shape (`storage()`, `DlqEntry`, `DlqStats`), see [known-issues.md](known-issues.md).
+  It throws on non-2xx responses and logical HTTP-200 `{ ok:false }`
+  failures, and its storage, job-timestamp and DLQ types mirror the server.
 - **`lib/bq.ts`**, the complete, shape-verified client behind every
   `pages/control/*` page and the control agent. Its `call()` helper throws on
   non-2xx **and** on a parsed `{ ok: false }` body, with one deliberate
@@ -131,8 +129,7 @@ Two clients, on purpose (see the additive rule in the project `CLAUDE.md`):
   HTTP 200), not "request succeeded", see api-mapping.md for why that
   distinction matters and which other endpoints are strict.
 - Types for `bq` live in `lib/bqTypes.ts` (verified against a live server, see api-mapping.md); types for `api` live in `lib/types.ts`.
-- **New work always uses `bq`.** Do not "fix" `api.ts` in place, add a
-  corrected page using `bq` instead (the additive rule).
+- **New work always uses `bq`**, which exposes the complete control surface.
 
 ## The control agent
 

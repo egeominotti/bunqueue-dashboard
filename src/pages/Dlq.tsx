@@ -130,19 +130,21 @@ export function Dlq() {
             <tbody>
               {entries.map((e, i) => (
                 <tr
-                  key={e.jobId ?? e.id ?? i}
+                  key={e.job.id || i}
                   className="border-b border-line last:border-0 align-top hover:bg-surface-2/40"
                 >
-                  <td className="px-5 py-3 font-mono text-xs text-muted">{e.jobId ?? e.id}</td>
-                  <td className="px-5 py-3 text-fg">{e.name || 'unknown'}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-muted">{e.job.id}</td>
+                  <td className="px-5 py-3 text-fg">
+                    {(e.job.data as { name?: string } | undefined)?.name || 'unnamed'}
+                  </td>
                   <td className="max-w-md px-5 py-3 text-xs text-red-400/90">
                     {String(e.reason || e.error || '—')}
                   </td>
                   <td className="px-5 py-3 text-right tnum text-muted">
-                    {Array.isArray(e.attempts) ? e.attempts.length : (e.attempts ?? '—')}
+                    {e.attempts?.length ?? e.job.attempts ?? '—'}
                   </td>
                   <td className="px-5 py-3 text-right text-faint">
-                    {formatRelativeTime(e.failedAt ?? e.enteredAt)}
+                    {formatRelativeTime(e.attempts?.at(-1)?.failedAt ?? e.enteredAt)}
                   </td>
                 </tr>
               ))}

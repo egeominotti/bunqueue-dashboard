@@ -84,7 +84,7 @@ export const api = {
   stats: () => request<StatsResponse>('/stats'),
   // strict:false — `ok` here is a semantic status flag (disk-full → ok:false at
   // HTTP 200 is data, not a request failure), so it must not throw.
-  storage: () => request<{ ok: boolean; status: StorageStatus }>('/storage', undefined, false),
+  storage: () => request<{ ok: boolean; data: StorageStatus }>('/storage', undefined, false),
   health: () => request<Record<string, unknown>>('/health', undefined, false),
 
   // ---- Jobs ----

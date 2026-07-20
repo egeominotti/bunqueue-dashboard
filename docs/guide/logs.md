@@ -54,7 +54,7 @@ Changing the queue, status, or search jumps you back to the first page, so you a
 - **This is a live view, not a history log.** It keeps only the most recent 250 events and starts counting from the moment you opened the page. Reloading, navigating away, or switching the queue clears the feed and resets every counter.
 - **You can only search what's on screen.** Because the feed holds the last 250 events, older events that have scrolled off can't be searched or paged back to.
 - **Switching queues restarts the feed.** Moving between **All Queues** and a specific queue reconnects the stream, so the list clears and the rates briefly drop to zero before filling again.
-- **There's no job-name column.** Job events don't carry a name, so the table shows the event type and job ID instead. (The older `/logs-classic` page shows a permanently blank "Job Name" for the same reason, see [Known issues](/known-issues).)
+- **There's no job-name column.** Job events don't carry a name, so both log views show the event type and job ID instead.
 - **The empty table tells you what's happening.** You'll see **"Connecting to the event stream…"** while it connects, **"Waiting for activity…"** once connected but idle, and **"No events match the current filters."** when your filters hide everything.
 - **It reconnects on its own.** If the connection drops, the **Live** indicator goes off and the feed retries automatically after a couple of seconds. If the server is unreachable, a banner with a **Retry** button appears under the header.
 

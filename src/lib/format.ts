@@ -75,9 +75,9 @@ export function formatDuration(ms: number | undefined | null): string {
 }
 
 /** Compute a job's duration from its timestamps, if both are present. */
-export function jobDuration(processedOn?: number, finishedOn?: number): number | undefined {
-  if (processedOn == null || finishedOn == null) return undefined;
-  const d = finishedOn - processedOn;
+export function jobDuration(startedAt?: number, completedAt?: number): number | undefined {
+  if (startedAt == null || completedAt == null) return undefined;
+  const d = completedAt - startedAt;
   return d >= 0 ? d : undefined;
 }
 
