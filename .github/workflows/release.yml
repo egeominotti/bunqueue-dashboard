@@ -144,7 +144,7 @@ jobs:
       # so downloads can be checked with `gh attestation verify <file> --repo …`.
       - name: Attest artifact provenance
         if: steps.ver.outputs.publish == 'true'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             bunqueue-dashboard-*.zip

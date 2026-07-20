@@ -111,7 +111,7 @@ jobs:
       # consumers can run `gh attestation verify oci://ghcr.io/...` to confirm it
       # was built from this repo by this workflow.
       - name: Attest image provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
