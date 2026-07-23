@@ -21,11 +21,18 @@ const numDefault = (s: string): number | undefined => {
   return s.trim() !== '' && Number.isFinite(n) ? n : undefined;
 };
 
-const asNum = (v: unknown): number | undefined =>
-  typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+// Records exported from a spreadsheet/CSV converter carry every scalar as a
+// string, so coerce numeric strings (and stringify numeric ids) instead of
+// dropping the option the operator wrote.
+export const asNum = (v: unknown): number | undefined => {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v.trim()) : v;
+  return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
+};
 const asBool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : undefined);
-const asStr = (v: unknown): string | undefined =>
-  typeof v === 'string' && v !== '' ? v : undefined;
+export const asStr = (v: unknown): string | undefined => {
+  if (typeof v === 'string') return v !== '' ? v : undefined;
+  return typeof v === 'number' && Number.isFinite(v) ? String(v) : undefined;
+};
 
 interface Defaults {
   priority?: number;
@@ -45,7 +52,7 @@ interface Defaults {
  *            you authored as job specs.
  * Shared defaults fill option fields a spec omits.
  */
-function coerceBody(el: unknown, def: Defaults, mode: ParseMode): AddJobBody {
+export function coerceBody(el: unknown, def: Defaults, mode: ParseMode): AddJobBody {
   if (mode === 'spec' && el && typeof el === 'object' && !Array.isArray(el) && 'data' in el) {
     const o = el as Record<string, unknown>;
     return {
@@ -94,8 +101,53 @@ function specWouldDropKeys(items: unknown[]): boolean {
   );
 }
 
+/** The coercer each spec option goes through, so a value-typed drop is detectable. */
+const SPEC_COERCERS: Record<string, (v: unknown) => unknown> = {
+  priority: asNum,
+  delay: asNum,
+  maxAttempts: asNum,
+  backoff: asNum,
+  timeout: asNum,
+  ttl: asNum,
+  jobId: asStr,
+  uniqueKey: asStr,
+  removeOnComplete: asBool,
+  removeOnFail: asBool,
+  durable: asBool,
+  lifo: asBool,
+};
+/** True when a `spec`-mode item carries a known option whose VALUE type can't be sent. */
+export function specWouldDropValues(items: unknown[]): boolean {
+  return items.some((el) => {
+    if (el == null || typeof el !== 'object' || Array.isArray(el) || !('data' in el)) return false;
+    const o = el as Record<string, unknown>;
+    return Object.keys(o).some((k) => {
+      const coerce = SPEC_COERCERS[k];
+      return coerce != null && o[k] !== undefined && coerce(o[k]) === undefined;
+    });
+  });
+}
+
+/**
+ * Created-vs-submitted summary: jobs deduped server-side (shared jobId/uniqueKey)
+ * must never be presented as a full success.
+ */
+export function bulkSummary(
+  created: number,
+  submitted: number,
+  queue: string
+): { ok: boolean; msg: string } {
+  if (created === submitted) {
+    return { ok: true, msg: `Created ${created} job${created === 1 ? '' : 's'} in ${queue}` };
+  }
+  return {
+    ok: false,
+    msg: `Created ${created} of ${submitted} jobs in ${queue} — ${submitted - created} were not created (duplicate jobId/uniqueKey?)`,
+  };
+}
+
 /** Parse the textarea as a JSON array, a single JSON object, or NDJSON (one per line). */
-function parseInput(text: string): { items: unknown[]; error: string | null } {
+export function parseInput(text: string): { items: unknown[]; error: string | null } {
   const trimmed = text.trim();
   if (!trimmed) return { items: [], error: null };
   // Try whole-document JSON first (array or single object).
@@ -108,7 +160,9 @@ function parseInput(text: string): { items: unknown[]; error: string | null } {
   }
   // NDJSON: one JSON value per non-empty line.
   const items: unknown[] = [];
-  const lines = trimmed.split('\n');
+  // Split the UNTRIMMED text so a reported line number matches the textarea:
+  // leading blank lines would otherwise shift every index.
+  const lines = text.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
@@ -143,6 +197,9 @@ export function BulkAddJobs() {
   // Warn (don't block) when spec-mode would silently drop non-option keys — the
   // signal that the operator probably wants raw mode for these records.
   const dropWarning = mode === 'spec' && !error && specWouldDropKeys(items);
+  // Same class of silent loss, one level down: a known option whose value is the
+  // wrong type (a stringified number, a numeric jobId) is coerced to undefined.
+  const valueWarning = mode === 'spec' && !error && specWouldDropValues(items);
 
   const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -163,7 +220,10 @@ export function BulkAddJobs() {
 
   const submit = async () => {
     setResult(null);
-    if (!queue.trim()) {
+    // Submit the string that passed validation — a trailing space would create a
+    // phantom look-alike queue and misroute the whole batch.
+    const target = queue.trim();
+    if (!target) {
       setResult({ ok: false, msg: 'Choose a queue' });
       return;
     }
@@ -192,12 +252,13 @@ export function BulkAddJobs() {
     const bodies = items.map((el) => coerceBody(el, def, mode));
     setBusy(true);
     try {
-      const r = await bq.addJobsBulk(queue, bodies);
-      // A shared custom jobId dedupes to one job server-side, so report distinct ids.
-      const created = new Set(r.ids).size;
-      const text2 = `Created ${created} job${created === 1 ? '' : 's'} in ${queue}`;
-      setResult({ ok: true, msg: text2 });
-      toast.success(text2);
+      const r = await bq.addJobsBulk(target, bodies);
+      // A shared custom jobId dedupes to one job server-side, so report distinct
+      // ids — and compare them against what was submitted before calling it a win.
+      const summary = bulkSummary(new Set(r.ids).size, bodies.length, target);
+      setResult(summary);
+      if (summary.ok) toast.success(summary.msg);
+      else toast.error('Bulk import incomplete', summary.msg);
     } catch (e) {
       const m = (e as Error).message;
       setResult({ ok: false, msg: m });
@@ -264,6 +325,12 @@ export function BulkAddJobs() {
             <p className="mt-2 text-xs text-warning">
               Some items carry keys beyond the known job options — in “spec” mode those keys are
               dropped. Switch to “raw” to keep every field as the job's data.
+            </p>
+          )}
+          {valueWarning && (
+            <p className="mt-2 text-xs text-warning">
+              Some items carry a job option whose value type can't be sent (e.g. a boolean written
+              as text) — those options are dropped. Fix the value types or switch to “raw”.
             </p>
           )}
         </Card>

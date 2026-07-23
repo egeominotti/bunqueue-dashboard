@@ -20,6 +20,16 @@ const objFromRows = (rows: Row[]): Record<string, string> => {
   return o;
 };
 
+/**
+ * Distinct keys that appear more than once. Deduped on purpose: the warning
+ * names each colliding key exactly once and pluralizes on the number of
+ * distinct collisions, not on how many extra rows carry them.
+ */
+export function duplicateKeys(keys: string[]): string[] {
+  const trimmed = keys.map((k) => k.trim());
+  return [...new Set(trimmed.filter((k, i, a) => k && a.indexOf(k) !== i))];
+}
+
 // Common bunqueue env knobs, offered as one-click add buttons.
 const PRESETS = ['AUTH_TOKENS', 'LOG_LEVEL', 'S3_BACKUP_ENABLED', 'S3_BUCKET', 'METRICS_ENABLED'];
 
@@ -50,7 +60,7 @@ export function EnvVarsEditor({
   const removeRow = (id: number) => commit(rows.filter((r) => r.id !== id));
 
   const used = new Set(rows.map((r) => r.key.trim()).filter(Boolean));
-  const dupes = rows.map((r) => r.key.trim()).filter((k, i, a) => k && a.indexOf(k) !== i);
+  const dupes = duplicateKeys(rows.map((r) => r.key));
   // Soft heuristic only — a space/'='/lowercase key is almost always a typo,
   // but nothing here blocks saving (the server accepts any string).
   const suspicious = [

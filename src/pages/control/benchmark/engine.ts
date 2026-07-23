@@ -125,7 +125,9 @@ export const clampInt = (v: number, lo: number, hi: number): number =>
 
 /** Nearest-rank percentile over an already-sorted ascending array. */
 export const percentile = (sorted: number[], p: number): number =>
-  sorted.length ? sorted[Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length))] : 0;
+  sorted.length
+    ? sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))]
+    : 0;
 
 export const makeJobs = (
   base: number,

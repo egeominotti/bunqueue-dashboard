@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -13,13 +13,62 @@ import { nextCronRuns } from '@/lib/cronPreview';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 
+/**
+ * Page state clamped to the live page count. Clamps the STATE, not just the
+ * rendered value: with only the render clamped, a list that shrinks (delete)
+ * and then regrows (create) jumps the table to a page nobody navigated to.
+ */
+export function useClampedPage(pageCount: number): [number, (p: number) => void] {
+  const [page, setPage] = useState(0);
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(pageCount - 1);
+  }, [page, pageCount]);
+  return [Math.min(page, pageCount - 1), setPage];
+}
+
+/**
+ * A confirmation flag that auto-clears after `ms`. The timer handle is kept and
+ * restarted on every `fire()`, so back-to-back creates each get their full
+ * window (an unheld timer from create N would erase create N+1's badge), and it
+ * is cleared on unmount.
+ */
+export function useTransientFlag(ms: number): {
+  on: boolean;
+  fire: () => void;
+  reset: () => void;
+} {
+  const [on, setOn] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clear = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+  };
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    []
+  );
+  return {
+    on,
+    fire: () => {
+      clear();
+      setOn(true);
+      timer.current = setTimeout(() => setOn(false), ms);
+    },
+    reset: () => {
+      clear();
+      setOn(false);
+    },
+  };
+}
+
 export function CronManager() {
   const { data, error, loading, refetch } = usePolledData(() => bq.crons(), []);
   const crons = data?.crons ?? [];
-  const [page, setPage] = useState(0);
   const PAGE_SIZE = 15;
   const pageCount = Math.max(1, Math.ceil(crons.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount - 1);
+  const [safePage, setPage] = useClampedPage(pageCount);
 
   const [actErr, setActErr] = useState<string | null>(null);
   const remove = async (name: string) => {
@@ -166,7 +215,7 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
   const [jobTimeout, setJobTimeout] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [created, setCreated] = useState(false);
+  const { on: created, fire: fireCreated, reset: resetCreated } = useTransientFlag(3000);
 
   // Live preview of the next fire times so a typo (9 0 * * * vs 0 9 * * *) is
   // caught before the schedule is created. Computed in the browser's local
@@ -179,7 +228,7 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
   const submit = async () => {
     if (busy) return; // double-click would create the cron twice
     setErr(null);
-    setCreated(false);
+    resetCreated();
     if (!name.trim() || !queue.trim()) {
       setErr('Name and queue are required');
       return;
@@ -191,7 +240,9 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
       setErr('Data is not valid JSON');
       return;
     }
-    const body: CreateCronBody = { name, queue, data };
+    // Persist exactly what was validated — an invisible trailing space would
+    // schedule into a phantom queue (or duplicate an existing schedule).
+    const body: CreateCronBody = { name: name.trim(), queue: queue.trim(), data };
     if (mode === 'cron') {
       if (!schedule.trim()) {
         setErr('Cron expression required');
@@ -233,8 +284,7 @@ function CronForm({ onCreate }: { onCreate: (b: CreateCronBody) => Promise<void>
       setName('');
       setSchedule('');
       setEvery('');
-      setCreated(true);
-      setTimeout(() => setCreated(false), 3000);
+      fireCreated();
     } catch (e) {
       setErr((e as Error).message);
     } finally {

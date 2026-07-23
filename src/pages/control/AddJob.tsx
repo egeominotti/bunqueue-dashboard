@@ -11,6 +11,47 @@ import { usePolledData } from '@/lib/usePolledData';
 
 const numOrEmpty = (v: number | undefined): string => (v == null ? '' : String(v));
 
+/**
+ * A strategy is only transmissible with a base delay (the API takes
+ * `{ type, delay }`), so a strategy picked without one is reported, never
+ * silently dropped.
+ */
+export function resolveBackoff(
+  delayMs: number | undefined,
+  type: '' | 'fixed' | 'exponential'
+): { ok: true; backoff: Backoff | undefined } | { ok: false; msg: string } {
+  if (delayMs == null) {
+    return type
+      ? { ok: false, msg: 'Backoff strategy needs a base delay in Backoff (ms)' }
+      : { ok: true, backoff: undefined };
+  }
+  return { ok: true, backoff: type ? { type, delay: delayMs } : delayMs };
+}
+
+/** Advanced fields honored only by the single-push route — the bulk route drops them. */
+export function bulkDroppedFields(b: AddJobBody): string[] {
+  return [
+    b.tags?.length ? 'Tags' : '',
+    b.groupId ? 'Group ID' : '',
+    b.dependsOn?.length ? 'Depends on' : '',
+    b.uniqueKey ? 'Unique key' : '',
+  ].filter(Boolean);
+}
+
+/**
+ * Created-vs-submitted summary. A shortfall (jobs deduped server-side by a
+ * shared jobId/uniqueKey) must never read as an unqualified success.
+ */
+export function createdSummary(created: number, submitted: number): { ok: boolean; msg: string } {
+  if (created === submitted) {
+    return { ok: true, msg: `Created ${created} job${created === 1 ? '' : 's'}` };
+  }
+  return {
+    ok: false,
+    msg: `Created ${created} of ${submitted} jobs — ${submitted - created} were not created (duplicate jobId/uniqueKey?)`,
+  };
+}
+
 export function AddJob() {
   // Queue name datalist only — rarely changes, so slow-poll it.
   const { data: qs } = usePolledData(() => bq.queues(), [], { intervalMs: 30000 });
@@ -53,10 +94,26 @@ export function AddJob() {
     return s.trim() !== '' && Number.isFinite(n) ? n : undefined;
   };
 
+  // Count > 1 goes through the bulk route, which only the single-push route's
+  // Advanced fields survive — say which ones before the click, not after.
+  const bulkDropped =
+    (num(count) ?? 1) > 1
+      ? bulkDroppedFields({
+          data: null,
+          tags: tags.trim() ? [tags.trim()] : undefined,
+          groupId: groupId.trim() || undefined,
+          dependsOn: dependsOn.trim() ? [dependsOn.trim()] : undefined,
+          uniqueKey: uniqueKey.trim() || undefined,
+        })
+      : [];
+
   const submit = async () => {
     setResult(null);
     setJsonErr(null);
-    if (!queue.trim()) {
+    // Validate and submit the SAME string: a pasted trailing space would
+    // otherwise enqueue into a look-alike queue nobody consumes.
+    const target = queue.trim();
+    if (!target) {
       setResult({ ok: false, msg: 'Choose a queue' });
       return;
     }
@@ -78,13 +135,12 @@ export function AddJob() {
       }
       effectiveDelay = Math.max(0, targetMs - Date.now());
     }
-    const backoffNum = num(backoff);
-    const backoff_: Backoff | undefined =
-      backoffNum == null
-        ? undefined
-        : backoffType
-          ? { type: backoffType, delay: backoffNum }
-          : backoffNum;
+    const bo = resolveBackoff(num(backoff), backoffType);
+    if (!bo.ok) {
+      setResult({ ok: false, msg: bo.msg });
+      return;
+    }
+    const backoff_: Backoff | undefined = bo.backoff;
     const tagList = tags
       .split(',')
       .map((s) => s.trim())
@@ -122,19 +178,20 @@ export function AddJob() {
     setBusy(true);
     try {
       if (n === 1) {
-        const r = await bq.addJob(queue, body);
+        const r = await bq.addJob(target, body);
         setResult({ ok: true, msg: `Created job ${r.id}` });
-        toast.success('Job created', `${queue} · ${r.id}`);
+        toast.success('Job created', `${target} · ${r.id}`);
       } else {
         const r = await bq.addJobsBulk(
-          queue,
+          target,
           Array.from({ length: n }, () => body)
         );
         // A shared custom jobId collapses N requests into one job — report the
         // distinct ids the server actually created, not the requested count.
-        const created = new Set(r.ids).size;
-        setResult({ ok: true, msg: `Created ${created} job${created === 1 ? '' : 's'}` });
-        toast.success(`Created ${created} job${created === 1 ? '' : 's'}`, `in ${queue}`);
+        const summary = createdSummary(new Set(r.ids).size, n);
+        setResult(summary);
+        if (summary.ok) toast.success(summary.msg, `in ${target}`);
+        else toast.error(summary.msg, `in ${target}`);
       }
     } catch (e) {
       setResult({ ok: false, msg: (e as Error).message });
@@ -353,6 +410,12 @@ export function AddJob() {
           <Button type="submit" variant="accent" disabled={busy}>
             {busy ? 'Adding…' : 'Add job'}
           </Button>
+          {bulkDropped.length > 0 && (
+            <span className="pb-2 text-xs text-warning">
+              {bulkDropped.join(', ')} {bulkDropped.length === 1 ? 'is' : 'are'} applied only when
+              Count is 1 — the bulk route ignores {bulkDropped.length === 1 ? 'it' : 'them'}.
+            </span>
+          )}
           {result && (
             <span
               role="status"

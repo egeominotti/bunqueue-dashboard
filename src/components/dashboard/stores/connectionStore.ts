@@ -20,7 +20,9 @@ interface ConnectionState {
   setRefreshMs: (refreshMs: number) => void;
 }
 
-const envBase = import.meta.env.VITE_BUNQUEUE_URL?.replace(/\/$/, '');
+// `/\/+$/` (not `/\/$/`): a pasted `host//` must not survive as `host/`, which
+// would make every request URL `host//dashboard` and 404 on the exact-path router.
+const envBase = import.meta.env.VITE_BUNQUEUE_URL?.trim().replace(/\/+$/, '');
 const envToken = import.meta.env.VITE_BUNQUEUE_TOKEN;
 const envAgentToken = import.meta.env.VITE_BUNQUEUE_AGENT_TOKEN;
 
@@ -44,7 +46,7 @@ export const useConnectionStore = create<ConnectionState>()(
       token: envToken || '',
       agentToken: envAgentToken || '',
       refreshMs: 3000,
-      setBaseUrl: (baseUrl) => set({ baseUrl: baseUrl.replace(/\/$/, '') }),
+      setBaseUrl: (baseUrl) => set({ baseUrl: baseUrl.trim().replace(/\/+$/, '') }),
       setToken: (token) => set({ token }),
       setAgentToken: (agentToken) => set({ agentToken }),
       setRefreshMs: (refreshMs) => set({ refreshMs: Math.max(500, refreshMs) }),

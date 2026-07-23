@@ -25,6 +25,10 @@ import { useBenchmark } from './benchmark/useBenchmark';
 
 const MODES: readonly RunMode[] = ['count', 'duration'] as const;
 
+// States "Clean queue" deletes — and, therefore, exactly the states the
+// post-clean verification must find empty before it may claim success.
+const CLEAN_STATES: readonly string[] = ['waiting', 'completed', 'failed', 'delayed'] as const;
+
 // Numeric fields are string-backed in the form (so a field can be cleared while
 // typing — a controlled type=number with Number() coercion can never be emptied)
 // and converted to a RunConfig once, at the Run boundary. run() clamps.
@@ -129,7 +133,7 @@ export function Benchmark() {
     setCleanResult(null);
     try {
       let lastErr: string | null = null;
-      for (const state of ['waiting', 'completed', 'failed', 'delayed']) {
+      for (const state of CLEAN_STATES) {
         try {
           await bq.clean(q, { state, limit: LIMITS.total });
         } catch (e) {
@@ -149,9 +153,20 @@ export function Benchmark() {
       if (after == null) {
         setCleanResult({ error: lastErr ?? 'server unreachable — could not verify' });
       } else {
-        // Pulled-but-unacked jobs can't be cleaned; the server requeues them
-        // after its stall timeout — report the residual active count honestly.
-        setCleanResult({ remaining: after.counts?.active ?? 0 });
+        // The verification must cover every state the loop tried to clean —
+        // checking only `active` would report a spotless clean while thousands
+        // of waiting/completed jobs are still there after a failed per-state call.
+        const cnt = after.counts ?? {};
+        const leftover = CLEAN_STATES.reduce((n, s) => n + (cnt[s] ?? 0), 0);
+        if (lastErr || leftover > 0) {
+          setCleanResult({
+            error: lastErr ?? `${formatNumber(leftover)} job(s) still present`,
+          });
+        } else {
+          // Pulled-but-unacked jobs can't be cleaned; the server requeues them
+          // after its stall timeout — report the residual active count honestly.
+          setCleanResult({ remaining: cnt.active ?? 0 });
+        }
       }
     } finally {
       setCleaning(false);
@@ -223,12 +238,24 @@ export function Benchmark() {
             <Button
               variant="success"
               size="sm"
+              disabled={cleaning}
               onClick={() => {
+                // A clean in flight deletes whatever the producers push, so the
+                // two must never overlap on the same queue.
+                if (cleaning) return;
                 // One confirm, stating the real target — this enqueues genuine
                 // jobs, not a simulation.
                 const cfg = toConfig(draft);
                 const q = cfg.queue.trim() || DEFAULT_CONFIG.queue;
-                if (!window.confirm(`Enqueue real jobs into "${q}" on ${getBaseUrl()}?`)) return;
+                // Simulated workers pull whatever is in the queue, so anything
+                // already there is processed and counted as this run's work.
+                const pre = c && pollQueue === q ? (c.waiting ?? 0) + (c.delayed ?? 0) : 0;
+                const preNote =
+                  cfg.workers > 0 && pre > 0
+                    ? ` Warning: it already holds ${formatNumber(pre)} job(s) — the simulated workers will pull and ack those too, and they will be counted as completed.`
+                    : '';
+                if (!window.confirm(`Enqueue real jobs into "${q}" on ${getBaseUrl()}?${preNote}`))
+                  return;
                 bench.run(cfg);
               }}
             >

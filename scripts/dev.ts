@@ -51,26 +51,43 @@ async function shutdown(reason: string): Promise<void> {
   process.exit(exitCode);
 }
 
-for (const { name, cmd } of services) {
-  children.push(
-    Bun.spawn([...cmd], {
-      stdio: ['inherit', 'inherit', 'inherit'],
-      env: process.env,
-      onExit(_child, code) {
-        // If one service dies, bring the whole stack down with its exit code.
-        if (!closing) {
-          exitCode = code ?? 0;
-          void shutdown(`${name} exited (code ${exitCode})`);
-        }
-      },
-    })
-  );
+// A throwing spawn (missing binary, EAGAIN) must not leave the services spawned
+// before it running — shutdown() kills everything already in `children`.
+export async function spawnServices(): Promise<void> {
+  try {
+    for (const { name, cmd } of services) {
+      children.push(
+        Bun.spawn([...cmd], {
+          stdio: ['inherit', 'inherit', 'inherit'],
+          env: process.env,
+          onExit(_child, code) {
+            // If one service dies, bring the whole stack down with its exit code.
+            if (!closing) {
+              exitCode = code ?? 0;
+              void shutdown(`${name} exited (code ${exitCode})`);
+            }
+          },
+        })
+      );
+    }
+  } catch (err) {
+    logger.error({ err: (err as Error).message }, 'failed to start services');
+    exitCode = 1;
+    await shutdown('spawn failed');
+  }
 }
 
-logger.info(
-  { agent: 'http://127.0.0.1:6800', dashboard: 'http://localhost:5273' },
-  'bunqueue dashboard up (Ctrl-C to stop)'
-);
+// Guarded so tests can import spawnServices() without booting the stack.
+if (import.meta.main) {
+  // Signals are wired before the first spawn so a Ctrl-C during startup still
+  // tears down whatever is already running.
+  process.on('SIGINT', () => void shutdown('interrupted'));
+  process.on('SIGTERM', () => void shutdown('terminated'));
 
-process.on('SIGINT', () => void shutdown('interrupted'));
-process.on('SIGTERM', () => void shutdown('terminated'));
+  await spawnServices();
+
+  logger.info(
+    { agent: 'http://127.0.0.1:6800', dashboard: 'http://localhost:5273' },
+    'bunqueue dashboard up (Ctrl-C to stop)'
+  );
+}

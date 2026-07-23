@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -11,13 +11,25 @@ import { type AddWebhookBody, bq, WEBHOOK_EVENTS } from '@/lib/bq';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 
+/**
+ * Page state clamped to the live page count. Clamps the STATE, not just the
+ * rendered value: with only the render clamped, a list that shrinks (delete)
+ * and then regrows (add) jumps the table to a page nobody navigated to.
+ */
+export function useClampedPage(pageCount: number): [number, (p: number) => void] {
+  const [page, setPage] = useState(0);
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(pageCount - 1);
+  }, [page, pageCount]);
+  return [Math.min(page, pageCount - 1), setPage];
+}
+
 export function Webhooks() {
   const { data, error, loading, refetch } = usePolledData(() => bq.webhooks(), []);
   const webhooks = data?.data?.webhooks ?? [];
-  const [page, setPage] = useState(0);
   const PAGE_SIZE = 15;
   const pageCount = Math.max(1, Math.ceil(webhooks.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount - 1);
+  const [safePage, setPage] = useClampedPage(pageCount);
 
   const [actErr, setActErr] = useState<string | null>(null);
   const act = async (fn: () => Promise<unknown>) => {
@@ -155,6 +167,46 @@ export function Webhooks() {
   );
 }
 
+/** True when the exact string given can be fetched by the server (http/https). */
+export function isDeliverableUrl(u: string): boolean {
+  try {
+    return /^https?:$/.test(new URL(u).protocol);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Build the registration body from the form state. The URL registered is the
+ * exact string that passed validation — sending the raw field would persist a
+ * hook the server can never call (and the list renders identically).
+ */
+export function buildWebhookBody(
+  url: string,
+  events: string[],
+  queue: string,
+  secret: string
+): { ok: true; body: AddWebhookBody } | { ok: false; msg: string } {
+  const u = url.trim();
+  if (!u || events.length === 0) {
+    return { ok: false, msg: 'URL and at least one event are required' };
+  }
+  // The server calls this URL blind — catch a pasted hostname/typo here
+  // instead of shipping a webhook that can never fire.
+  if (!isDeliverableUrl(u)) {
+    return { ok: false, msg: 'URL must be a valid http:// or https:// address' };
+  }
+  return {
+    ok: true,
+    body: {
+      url: u,
+      events,
+      queue: queue.trim() || undefined,
+      secret: secret.trim() || undefined,
+    },
+  };
+}
+
 function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> }) {
   const [url, setUrl] = useState('');
   const [queue, setQueue] = useState('');
@@ -169,32 +221,14 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
   const submit = async () => {
     if (busy) return; // a double-click would register the webhook twice
     setErr(null);
-    const u = url.trim();
-    if (!u || events.length === 0) {
-      setErr('URL and at least one event are required');
-      return;
-    }
-    // The server calls this URL blind — catch a pasted hostname/typo here
-    // instead of shipping a webhook that can never fire.
-    const validUrl = (() => {
-      try {
-        return /^https?:$/.test(new URL(u).protocol);
-      } catch {
-        return false;
-      }
-    })();
-    if (!validUrl) {
-      setErr('URL must be a valid http:// or https:// address');
+    const built = buildWebhookBody(url, events, queue, secret);
+    if (!built.ok) {
+      setErr(built.msg);
       return;
     }
     setBusy(true);
     try {
-      await onAdd({
-        url,
-        events,
-        queue: queue.trim() || undefined,
-        secret: secret.trim() || undefined,
-      });
+      await onAdd(built.body);
       setUrl('');
       setSecret('');
     } catch (e) {

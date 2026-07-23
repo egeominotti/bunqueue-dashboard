@@ -60,6 +60,19 @@ export class BqError extends Error {
   }
 }
 
+/**
+ * Per-request deadline. fetch has no default timeout, so a reachable-but-hung
+ * server (SIGSTOPped process, half-open socket) would leave the promise pending
+ * forever — and usePolledData schedules its next tick only AFTER the current one
+ * settles, so the page would stop polling for the lifetime of the mount.
+ * Overridable (tests set it low so they never sleep); a caller-supplied
+ * `init.signal` always wins.
+ */
+let requestTimeoutMs = 30_000;
+export function setRequestTimeoutMs(ms: number): void {
+  requestTimeoutMs = ms;
+}
+
 async function call<T>(
   base: string,
   path: string,
@@ -68,10 +81,21 @@ async function call<T>(
   strict = true,
   authScope: 'server' | 'agent' = 'server'
 ): Promise<T> {
-  const res = await fetch(base + path, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...headers, ...init?.headers },
-  });
+  let res: Response;
+  try {
+    res = await fetch(base + path, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', ...headers, ...init?.headers },
+      signal: init?.signal ?? AbortSignal.timeout(requestTimeoutMs),
+    });
+  } catch (e) {
+    // A blown deadline must surface as the normal error type (status 0 — no
+    // response was received), so callers show an error instead of hanging.
+    if ((e as { name?: string } | null)?.name === 'TimeoutError') {
+      throw new BqError('Request timed out', 0);
+    }
+    throw e;
+  }
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     try {
@@ -85,8 +109,15 @@ async function call<T>(
     // for the bunqueue token, an agent 401 (AGENT_TOKEN) asks for the agent
     // token; prompting for the wrong one is an unfixable loop. Then still throw
     // so callers see the failure. Guarded for non-browser contexts (tests).
+    // `auth` carries the credential this request actually used, so a listener
+    // can drop a 401 produced by an in-flight request issued with an OLD token
+    // (which would otherwise re-lock the gate right after a correct token).
     if (res.status === 401 && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('auth:required', { detail: { scope: authScope } }));
+      window.dispatchEvent(
+        new CustomEvent('auth:required', {
+          detail: { scope: authScope, auth: headers.Authorization },
+        })
+      );
     }
     throw new BqError(message, res.status);
   }
@@ -135,6 +166,19 @@ const q = (s: string) => encodeURIComponent(s);
 const body = (method: string, b?: unknown): RequestInit => ({
   method,
   body: b === undefined ? undefined : JSON.stringify(b),
+});
+
+/**
+ * Deadline for the few endpoints whose work scales with the request: a 10k-job
+ * bulk insert or a drain of a huge queue can legitimately outrun the default
+ * 30s. Aborting those is worse than waiting — the server has usually committed
+ * the write, so the client reports a timeout the operator "fixes" by
+ * resubmitting, duplicating every job that lacks a jobId/uniqueKey.
+ */
+const BULK_TIMEOUT_MS = 300_000;
+const bulkBody = (method: string, b?: unknown): RequestInit => ({
+  ...body(method, b),
+  signal: AbortSignal.timeout(BULK_TIMEOUT_MS),
 });
 
 /** Backoff on a job: a flat delay, or a strategy with a base delay. */
@@ -221,7 +265,10 @@ export const bq = {
   queueDetail: (queue: string, includeJobs = true) =>
     srv<QueueDetailResponse>(`/dashboard/queues/${q(queue)}?includeJobs=${includeJobs}`),
   stats: () => srv<StatsResponse>('/stats'),
-  storage: () => srv<{ ok: boolean; data: StorageStatusFlat }>('/storage'),
+  // strict:false — /storage's `ok` is a semantic status flag too (disk-full →
+  // ok:false with HTTP 200 is the very data the storage views exist to show),
+  // matching api.ts's storage() opt-out.
+  storage: () => srv<{ ok: boolean; data: StorageStatusFlat }>('/storage', undefined, false),
   // strict:false — /health's `ok` means "server healthy", not "request succeeded"
   // (disk-full reports ok:false with HTTP 200; that's data, not an error to throw).
   health: () =>
@@ -263,7 +310,10 @@ export const bq = {
   addJob: (queue: string, b: AddJobBody) =>
     srv<{ ok: boolean; id: string }>(`/queues/${q(queue)}/jobs`, body('POST', b)),
   addJobsBulk: (queue: string, jobs: AddJobBody[]) =>
-    srv<{ ok: boolean; ids: string[] }>(`/queues/${q(queue)}/jobs/bulk`, body('POST', { jobs })),
+    srv<{ ok: boolean; ids: string[] }>(
+      `/queues/${q(queue)}/jobs/bulk`,
+      bulkBody('POST', { jobs })
+    ),
   // Worker-side consume: reserve up to `count` jobs, then ack (complete) them by
   // id. Used by the Benchmark page to simulate workers draining a queue.
   pullBatch: (queue: string, count: number) =>
@@ -298,8 +348,8 @@ export const bq = {
   pause: (queue: string) => srv(`/queues/${q(queue)}/pause`, body('POST')),
   resume: (queue: string) => srv(`/queues/${q(queue)}/resume`, body('POST')),
   drain: (queue: string) =>
-    srv<{ ok: boolean; count: number }>(`/queues/${q(queue)}/drain`, body('POST')),
-  obliterate: (queue: string) => srv(`/queues/${q(queue)}/obliterate`, body('POST')),
+    srv<{ ok: boolean; count: number }>(`/queues/${q(queue)}/drain`, bulkBody('POST')),
+  obliterate: (queue: string) => srv(`/queues/${q(queue)}/obliterate`, bulkBody('POST')),
   clean: (queue: string, opts: { grace?: number; state?: string; limit?: number } = {}) =>
     srv<{ ok: boolean; count: number }>(`/queues/${q(queue)}/clean`, body('POST', opts)),
   promoteJobs: (queue: string, count?: number) =>

@@ -73,6 +73,21 @@ describe('agent DNS-rebinding (Host header) defense', () => {
     expect(hostnameOf('[::1]')).toBe('::1');
   });
 
+  // A bare IPv6 literal has no port delimiter — splitting at the first colon
+  // both locked the real host out and allowlisted a bogus label ('2001').
+  test('hostnameOf keeps an unbracketed IPv6 literal whole', () => {
+    expect(hostnameOf('2001:db8::5')).toBe('2001:db8::5');
+    expect(hostnameOf('::1')).toBe('::1');
+    expect(hostnameOf(hostnameOf('[::1]'))).toBe('::1'); // idempotent
+  });
+
+  test('resolveAllowedHosts accepts an unbracketed IPv6 from AGENT_ALLOWED_HOSTS', () => {
+    const out = resolveAllowedHosts({ AGENT_ALLOWED_HOSTS: '2001:db8::5' } as NodeJS.ProcessEnv);
+    expect(out).toContain('2001:db8::5');
+    expect(out).not.toContain('2001');
+    expect(isHostAllowed('[2001:db8::5]:6800', out)).toBe(true);
+  });
+
   test('resolveAllowedHosts: loopback defaults + env + extra, hostname-only, deduped', () => {
     const out = resolveAllowedHosts(
       { AGENT_ALLOWED_HOSTS: 'dash.example:8080, localhost' } as NodeJS.ProcessEnv,

@@ -73,7 +73,10 @@ export function toCsv(
     })();
   const header = cols.map(csvCell).join(',');
   const body = rows.map((row) => cols.map((c) => csvCell(row[c])).join(',')).join('\n');
-  return body ? `${header}\n${body}` : header;
+  // Test the record count, not the joined string: a single row whose cells all
+  // serialize to '' produces an empty body that is NOT "no rows" — dropping it
+  // would silently lose a record.
+  return rows.length ? `${header}\n${body}` : header;
 }
 
 /** Serialize `rows` to CSV and download them as `<filename>` (‘.csv’ appended if missing). */

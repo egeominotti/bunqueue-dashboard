@@ -26,29 +26,35 @@ type ColMeta = Record<string, { type: string; primaryKey: boolean }>;
 
 /* ---------------------------------- utils ---------------------------------- */
 
-function csvEscape(v: unknown): string {
+export function csvEscape(v: unknown): string {
   const s = v == null ? '' : String(v);
   // Neutralize spreadsheet formula injection on TEXT cells only (a real number
   // can't be a formula, so it keeps numeric fidelity) — mirrors lib/exportFile.ts.
-  // A string cell starting with = + - @ is evaluated by Excel/Sheets on open;
-  // prefix with a ' so it stays literal text.
-  const safe = typeof v === 'string' && /^[=+\-@]/.test(v) ? `'${v}` : s;
+  // A string cell starting with = + - @ (or a leading tab/CR, which Excel strips
+  // before evaluating what follows) is executed by Excel/Sheets on open; prefix
+  // with a ' so it stays literal text.
+  const safe = typeof v === 'string' && /^[=+\-@\t\r]/.test(v) ? `'${v}` : s;
   // Quote on comma, quote, CR, or LF — a bare \r is a record separator to
   // RFC-4180 parsers and would otherwise split the row.
   return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
-function toCsv(columns: string[], rows: unknown[][]): string {
+export function toCsv(columns: string[], rows: unknown[][]): string {
   return [columns.map(csvEscape).join(','), ...rows.map((r) => r.map(csvEscape).join(','))].join(
     '\n'
   );
 }
-function download(name: string, mime: string, content: string) {
+export function download(name: string, mime: string, content: string) {
   const url = URL.createObjectURL(new Blob([content], { type: mime }));
   const a = document.createElement('a');
   a.href = url;
   a.download = name;
+  // Attach before clicking (Firefox ignores a click on a detached anchor) and
+  // revoke on the next tick — revoking in the same task can kill the download
+  // before the browser has read the blob.
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 function loadHistory(): string[] {
   try {
@@ -70,14 +76,21 @@ function pushHistory(sql: string): string[] {
   return writeHistory([sql, ...loadHistory().filter((h) => h !== sql)].slice(0, HISTORY_MAX));
 }
 /** Pretty-print a value, expanding JSON strings; used by the detail drawer. */
-function pretty(v: unknown): string {
+export function pretty(v: unknown): string {
   if (v == null) return 'NULL';
   const s = typeof v === 'string' ? v : String(v);
-  try {
-    return JSON.stringify(JSON.parse(s), null, 2);
-  } catch {
-    return s;
+  // Only expand embedded JSON objects/arrays. Round-tripping every string would
+  // rewrite scalar cells the inspector must show verbatim ('1.50' → '1.5',
+  // a 20-digit id → a lossy float): an inspector never alters the stored value.
+  const t = s.trimStart();
+  if (t.startsWith('{') || t.startsWith('[')) {
+    try {
+      return JSON.stringify(JSON.parse(s), null, 2);
+    } catch {
+      return s;
+    }
   }
+  return s;
 }
 
 /* ------------------------------- result grid ------------------------------- */
@@ -392,11 +405,13 @@ export function Database() {
         cols = r.columns;
         all.push(...r.rows);
         off += EXPORT_BATCH;
+        // Natural end first: a table of exactly EXPORT_MAX_ROWS rows is fully
+        // exported, not "capped" — the cap only fires when rows remain unread.
+        if (r.rows.length < EXPORT_BATCH || off >= r.total) break;
         if (all.length >= EXPORT_MAX_ROWS) {
           capped = true;
           break;
         }
-        if (r.rows.length < EXPORT_BATCH || off >= r.total) break;
       }
       download(`${selected}.csv`, 'text/csv', toCsv(cols, all));
       const done = capped
@@ -753,6 +768,10 @@ function RowDetailDrawer({
   // cell each tick; the truncated set for a fixed row doesn't change between polls.
   const truncatedKey = columns.filter((_, i) => truncated[i]).join('\u0001');
   useEffect(() => {
+    // Drop the previous row's fetched cells first: the 6s poll can swap a
+    // different row under the same drawer index, and a stale `full` entry would
+    // render another row's value under this row's column header.
+    setFull({});
     if (rowid == null || !truncatedKey) return;
     const cols = truncatedKey.split('\u0001');
     let cancelled = false;

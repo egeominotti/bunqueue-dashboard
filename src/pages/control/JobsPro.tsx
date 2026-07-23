@@ -35,6 +35,24 @@ const STATUS = ['all', 'waiting', 'active', 'completed', 'failed'] as const;
 type StatusFilter = (typeof STATUS)[number];
 const PAGE_SIZE = 25;
 
+/**
+ * Bulk-bar count. The bulk buttons only ever target rows the ID filter leaves
+ * VISIBLE, so a bare `selected.size` next to them overstates what they do
+ * ("25 selected" → 1 job cancelled) whenever the filter hides selected rows.
+ */
+export function selectionLabel(visible: number, total: number): string {
+  return visible === total
+    ? `${total} selected`
+    : `${visible} of ${total} selected match this filter`;
+}
+
+/** Drop only the ids a bulk action actually ran on — never the hidden rest. */
+export function withoutActed(selected: Set<string>, actedIds: string[]): Set<string> {
+  const next = new Set(selected);
+  for (const id of actedIds) next.delete(id);
+  return next;
+}
+
 function priorityLabel(p = 0) {
   if (p >= 10) return { t: 'HIGH', c: 'text-warning' };
   if (p >= 1) return { t: 'MEDIUM', c: 'text-blue-400' };
@@ -188,7 +206,8 @@ export function JobsPro() {
     setActionMsg({ ok: failCount === 0, text });
     if (failCount === 0) toast.success(text);
     else toast.error(text);
-    setSelected(new Set());
+    const actedIds = targets.map((t) => t.id);
+    setSelected((s) => withoutActed(s, actedIds));
     setBulkBusy(false);
     refetch();
   };
@@ -346,7 +365,12 @@ export function JobsPro() {
 
       {selected.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-line bg-surface-2 px-4 py-2 text-sm">
-          <span className="mr-1 text-muted">{selected.size} selected</span>
+          {/* The bulk actions only ever touch VISIBLE rows, so the count must
+              be the visible one — a search filter can hide selected rows and
+              "25 selected" next to buttons that act on 1 is a lie. */}
+          <span className="mr-1 text-muted">
+            {selectionLabel(selectedRows.length, selected.size)}
+          </span>
           {canBulk.retry && (
             <Button size="sm" disabled={bulkBusy} onClick={bulkRetry}>
               Retry selected
@@ -378,7 +402,9 @@ export function JobsPro() {
             !canBulk.fail &&
             !canBulk.cancel && (
               <span className="text-xs text-faint">
-                No actions apply to the selected job states.
+                {selectedRows.length === 0
+                  ? 'The selected jobs are hidden by the filter — clear it to act on them.'
+                  : 'No actions apply to the selected job states.'}
               </span>
             )}
         </div>

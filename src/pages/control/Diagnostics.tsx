@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -28,14 +28,19 @@ export function Diagnostics() {
   }, []);
 
   const [ping, setPing] = useState<string | null>(null);
+  // Sequence guard (last-to-start wins): the Ping button isn't gated while a
+  // probe runs, and a slow earlier probe resolving last would overwrite the
+  // newer, faster reading it superseded.
+  const pingGen = useRef(0);
   const doPing = async () => {
+    const my = ++pingGen.current;
     setPing('…');
     const t0 = performance.now();
     try {
       await bq.ping();
-      setPing(`${Math.round(performance.now() - t0)} ms`);
+      if (my === pingGen.current) setPing(`${Math.round(performance.now() - t0)} ms`);
     } catch {
-      setPing('unreachable');
+      if (my === pingGen.current) setPing('unreachable');
     }
   };
 

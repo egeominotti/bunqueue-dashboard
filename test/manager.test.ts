@@ -136,4 +136,127 @@ describe('ProcessManager', () => {
     expect(m.getStatus().status).toBe('stopped');
     expect(m.getStatus().pid).toBeNull();
   });
+
+  // …and the converse invariant: the replacement must not be spawned while the
+  // outgoing child is still alive, or two bunqueue servers briefly fight over
+  // the same ports and SQLite db.
+  test('start racing an in-flight stop waits for the old child to exit', async () => {
+    const alive = (pid: number): boolean => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const m = new ProcessManager();
+    m.setConfig({ command: 'sleep 30' });
+    await m.start();
+    const pid1 = m.getStatus().pid as number;
+
+    const stopping = m.stop();
+    await m.start();
+    const pid2 = m.getStatus().pid as number;
+    expect(pid2).not.toBe(pid1);
+    expect(alive(pid1)).toBe(false);
+
+    await stopping;
+    await m.stop();
+  });
+
+  // An invalid command must leave the manager exactly as it was: the old code
+  // bumped procToken and set status BEFORE validating, so the empty-command
+  // throw stranded the previous generation's dead pid + runningConfig (both
+  // finalizers were already token-stale and returned early).
+  test('empty command rejects without stranding a pid or runningConfig', async () => {
+    const m = new ProcessManager();
+    m.setConfig({ command: 'sleep 30' });
+    await m.start();
+
+    const stopping = m.stop();
+    m.setConfig({ command: '   ' });
+    await expect(m.start()).rejects.toThrow('Empty command');
+    await stopping;
+
+    const s = m.getStatus();
+    expect(s.status).toBe('stopped');
+    expect(s.pid).toBeNull();
+    expect(s.runningConfig).toBeNull();
+  });
+
+  // PUT /control/config casts the JSON body straight to Partial<ServerConfig>,
+  // so `{"command": null}` reaches the manager. `.trim()` on it used to throw a
+  // TypeError with status already pinned at 'starting' — an unrecoverable wedge
+  // (the guard short-circuits every later start, and the UI disables all three
+  // controls while 'starting').
+  test('a non-string command does not wedge status at starting', async () => {
+    const m = new ProcessManager();
+    m.setConfig({ command: null as unknown as string });
+    await expect(m.start()).rejects.toThrow('Empty command');
+    expect(m.getStatus().status).toBe('stopped');
+
+    m.setConfig({ command: 'sleep 30' });
+    await m.start();
+    expect(m.getStatus().status).toBe('running');
+    await m.stop();
+  });
+
+  // extraEnv used to be spread AFTER the injected ports, so a user key named
+  // HTTP_PORT moved the child while runningConfig (and the agent's /health
+  // probe, which reads it) kept reporting the port nobody was listening on.
+  test('extraEnv cannot override the ports runningConfig advertises', async () => {
+    const m = new ProcessManager();
+    m.setConfig({
+      command: 'printenv HTTP_PORT',
+      httpPort: 6790,
+      extraEnv: { HTTP_PORT: '7000' },
+    });
+    const started = await m.start();
+    expect(started.runningConfig?.httpPort).toBe(6790);
+    await Bun.sleep(300);
+    // …and the child really received that port, not the extraEnv one.
+    expect(m.getLogs().some((l) => l.stream === 'stdout' && l.line.trim() === '6790')).toBe(true);
+    await m.stop();
+  });
+
+  // The reader's line buffer only shrank at a '\n', and the ring buffer trims by
+  // COUNT — so a child dumping a newline-free blob grew the agent's heap to the
+  // full output size and then kept it as one giant LogLine.
+  test('newline-free child output is capped instead of buffered whole', async () => {
+    const script = `/tmp/bq-agent-bigout-${process.pid}.ts`;
+    await Bun.write(script, "process.stdout.write('x'.repeat(200000));\n");
+    try {
+      const m = new ProcessManager();
+      m.setConfig({ command: `${process.execPath} ${script}` });
+      await m.start();
+      await Bun.sleep(1500);
+      const longest = Math.max(0, ...m.getLogs().map((l) => l.line.length));
+      expect(longest).toBeLessThanOrEqual(8192 + 32);
+      await m.stop();
+    } finally {
+      rmSync(script, { force: true });
+    }
+  });
+
+  // Ctrl-C on the agent calls shutdown(): a plain stop() racing an in-flight
+  // restart() returns successfully *because* restart's start() already spawned a
+  // replacement, which process.exit(0) would then orphan on the ports + db.
+  test('shutdown() racing an in-flight restart leaves nothing running', async () => {
+    const m = new ProcessManager();
+    m.setConfig({ command: 'sleep 30' });
+    await m.start();
+
+    const restarting = m.restart();
+    await Bun.sleep(0);
+    await m.shutdown();
+    await restarting;
+
+    expect(m.getStatus().status).toBe('stopped');
+    expect(m.getStatus().pid).toBeNull();
+
+    // The latch is permanent — nothing can spawn after shutdown.
+    await m.start();
+    expect(m.getStatus().status).toBe('stopped');
+    expect(m.getStatus().pid).toBeNull();
+  });
 });

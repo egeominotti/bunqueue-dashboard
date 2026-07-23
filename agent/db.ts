@@ -9,14 +9,21 @@
  *
  * Defense in depth for the arbitrary-query endpoint (dbQuery):
  *  - a positive statement allowlist rejects ATTACH/DETACH/CREATE-TEMP/etc.
- *    BEFORE execution, so store safety never relies on Bun's single-statement
- *    compilation quirk;
+ *    before execution — but it inspects only the FIRST keyword, so it does NOT
+ *    stop a trailing statement smuggled in after a legal one. Everything here
+ *    must therefore compile SQL through db.query() (one statement, the rest
+ *    inert) and never db.run() (executes them all). Do not weaken this comment
+ *    into "the allowlist makes the store safe": believing that is what once
+ *    turned the dup-column recovery path into an arbitrary file write;
  *  - results are streamed with an early break at MAX_ROWS, so a huge or
  *    row-bomb query can't materialize the whole set in agent memory;
  *  - queryWithTimeout() runs it in a disposable Worker raced against a wall
  *    clock, so an O(N^k) scan can't pin the agent's only thread and freeze the
  *    process-control endpoints (falls back to synchronous run if a Worker can't
- *    be spawned, e.g. inside a compiled single-file binary).
+ *    be spawned, e.g. inside a compiled single-file binary). The timeout aborts
+ *    the response, not the query — a synchronous sqlite3_step never yields to
+ *    the terminate() request — so live worker threads are counted and capped by
+ *    MAX_CONCURRENT_QUERIES instead of accumulating one pinned core per request.
  */
 import { existsSync } from 'node:fs';
 import { Database } from 'bun:sqlite';
@@ -144,8 +151,27 @@ function isTruncated(v: unknown): boolean {
 function cell(v: unknown): unknown {
   if (v instanceof Uint8Array) return `<blob ${v.byteLength} B>`;
   if (typeof v === 'string' && v.length > MAX_CELL) return `${v.slice(0, MAX_CELL)}…`;
-  if (typeof v === 'bigint') return v.toString();
+  // Read statements run with safeIntegers, so INTEGERs arrive as bigint: keep the
+  // familiar number shape when it round-trips exactly, and fall back to a string
+  // beyond 2^53 (where a double would silently round the stored value).
+  if (typeof v === 'bigint') return bigintCell(v);
   return v;
+}
+
+/** Exact-value-preserving JSON form of a SQLite INTEGER read with safeIntegers. */
+function bigintCell(v: bigint): number | string {
+  return v >= BigInt(Number.MIN_SAFE_INTEGER) && v <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? Number(v)
+    : v.toString();
+}
+
+/**
+ * bun:sqlite exposes Statement.safeIntegers() at runtime but does not type it.
+ * Enabled per statement (never connection-wide) so the COUNT(*) reads that are
+ * consumed as numbers keep returning numbers.
+ */
+function safeIntegers(stmt: unknown): void {
+  (stmt as { safeIntegers?: (on: boolean) => void }).safeIntegers?.(true);
 }
 
 const sanitize = (rows: unknown[][]): unknown[][] => rows.map((r) => r.map(cell));
@@ -189,8 +215,14 @@ function buildFilter(
   const q = ident(col);
   if (filter.op === 'eq') return { clause: ` WHERE ${q} = ?`, params: [filter.value], applied: filter };
   if (filter.op === 'ne') return { clause: ` WHERE ${q} <> ?`, params: [filter.value], applied: filter };
-  // contains (default)
-  return { clause: ` WHERE ${q} LIKE ?`, params: [`%${filter.value}%`], applied: { ...filter, op: 'contains' } };
+  // contains (default) — escape LIKE metacharacters so a value containing % or _
+  // matches literally instead of turning into a wildcard pattern.
+  const needle = filter.value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_');
+  return {
+    clause: ` WHERE ${q} LIKE ? ESCAPE '\\'`,
+    params: [`%${needle}%`],
+    applied: { ...filter, op: 'contains' },
+  };
 }
 
 /**
@@ -208,7 +240,11 @@ export function dbRows(
   filter?: DbFilter
 ): DbRowsPage {
   const lim = Math.max(1, Math.min(MAX_ROWS, Math.floor(limit) || 50));
-  const off = Math.max(0, Math.floor(offset) || 0);
+  // Non-finite / out-of-range offsets must be clamped here: SQLite rejects a
+  // bound non-safe-integer double with a raw "datatype mismatch".
+  const off = Number.isFinite(offset)
+    ? Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(offset) || 0))
+    : 0;
   const db = open(path);
   try {
     const name = knownTable(db, table);
@@ -235,15 +271,19 @@ export function dbRows(
     let rowids: (number | null)[] = [];
     let rawRows: unknown[][];
     try {
-      const withRowid = db
-        .query(`SELECT rowid AS __rid, * FROM ${ident(name)}${clause}${order} LIMIT ? OFFSET ?`)
-        .values(...(params as []), lim, off) as unknown[][];
-      rowids = withRowid.map((r) => (typeof r[0] === 'number' ? r[0] : null));
+      const stmt = db.query(
+        `SELECT rowid AS __rid, * FROM ${ident(name)}${clause}${order} LIMIT ? OFFSET ?`
+      );
+      safeIntegers(stmt);
+      const withRowid = stmt.values(...(params as []), lim, off) as unknown[][];
+      rowids = withRowid.map((r) =>
+        typeof r[0] === 'bigint' ? Number(r[0]) : typeof r[0] === 'number' ? r[0] : null
+      );
       rawRows = withRowid.map((r) => r.slice(1));
     } catch {
-      rawRows = db
-        .query(`SELECT * FROM ${ident(name)}${clause}${order} LIMIT ? OFFSET ?`)
-        .values(...(params as []), lim, off) as unknown[][];
+      const stmt = db.query(`SELECT * FROM ${ident(name)}${clause}${order} LIMIT ? OFFSET ?`);
+      safeIntegers(stmt);
+      rawRows = stmt.values(...(params as []), lim, off) as unknown[][];
       rowids = rawRows.map(() => null);
     }
 
@@ -276,13 +316,13 @@ export function dbCell(path: string, table: string, rowid: number, column: strin
     );
     const col = columns.find((c) => c === column);
     if (!col) throw new Error(`No such column: ${column}`);
-    const row = db
-      .query(`SELECT ${ident(col)} AS v FROM ${ident(name)} WHERE rowid = ?`)
-      .get(rowid) as { v: unknown } | null;
+    const stmt = db.query(`SELECT ${ident(col)} AS v FROM ${ident(name)} WHERE rowid = ?`);
+    safeIntegers(stmt);
+    const row = stmt.get(rowid) as { v: unknown } | null;
     if (!row) throw new Error('Row not found');
     let v = row.v;
     if (v instanceof Uint8Array) v = `<blob ${v.byteLength} B — binary, not shown>`;
-    else if (typeof v === 'bigint') v = v.toString();
+    else if (typeof v === 'bigint') v = bigintCell(v);
     else if (typeof v === 'string' && v.length > MAX_FULL_CELL) v = `${v.slice(0, MAX_FULL_CELL)}…`;
     return { value: v };
   } finally {
@@ -375,6 +415,38 @@ function leadingKeyword(sql: string): string {
 
 const READ_ONLY_LEAD = /^(?:SELECT|WITH|EXPLAIN|VALUES|PRAGMA)\b/;
 
+/** Temp-view name used to recover colliding output column names (see dbQuery). */
+const DUP_VIEW = '__bq_query_columns';
+
+/**
+ * Re-prepare a statement whose output column names collide through a TEMP VIEW,
+ * so SQLite disambiguates them itself ("id", "id:1") and every column survives
+ * the by-name row rebuild. The view lives in the private temp schema (nothing is
+ * written to the readonly store) and dies with the connection. Returns null when
+ * the statement can't be a view (PRAGMA / EXPLAIN — neither can collide anyway).
+ */
+function disambiguateColumns(
+  db: Database,
+  sql: string
+): { stmt: ReturnType<Database['query']>; cols: string[] } | null {
+  try {
+    // MUST be query().run() (single prepared statement), never db.run(): db.run
+    // executes EVERY statement in the string, and the front-door allowlist only
+    // inspects the FIRST keyword. `SELECT 1 a, 2 a; VACUUM INTO '/tmp/x'` would
+    // otherwise reach a readonly connection as an arbitrary-file WRITE, and
+    // `…; ATTACH '/any.db' AS l; DROP VIEW …; CREATE TEMP VIEW … AS SELECT * FROM l.x`
+    // as an arbitrary-SQLite-file READ. query() compiles only the first
+    // statement, so the trailing payload is inert.
+    db.query(`CREATE TEMP VIEW ${ident(DUP_VIEW)} AS ${sql.replace(/;\s*$/, '')}`).run();
+    const cols = (
+      db.query(`PRAGMA table_info(${ident(DUP_VIEW)})`).all() as { name: string }[]
+    ).map((c) => c.name);
+    return { stmt: db.query(`SELECT * FROM ${ident(DUP_VIEW)}`), cols };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Run an arbitrary read-only query. Rejects non-read statements up front,
  * streams rows with an early break at MAX_ROWS, and translates the raw SQLite
@@ -396,7 +468,18 @@ export function dbQuery(path: string, sql: string): DbQueryResult {
     } catch (e) {
       throw translateError(e);
     }
-    const cols = stmt.columnNames;
+    let cols = stmt.columnNames;
+    // Bun de-duplicates columnNames while columnTypes keeps the true arity, and
+    // rows are rebuilt BY NAME below — so without this, a statement with colliding
+    // output names (`SELECT a.id, b.id`, any self-join) silently loses columns.
+    if (stmt.columnTypes.length > cols.length) {
+      const wide = disambiguateColumns(db, trimmed);
+      if (wide) {
+        stmt = wide.stmt;
+        cols = wide.cols;
+      }
+    }
+    safeIntegers(stmt);
     const rows: unknown[][] = [];
     let truncated = false;
     try {
@@ -437,8 +520,22 @@ function translateError(e: unknown): Error {
  * Time-boxed, off-thread execution of an arbitrary query. Spawns a disposable
  * readonly Worker and races it against QUERY_TIMEOUT_MS so a runaway scan can't
  * freeze the agent's control endpoints.
+ *
+ * The timeout aborts the RESPONSE, not the query: terminate() is delivered to
+ * the worker's event loop, which a synchronous sqlite3_step never yields back
+ * to, so a runaway scan keeps burning its own thread until SQLite finishes it.
+ * That thread is therefore accounted for (a slot is held until the worker really
+ * exits) and capped by MAX_CONCURRENT_QUERIES, so N timed-out queries can pin at
+ * most MAX_CONCURRENT_QUERIES cores instead of one core per request, forever.
  */
 let queryWorkerUrl = new URL('./dbQueryWorker.ts', import.meta.url).href;
+
+/** Hard cap on query worker threads alive at once (see queryWithTimeout). */
+export const MAX_CONCURRENT_QUERIES = 2;
+let liveQueryWorkers = 0;
+
+/** Query worker threads currently alive — includes timed-out, still-running ones. */
+export const queryWorkerLoad = (): number => liveQueryWorkers;
 
 /**
  * The standalone executable's bundle root is scripts/serve.ts, so it supplies
@@ -449,13 +546,42 @@ export function setQueryWorkerUrl(url: string): void {
   queryWorkerUrl = url;
 }
 
+const spawnRealWorker = (): Worker => new Worker(queryWorkerUrl, { type: 'module' });
+let queryWorkerFactory: () => Worker = spawnRealWorker;
+
+/**
+ * Swap how a query worker is constructed. Tests only: spawning a real Bun
+ * Worker in a process where happy-dom's globals are installed panics the
+ * runtime (allocator abort), so the timeout/accounting behaviour below is
+ * exercised through a stand-in worker instead of a real thread. Pass null to
+ * restore the real one.
+ */
+export function setQueryWorkerFactory(factory: (() => Worker) | null): void {
+  queryWorkerFactory = factory ?? spawnRealWorker;
+}
+
 export async function queryWithTimeout(path: string, sql: string): Promise<DbQueryResult> {
+  if (liveQueryWorkers >= MAX_CONCURRENT_QUERIES) {
+    throw new Error(
+      `Too many queries running (${liveQueryWorkers}/${MAX_CONCURRENT_QUERIES}). A previous query timed out and is still running inside SQLite — wait for it to finish, or restart the agent.`
+    );
+  }
   let worker: Worker;
   try {
-    worker = new Worker(queryWorkerUrl, { type: 'module' });
+    worker = queryWorkerFactory();
   } catch (e) {
     throw new Error(`Query worker unavailable: ${(e as Error).message ?? String(e)}`);
   }
+  liveQueryWorkers++;
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    liveQueryWorkers--;
+  };
+  // A worker that never answers still holds its slot until the thread really
+  // exits ('close' fires when SQLite finally returns) — that is the whole point.
+  worker.addEventListener('close', release);
   try {
     return await new Promise<DbQueryResult>((resolve, reject) => {
       let settled = false;
@@ -463,20 +589,35 @@ export async function queryWithTimeout(path: string, sql: string): Promise<DbQue
         if (settled) return;
         settled = true;
         worker.terminate();
-        reject(new Error(`Query exceeded the ${QUERY_TIMEOUT_MS / 1000}s time limit and was aborted.`));
+        reject(
+          new Error(
+            `Query exceeded the ${QUERY_TIMEOUT_MS / 1000}s time limit and was abandoned (it may keep running inside SQLite until it completes).`
+          )
+        );
       }, QUERY_TIMEOUT_MS);
       worker.addEventListener('message', (ev: MessageEvent) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        const d = ev.data as { ok: boolean; result?: DbQueryResult; error?: string };
+        // The query is done — its thread is idle, so free the slot immediately.
+        release();
+        const d = ev.data as {
+          ok: boolean;
+          result?: DbQueryResult;
+          error?: string;
+          missing?: boolean;
+        };
         if (d.ok && d.result) resolve(d.result);
+        // The worker boundary is a string channel, so the error CLASS is carried
+        // as a flag — server.ts maps MissingDbError to 404, everything else 400.
+        else if (d.missing) reject(new MissingDbError(d.error ?? 'Database not found'));
         else reject(new Error(d.error ?? 'Query failed'));
       });
       worker.addEventListener('error', (ev: ErrorEvent) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        release();
         ev.preventDefault?.();
         reject(new Error(`Query worker failed: ${ev.message || 'unknown worker error'}`));
       });

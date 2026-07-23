@@ -26,17 +26,6 @@ const DB_INFO = {
   fileSize: 2621440,
   walSize: 49152,
 };
-const DB_TABLES = {
-  ok: true,
-  tables: [
-    { name: 'jobs', rows: 34, columns: 6 },
-    { name: 'queues', rows: 4, columns: 4 },
-    { name: 'dlq', rows: 2, columns: 5 },
-    { name: 'crons', rows: 2, columns: 5 },
-    { name: 'webhooks', rows: 1, columns: 6 },
-    { name: 'job_results', rows: 4, columns: 3 },
-  ],
-};
 const DB_DATA: Record<
   string,
   { columns: string[]; types: Record<string, string>; rows: unknown[][] }
@@ -69,6 +58,71 @@ const DB_DATA: Record<
       ['notifications', 0, 8, 0],
     ],
   },
+  dlq: {
+    columns: ['id', 'queue', 'reason', 'attempts', 'entered_at'],
+    types: {
+      id: 'TEXT',
+      queue: 'TEXT',
+      reason: 'TEXT',
+      attempts: 'INTEGER',
+      entered_at: 'INTEGER',
+    },
+    rows: [
+      ['019f252b-8716-7000-bbec-d8c65e09f340', 'emails', 'max attempts reached', 3, 1783035037462],
+      ['019f252b-8a02-7000-9b21-4c1f0b7e2a55', 'reports', 'handler threw', 5, 1783035039101],
+    ],
+  },
+  crons: {
+    columns: ['name', 'queue', 'pattern', 'tz', 'next_run'],
+    types: { name: 'TEXT', queue: 'TEXT', pattern: 'TEXT', tz: 'TEXT', next_run: 'INTEGER' },
+    rows: [
+      ['nightly-report', 'reports', '0 2 * * *', 'UTC', 1783094400000],
+      ['digest-email', 'emails', '*/15 * * * *', 'UTC', 1783035900000],
+    ],
+  },
+  webhooks: {
+    columns: ['id', 'url', 'events', 'active', 'failures', 'created_at'],
+    types: {
+      id: 'TEXT',
+      url: 'TEXT',
+      events: 'TEXT',
+      active: 'INTEGER',
+      failures: 'INTEGER',
+      created_at: 'INTEGER',
+    },
+    rows: [
+      [
+        'wh_9c31',
+        'https://hooks.example.com/bunqueue',
+        'job:completed,job:failed',
+        1,
+        0,
+        1783034000000,
+      ],
+    ],
+  },
+  job_results: {
+    columns: ['job_id', 'result', 'stored_at'],
+    types: { job_id: 'TEXT', result: 'TEXT', stored_at: 'INTEGER' },
+    rows: [
+      ['019f252b-86da-7000-a9e3-6b1b74944d70', '{"messageId":"smtp-7712"}', 1783035037999],
+      ['019f252b-8769-7000-bc44-cfc168232f53', '{"bytes":184320}', 1783035038220],
+      ['019f252b-87d8-7000-8f0c-e8ca5fec7d18', '{"rows":128}', 1783035038511],
+      ['019f252b-8a02-7000-9b21-4c1f0b7e2a55', '{"error":"handler threw"}', 1783035039300],
+    ],
+  },
+};
+
+// Derived, never hand-written: the sidebar's advertised row/column counts must
+// match what /db/tables/:t and its /schema actually serve, or the inspector
+// looks broken (a table listed as "2 rows" that opens empty).
+const DB_TABLES = {
+  ok: true,
+  tables: Object.entries(DB_DATA).map(([name, t]) => ({
+    name,
+    rows: t.rows.length,
+    columns: t.columns.length,
+  })),
 };
 
 function dbSchema(table: string): Json {
@@ -256,20 +310,41 @@ const demoControlLogs = (): Json => {
 function dbRows(table: string, search: string): Json {
   const t = DB_DATA[table];
   const columns = t?.columns ?? ['id', 'data'];
-  const rows = t?.rows ?? [];
+  const all = t?.rows ?? [];
   const sp = new URLSearchParams(search);
+  const num = (v: string | null, fallback: number): number => {
+    const n = Number(v);
+    return v !== null && Number.isFinite(n) && n >= 0 ? n : fallback;
+  };
+  const limit = num(sp.get('limit'), 50);
+  const offset = num(sp.get('offset'), 0);
+  const orderBy = sp.get('orderBy');
+  const dir = sp.get('dir') === 'desc' ? 'desc' : 'asc';
+  // Honour orderBy/limit/offset instead of just echoing them back, so sorting or
+  // paging the demo grid actually changes what it shows.
+  const col = orderBy ? columns.indexOf(orderBy) : -1;
+  const sorted =
+    col >= 0
+      ? [...all].sort((a, b) => {
+          const x = a[col] as string | number;
+          const y = b[col] as string | number;
+          const cmp = x < y ? -1 : x > y ? 1 : 0;
+          return dir === 'desc' ? -cmp : cmp;
+        })
+      : all;
+  const rows = sorted.slice(offset, offset + (limit > 0 ? limit : sorted.length));
   return {
     ok: true,
     table,
     columns,
     rows,
-    rowids: rows.map((_, i) => i + 1),
+    rowids: rows.map((_, i) => offset + i + 1),
     truncatedCells: rows.map((r) => r.map(() => false)),
-    total: rows.length,
-    limit: Number(sp.get('limit') ?? 50),
-    offset: Number(sp.get('offset') ?? 0),
-    orderBy: sp.get('orderBy'),
-    dir: sp.get('dir') === 'desc' ? 'desc' : 'asc',
+    total: all.length,
+    limit,
+    offset,
+    orderBy,
+    dir,
     filter: null,
   };
 }

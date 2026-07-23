@@ -6,7 +6,18 @@ import { formatDuration } from '@/lib/format';
 const DEFAULT_MAX_BACKOFF = 3_600_000;
 const MAX_ROWS = 10;
 
-function previewDelays(job: JobFull): { attempt: number; delayMs: number }[] {
+/**
+ * First attempt a backoff delay applies to. Backoff gates RETRIES, not the
+ * first execution — a never-run job (made=0) starts at attempt 2, i.e. k=1.
+ */
+export const firstRetryIndex = (made: number) => Math.max(made, 1);
+
+/** Rows previewDelays would produce without the MAX_ROWS cap. */
+export function remainingRetries(job: JobFull): number {
+  return Math.max(0, (job.maxAttempts ?? 0) - firstRetryIndex(job.attempts ?? 0));
+}
+
+export function previewDelays(job: JobFull): { attempt: number; delayMs: number }[] {
   const maxAttempts = job.maxAttempts ?? 0;
   const made = job.attempts ?? 0;
   const cfg = job.backoffConfig;
@@ -16,7 +27,7 @@ function previewDelays(job: JobFull): { attempt: number; delayMs: number }[] {
   // Backoff applies before RETRIES, not the first attempt. A never-run job
   // (made=0) must start at attempt 2 — its first execution has no backoff
   // delay, only the job's own `delay` option gates it.
-  for (let k = Math.max(made, 1); k < maxAttempts && rows.length < MAX_ROWS; k++) {
+  for (let k = firstRetryIndex(made); k < maxAttempts && rows.length < MAX_ROWS; k++) {
     const raw = cfg?.type === 'fixed' ? base : base * 2 ** k;
     rows.push({ attempt: k + 1, delayMs: Math.min(raw, maxDelay) });
   }
@@ -52,7 +63,10 @@ export function JobBackoff({ job }: { job: JobFull }) {
 
   const cfg = job.backoffConfig;
   const typeLabel = cfg ? cfg.type : 'exponential (default)';
-  const remaining = maxAttempts - made;
+  // Count the rows that WOULD exist uncapped, from the same start index the
+  // preview loop uses — `maxAttempts - made` overstates it by one for a
+  // never-run job, whose first execution has no backoff row.
+  const remaining = remainingRetries(job);
   const rows = previewDelays(job);
 
   return (

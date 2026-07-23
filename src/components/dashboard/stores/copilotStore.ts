@@ -45,8 +45,16 @@ export interface CopilotConfig {
   apiKey: string;
 }
 
+// Ids must be unique even without crypto.randomUUID — that API is gated on a
+// SECURE context, so on a plain-http LAN/Docker origin the fallback is the only
+// branch that ever runs. A bare `${Date.now()}` collides for anything minted in
+// the same millisecond (two tool calls in one model step), which would make one
+// confirm card resolve another's promise; the counter + random suffix can't.
+let uidSeq = 0;
 const uid = () =>
-  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`;
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${(uidSeq++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 // Confirmation resolvers kept OUT of store state so they are never serialized.
 const resolvers = new Map<string, (approved: boolean) => void>();
@@ -134,7 +142,14 @@ export const useCopilotStore = create<CopilotState>()(
             ...m,
             done: true,
             error: !!opts?.error,
-            content: opts?.error ? m.content || opts.error : m.content,
+            // Append the reason instead of dropping it: a turn that streamed a
+            // few tokens and THEN failed (429, connection reset) would otherwise
+            // render as a truncated answer in red with no explanation at all.
+            content: opts?.error
+              ? m.content
+                ? `${m.content}\n\n${opts.error}`
+                : opts.error
+              : m.content,
           })),
         })),
 

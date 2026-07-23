@@ -15,7 +15,7 @@ import type { DlqConfig, StallConfig } from '@/lib/bqTypes';
  */
 /** Order-insensitive value signature so a save's echo can be recognized
  *  regardless of the key order the server serializes it back in. */
-function configSig(v: unknown): string {
+export function configSig(v: unknown): string {
   if (v && typeof v === 'object' && !Array.isArray(v)) {
     const o = v as Record<string, unknown>;
     return JSON.stringify(
@@ -27,7 +27,7 @@ function configSig(v: unknown): string {
   return JSON.stringify(v);
 }
 
-function useSyncedConfig<T>(config: T): [T, (v: T) => void, (saved: unknown) => void] {
+export function useSyncedConfig<T>(config: T): [T, (v: T) => void, () => (saved: unknown) => void] {
   const [c, setC] = useState(config);
   const lastServer = useRef(configSig(config));
   useEffect(() => {
@@ -40,10 +40,19 @@ function useSyncedConfig<T>(config: T): [T, (v: T) => void, (saved: unknown) => 
   // Advance the baseline to a just-saved value so the server's echo of OUR OWN
   // save on the next poll isn't treated as an external change that wipes an
   // immediate re-edit (edit → Save → re-edit was clobbered within one poll).
-  const markSaved = (saved: unknown) => {
-    lastServer.current = configSig(saved);
+  //
+  // Called BEFORE the request so it can capture the baseline as it was then: if
+  // the 3s poll re-seeded the form mid-save (an external change), that value is
+  // what the user is now looking at and it is authoritative — advancing to our
+  // payload would strand the form on a value the server does not have and stop
+  // it ever adopting server state again.
+  const beginSave = () => {
+    const base = lastServer.current;
+    return (saved: unknown) => {
+      if (lastServer.current === base) lastServer.current = configSig(saved);
+    };
   };
-  return [c, setC, markSaved];
+  return [c, setC, beginSave];
 }
 
 /**
@@ -85,7 +94,7 @@ export function StallForm({
   config: StallConfig;
   onSaved: () => void;
 }) {
-  const [c, setC, markSaved] = useSyncedConfig<StallDraft>(config);
+  const [c, setC, beginSave] = useSyncedConfig<StallDraft>(config);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -146,6 +155,7 @@ export function StallForm({
             try {
               setErr(null);
               const payload = { ...c, stallInterval, maxStalls, gracePeriod };
+              const markSaved = beginSave();
               await bq.setStallConfig(queue, payload);
               markSaved(payload);
               onSaved();
@@ -176,7 +186,7 @@ export function DlqConfigForm({
   config: DlqConfig;
   onSaved: () => void;
 }) {
-  const [c, setC, markSaved] = useSyncedConfig<DlqDraft>(config);
+  const [c, setC, beginSave] = useSyncedConfig<DlqDraft>(config);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -243,6 +253,7 @@ export function DlqConfigForm({
             try {
               setErr(null);
               const payload = { ...c, autoRetryInterval, maxAutoRetries, maxAge, maxEntries };
+              const markSaved = beginSave();
               await bq.setDlqConfig(queue, payload);
               markSaved(payload);
               onSaved();

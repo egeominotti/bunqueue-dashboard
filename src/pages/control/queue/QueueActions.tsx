@@ -6,6 +6,29 @@ import { bq } from '@/lib/bq';
 
 export type RunAction = (label: string, fn: () => Promise<unknown>, confirmMsg?: string) => void;
 
+/**
+ * Coerce the two Clean inputs ONCE, so the confirm prompt quotes exactly what
+ * the request sends. `<input type="number">` reports '' for an empty (or
+ * partially typed) field and `Number('')` is 0 — quoting the raw strings would
+ * show a blank where the scope should be while sending `{grace:0, limit:0}`,
+ * i.e. a wider deletion than the prompt named. `valid` gates the button.
+ */
+export function cleanArgs(
+  graceRaw: string,
+  limitRaw: string
+): { grace: number; limit: number; valid: boolean } {
+  const grace = Number(graceRaw);
+  const limit = Number(limitRaw);
+  const valid =
+    graceRaw.trim() !== '' &&
+    limitRaw.trim() !== '' &&
+    Number.isFinite(grace) &&
+    Number.isFinite(limit) &&
+    grace >= 0 &&
+    limit > 0;
+  return { grace, limit, valid };
+}
+
 /** Pause/resume, drain, retry-completed, promote-delayed, clean. */
 export function LifecycleCard({
   queue,
@@ -21,6 +44,7 @@ export function LifecycleCard({
   const [cleanGrace, setCleanGrace] = useState('0');
   const [cleanLimit, setCleanLimit] = useState('1000');
   const [promoteCount, setPromoteCount] = useState('');
+  const clean = cleanArgs(cleanGrace, cleanLimit);
 
   return (
     <Card className="mb-6">
@@ -113,12 +137,12 @@ export function LifecycleCard({
             <Button
               variant="danger"
               size="sm"
-              disabled={busy}
+              disabled={busy || !clean.valid}
               onClick={() =>
                 run(
                   'Cleaned',
-                  () => bq.clean(queue, { grace: Number(cleanGrace), limit: Number(cleanLimit) }),
-                  `Permanently delete up to ${cleanLimit} completed/failed jobs older than ${cleanGrace}ms from "${queue}"?`
+                  () => bq.clean(queue, { grace: clean.grace, limit: clean.limit }),
+                  `Permanently delete up to ${clean.limit} completed/failed jobs older than ${clean.grace}ms from "${queue}"?`
                 )
               }
             >

@@ -19,6 +19,10 @@ import { bq } from '@/lib/bq';
 
 const POLL_MS = 15000;
 const COOLDOWN_MS = 60000;
+// A same-tick fan-out larger than this would evict its own earliest toasts
+// before <Toaster/> ever paints them (toastStore caps the stack at 5), so a
+// burst is collapsed into a single summary toast instead of being swallowed.
+const MAX_INLINE_TOASTS = 3;
 
 export interface Breach {
   ruleId: string;
@@ -132,16 +136,65 @@ function metricValue(rule: AlertRule, ctx: MetricCtx): number | null {
   }
 }
 
-function notify(breach: Breach) {
-  const body = `${breach.queue || 'All queues'}: ${breach.metricLabel} ${breach.operator} ${breach.threshold} (now ${Math.round(breach.value)})`;
-  toast.error(`Alert: ${breach.ruleName}`, body);
+const breachBody = (breach: Breach): string =>
+  `${breach.queue || 'All queues'}: ${breach.metricLabel} ${breach.operator} ${breach.threshold} (now ${Math.round(breach.value)})`;
+
+function desktopNotify(breach: Breach) {
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
     try {
       // tag = ruleId collapses repeats for the same rule into one desktop toast.
-      new Notification(`bunqueue alert: ${breach.ruleName}`, { body, tag: breach.ruleId });
+      new Notification(`bunqueue alert: ${breach.ruleName}`, {
+        body: breachBody(breach),
+        tag: breach.ruleId,
+      });
     } catch {
       /* notifications unsupported / blocked */
     }
+  }
+}
+
+function notify(breach: Breach) {
+  toast.error(`Alert: ${breach.ruleName}`, breachBody(breach));
+  desktopNotify(breach);
+}
+
+/**
+ * Deliver a tick's fresh breaches. Beyond MAX_INLINE_TOASTS the in-app toasts
+ * would evict each other before rendering, so they collapse into one summary
+ * toast; the desktop notifications stay per-rule (the browser dedupes by tag).
+ */
+function notifyAll(breaches: Breach[]) {
+  if (breaches.length <= MAX_INLINE_TOASTS) {
+    for (const b of breaches) notify(b);
+    return;
+  }
+  toast.error(
+    `${breaches.length} alert rules breaching`,
+    breaches.map((b) => b.ruleName).join(', ')
+  );
+  for (const b of breaches) desktopNotify(b);
+}
+
+/**
+ * Every queue, not just the first page: `bq.queues()` is paginated (default
+ * limit 500) and the dlq metric must see the whole deployment — a truncated
+ * page makes a rule scoped to queue #501 look permanently "unknown" and a
+ * global dlq sum silently under-count. null ⇒ the fetch failed.
+ */
+async function allQueues(): Promise<QueueRow[] | null> {
+  try {
+    const first = await bq.queues();
+    const rows = [...first.queues];
+    const total = first.total ?? rows.length;
+    // Bounded: 20 extra pages of 500 = 10k queues, plenty, and can't spin.
+    for (let page = 0; rows.length < total && page < 20; page++) {
+      const next = await bq.queues(500, rows.length);
+      if (!next.queues.length) break;
+      rows.push(...next.queues);
+    }
+    return rows;
+  } catch {
+    return null;
   }
 }
 
@@ -158,6 +211,10 @@ export function useAlertEngine() {
   // When each currently-breaching rule STARTED breaching, so the Alerts page can
   // show a real "since" instead of resetting to now on every poll.
   const breachSince = useRef<Map<string, number>>(new Map());
+  // Last published breach per rule, so a tick that can't evaluate a rule (its
+  // metric source failed) carries the known breach forward instead of dropping
+  // it — an unevaluated rule must never be published as "within threshold".
+  const lastBreach = useRef<Map<string, Breach>>(new Map());
 
   // Re-arm the poller only when the enabled-rule set actually changes (not on
   // every unrelated store update), keyed by a stable signature. Empty ⇒ no
@@ -173,6 +230,7 @@ export function useAlertEngine() {
       wasBreaching.current.clear();
       lastNotified.current.clear();
       breachSince.current.clear();
+      lastBreach.current.clear();
       return;
     }
     let cancelled = false;
@@ -182,29 +240,56 @@ export function useAlertEngine() {
       if (inFlight) return;
       inFlight = true;
       try {
-        const [summary, queuesRes, overview] = await Promise.all([
+        const [summary, queues, overview] = await Promise.all([
           bq.queuesSummary().catch(() => null),
-          bq.queues().catch(() => null),
+          allQueues(),
           bq.overview().catch(() => null),
         ]);
         if (cancelled) return;
+        const active = useAlertsStore.getState().rules.filter((r) => r.enabled);
+        const liveIds = new Set(active.map((r) => r.id));
+        // Forget state for rules that were deleted/disabled. Runs BEFORE the
+        // metric gate below: pruning a rule the operator just removed must not
+        // depend on the server being reachable.
+        for (const id of [...wasBreaching.current.keys()]) {
+          if (!liveIds.has(id)) {
+            wasBreaching.current.delete(id);
+            lastNotified.current.delete(id);
+            breachSince.current.delete(id);
+            lastBreach.current.delete(id);
+          }
+        }
         // If the core overview call failed the server is (likely) unreachable —
         // skip this tick rather than treating absent data as zeros, which would
         // falsely trip a `<`-threshold rule while the server is simply down. A
         // partial failure (summary/queues) is handled per-metric (returns null).
-        if (!overview) return;
+        // Rows for rules that no longer exist are still dropped.
+        if (!overview) {
+          const current = useAlertRuntimeStore.getState().breaching;
+          const kept = current.filter((b) => liveIds.has(b.ruleId));
+          if (kept.length !== current.length) setBreaching(kept);
+          return;
+        }
         const ctx: MetricCtx = {
           summary,
-          queues: queuesRes?.queues ?? null,
+          queues,
           overview,
         };
         const now = Date.now();
         const breaches: Breach[] = [];
-        const active = useAlertsStore.getState().rules.filter((r) => r.enabled);
-        const liveIds = new Set(active.map((r) => r.id));
+        const fresh: Breach[] = [];
         for (const rule of active) {
           const value = metricValue(rule, ctx);
-          if (value == null) continue;
+          if (value == null) {
+            // Unknown ≠ resolved: keep publishing the last known breach so the
+            // Alerts page can't claim "all clear" on the strength of a fetch
+            // that failed. State refs are left untouched (still breaching).
+            const prev = wasBreaching.current.get(rule.id)
+              ? lastBreach.current.get(rule.id)
+              : undefined;
+            if (prev) breaches.push(prev);
+            continue;
+          }
           const isBreach = compare(value, rule.operator, rule.threshold);
           const was = wasBreaching.current.get(rule.id) ?? false;
           if (isBreach) {
@@ -222,24 +307,25 @@ export function useAlertEngine() {
               at: since,
             };
             breaches.push(breach);
-            const cooled = now - (lastNotified.current.get(rule.id) ?? 0) > COOLDOWN_MS;
-            if (!was && cooled) {
-              notify(breach);
+            lastBreach.current.set(rule.id, breach);
+            // The cooldown must DEFER, not drop: comparing the last
+            // notification against this episode's onset keeps it one
+            // notification per breach episode (`notifiedAt < since`) while
+            // still throttling a flapping metric — an edge suppressed by the
+            // cooldown fires as soon as the cooldown expires instead of being
+            // swallowed forever by the `wasBreaching` latch.
+            const notifiedAt = lastNotified.current.get(rule.id) ?? 0;
+            if (now - notifiedAt > COOLDOWN_MS && notifiedAt < since) {
+              fresh.push(breach);
               lastNotified.current.set(rule.id, now);
             }
           } else {
             breachSince.current.delete(rule.id);
+            lastBreach.current.delete(rule.id);
           }
           wasBreaching.current.set(rule.id, isBreach);
         }
-        // Forget state for rules that were deleted/disabled.
-        for (const id of [...wasBreaching.current.keys()]) {
-          if (!liveIds.has(id)) {
-            wasBreaching.current.delete(id);
-            lastNotified.current.delete(id);
-            breachSince.current.delete(id);
-          }
-        }
+        notifyAll(fresh);
         setBreaching(breaches);
       } finally {
         inFlight = false;

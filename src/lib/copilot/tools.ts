@@ -12,8 +12,15 @@ import { bq } from '@/lib/bq';
  * recover instead of the whole turn aborting.
  */
 
+// See copilotStore's uid(): crypto.randomUUID is secure-context-only, so on a
+// plain-http origin the fallback runs and a bare `${Date.now()}` would give two
+// tools started in the same millisecond the same ToolEvent id (updateTool would
+// then patch both chips). Counter + random suffix keeps them distinct.
+let uidSeq = 0;
 const uid = () =>
-  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`;
+  typeof crypto !== 'undefined' && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${(uidSeq++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 interface ToolMeta {
   name: string;

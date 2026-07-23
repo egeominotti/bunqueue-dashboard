@@ -74,11 +74,13 @@ function pushRecentFlow(list: RecentFlow[], entry: RecentFlow): RecentFlow[] {
   return next;
 }
 
-interface Graph {
+export interface Graph {
   jobs: Map<string, JobFull>;
   edges: FlowEdge[];
   /** True when the walk stopped at MAX_NODES/MAX_DEPTH before exhausting the flow. */
   truncated: boolean;
+  /** Nodes whose GET /jobs/:id failed — their edges are missing from the graph. */
+  failed: number;
 }
 
 /** Climb parentId to the flow's true root so pasting any node shows the whole flow. */
@@ -105,12 +107,13 @@ async function findRoot(id: string): Promise<string> {
 }
 
 /** BFS from the root over childrenIds (child edges) + dependsOn (depends edges). */
-async function walkFlow(rootId: string): Promise<Graph> {
+export async function walkFlow(rootId: string): Promise<Graph> {
   const jobs = new Map<string, JobFull>();
   const edges: FlowEdge[] = [];
   const seenEdge = new Set<string>();
   const queue: { id: string; depth: number }[] = [{ id: rootId, depth: 0 }];
   let truncated = false;
+  let failed = 0;
 
   while (queue.length && jobs.size < MAX_NODES) {
     const { id, depth } = queue.shift() as { id: string; depth: number };
@@ -120,7 +123,10 @@ async function walkFlow(rootId: string): Promise<Graph> {
     try {
       job = (await bq.job(id)).job ?? null;
     } catch {
-      /* keep a placeholder node so a dangling reference still renders */
+      /* keep a placeholder node so a dangling reference still renders — but
+         count it: its children/dependsOn edges are silently absent, and a
+         partial graph must never render as a complete one */
+      failed += 1;
     }
     jobs.set(id, job ?? ({ id, state: 'unknown' } as JobFull));
     if (!job) continue;
@@ -143,7 +149,7 @@ async function walkFlow(rootId: string): Promise<Graph> {
   }
   // Nodes still queued but never fetched = the MAX_NODES cap cut the walk short.
   if (queue.some((e) => !jobs.has(e.id))) truncated = true;
-  return { jobs, edges, truncated };
+  return { jobs, edges, truncated, failed };
 }
 
 function edgePath(x1: number, y1: number, x2: number, y2: number): string {
@@ -214,8 +220,11 @@ export function Flows() {
           graph && (
             <button
               type="button"
+              // A walk is up to 72 sequential job fetches with no abort: without
+              // this, every impatient click spawns another full chain.
+              disabled={loading}
               onClick={() => load(input || rootParam)}
-              className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+              className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg disabled:opacity-50"
             >
               Refresh
             </button>
@@ -234,7 +243,7 @@ export function Flows() {
           />
           <button
             type="submit"
-            disabled={!input.trim()}
+            disabled={loading || !input.trim()}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 disabled:opacity-50"
           >
             Load flow
@@ -370,6 +379,12 @@ export function Flows() {
               {graph.truncated && (
                 <div className="mb-1 text-warning">
                   Graph truncated at {MAX_NODES} nodes / depth {MAX_DEPTH} — not the whole flow.
+                </div>
+              )}
+              {graph.failed > 0 && (
+                <div className="mb-1 text-warning">
+                  {graph.failed} node{graph.failed === 1 ? '' : 's'} couldn't be loaded — their
+                  edges are missing, so this is not the whole flow.
                 </div>
               )}
               <div className="mb-1">

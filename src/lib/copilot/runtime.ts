@@ -80,6 +80,18 @@ export function abortActive(): void {
   ac?.abort();
 }
 
+/**
+ * Clear the conversation. Wiping the messages is not enough on its own: the turn
+ * would keep streaming into a message that no longer exists, so a later tool call
+ * would pin a confirm card ("Purge DLQ: prod") onto an empty panel with no
+ * ToolEvent trail, and busy would stay latched for the rest of the turn. Abort
+ * first, then clear.
+ */
+export function clearChat(): void {
+  abortActive();
+  useCopilotStore.getState().clear();
+}
+
 /** Run one user turn: stream the assistant reply, executing tools as it goes. */
 export async function sendMessage(text: string): Promise<void> {
   const store = useCopilotStore.getState();

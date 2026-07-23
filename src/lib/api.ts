@@ -25,15 +25,35 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Per-request deadline — fetch has no default timeout, so a reachable-but-hung
+ * server would leave the promise pending forever and stall every poll loop that
+ * awaits it. Overridable (tests set it low); a caller `init.signal` still wins.
+ */
+let requestTimeoutMs = 30_000;
+export function setRequestTimeoutMs(ms: number): void {
+  requestTimeoutMs = ms;
+}
+
 async function request<T>(path: string, init?: RequestInit, strict = true): Promise<T> {
-  const res = await fetch(getBaseUrl() + path, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders(),
-      ...init?.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(getBaseUrl() + path, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+        ...init?.headers,
+      },
+      signal: init?.signal ?? AbortSignal.timeout(requestTimeoutMs),
+    });
+  } catch (e) {
+    // A blown deadline surfaces as the normal error type (status 0 — no response).
+    if ((e as { name?: string } | null)?.name === 'TimeoutError') {
+      throw new ApiError('Request timed out', 0);
+    }
+    throw e;
+  }
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
@@ -47,7 +67,17 @@ async function request<T>(path: string, init?: RequestInit, strict = true): Prom
   }
 
   if (res.status === 204) return undefined as T;
-  const data = (await res.json()) as T;
+  // Defensive parse (mirrors bq.call()): a 2xx with an empty or non-JSON body —
+  // an SPA-fallback proxy answering `/api/health` with index.html, a 200 with no
+  // body — must surface as an ApiError carrying the status, not a raw SyntaxError.
+  const text = await res.text();
+  if (!text) return undefined as T;
+  let data: T;
+  try {
+    data = JSON.parse(text) as T;
+  } catch {
+    throw new ApiError(`Invalid JSON response (HTTP ${res.status})`, res.status);
+  }
   // Many mutating endpoints return HTTP 200 with { ok:false, error } on logical
   // failure (cancel a finished job, apply a rate limit, …). Surface those as
   // errors instead of resolving as success. `strict:false` opts out where `ok`

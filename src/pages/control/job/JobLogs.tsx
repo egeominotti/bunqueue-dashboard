@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/form';
@@ -21,17 +21,24 @@ export function JobLogs({ jobId }: { jobId: string }) {
   const [level, setLevel] = useState<LogLevel>('info');
   const [busy, setBusy] = useState(false);
 
+  // Sequence guard (last-to-start wins): add() reloads while a slow mount read
+  // may still be in flight, and that older snapshot — taken before the POST —
+  // would otherwise land last and erase the line just added.
+  const gen = useRef(0);
+
   const load = useCallback(async () => {
+    const my = ++gen.current;
     setLoading(true);
     setError(null);
     try {
       const r = await bq.jobLogs(jobId);
+      if (my !== gen.current) return;
       setLogs(r.data?.logs ?? []);
       setCount(r.data?.count ?? 0);
     } catch (e) {
-      setError((e as Error).message);
+      if (my === gen.current) setError((e as Error).message);
     } finally {
-      setLoading(false);
+      if (my === gen.current) setLoading(false);
     }
   }, [jobId]);
 

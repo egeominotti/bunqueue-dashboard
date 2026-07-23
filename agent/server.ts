@@ -65,7 +65,13 @@ export function hostnameOf(host: string): string {
   const v6 = s.match(/^\[([^\]]+)\]/); // [::1]:6800 → ::1
   if (v6) return v6[1].toLowerCase();
   const i = s.indexOf(':');
-  return (i === -1 ? s : s.slice(0, i)).toLowerCase();
+  if (i === -1) return s.toLowerCase();
+  // A bare (unbracketed) IPv6 literal has several colons and no port delimiter:
+  // splitting on the first one would both lock the real host out and allowlist a
+  // bogus single label ('2001:db8::5' → '2001'). Keep it whole — that also makes
+  // hostnameOf idempotent over its own bracket-stripped output.
+  if (s.indexOf(':') !== s.lastIndexOf(':')) return s.toLowerCase();
+  return s.slice(0, i).toLowerCase();
 }
 
 /**

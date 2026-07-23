@@ -6,8 +6,9 @@
  * vertically within each column, then every column is centred.
  *
  * Cycle-safe: a genuine cycle (which a job DAG should never contain, but a
- * corrupt/looping `dependsOn` could) can't starve the queue — any node that
- * never reaches in-degree 0 is pinned to layer 0 so it still lays out.
+ * corrupt/looping `dependsOn` could) can't starve the queue — when nothing is
+ * left with in-degree 0 the earliest unplaced node is forced ready, so only the
+ * cycle's back-edge is ignored and everything downstream still layers normally.
  */
 export type FlowEdgeKind = 'child' | 'depends';
 export interface FlowEdge {
@@ -57,17 +58,29 @@ export function computeLayers(ids: string[], edges: FlowEdge[]): Map<string, num
     indeg.set(e.to, (indeg.get(e.to) ?? 0) + 1);
   }
   const queue = ids.filter((id) => (indeg.get(id) ?? 0) === 0);
-  let processed = 0;
-  while (queue.length) {
-    const u = queue.shift() as string;
-    processed += 1;
-    for (const v of out.get(u) ?? []) {
-      layer.set(v, Math.max(layer.get(v) ?? 0, (layer.get(u) ?? 0) + 1));
-      const d = (indeg.get(v) ?? 0) - 1;
-      indeg.set(v, d);
-      if (d === 0) queue.push(v);
+  const placed = new Set<string>();
+  while (placed.size < layer.size) {
+    while (queue.length) {
+      const u = queue.shift() as string;
+      if (placed.has(u)) continue;
+      placed.add(u);
+      for (const v of out.get(u) ?? []) {
+        // An already-placed target is never relaxed again: in a real DAG that
+        // cannot happen (a node is popped only once every predecessor relaxed
+        // it), and inside a cycle it is exactly the back-edge to ignore.
+        if (placed.has(v)) continue;
+        layer.set(v, Math.max(layer.get(v) ?? 0, (layer.get(u) ?? 0) + 1));
+        const d = (indeg.get(v) ?? 0) - 1;
+        indeg.set(v, d);
+        if (d === 0) queue.push(v);
+      }
     }
-    if (processed > ids.length + edges.length) break; // cycle backstop
+    // Cycle backstop: nothing is left with in-degree 0, so force the earliest
+    // unplaced node (input order) ready. That drops one back-edge instead of
+    // stranding the whole downstream subgraph at layer 0.
+    const stuck = ids.find((id) => !placed.has(id));
+    if (stuck === undefined) break;
+    queue.push(stuck);
   }
   return layer;
 }

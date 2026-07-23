@@ -15,6 +15,14 @@ export interface ActivityCounters {
 const EMPTY: ActivityCounters = { total: 0, completed: 0, failed: 0, waiting: 0, active: 0 };
 const MAX_EVENTS = 250;
 
+/**
+ * Monotonic clock for the throughput window. Date.now() can step BACKWARDS
+ * (NTP correction, resume from sleep, manual clock change); with a one-sided
+ * `now - ts < 5000` prune every pre-step stamp then compares negative, so the
+ * window stops pruning, `stamps` grows unbounded and the rate stays inflated.
+ */
+const monoNow = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
 function statusFromEvent(event: string): string {
   const suffix = event.includes(':') ? event.split(':')[1] : event;
   switch (suffix) {
@@ -43,6 +51,8 @@ export function useActivityStream(queue?: string) {
   const [counters, setCounters] = useState<ActivityCounters>(EMPTY);
   const [throughput, setThroughput] = useState(0);
   const [connected, setConnected] = useState(false);
+  /** Last connect/stream failure (e.g. `SSE connect failed: HTTP 404`), null while healthy. */
+  const [error, setError] = useState<Error | null>(null);
 
   const stamps = useRef<number[]>([]);
   // Incoming job events and counter deltas are buffered here and applied on a
@@ -62,6 +72,7 @@ export function useActivityStream(queue?: string) {
 
     setEvents([]);
     setCounters(EMPTY);
+    setError(null);
     stamps.current = [];
     pendingEvents.current = [];
     pendingCounters.current = { ...EMPTY };
@@ -86,7 +97,10 @@ export function useActivityStream(queue?: string) {
       // Any delivered frame means the stream is established and flowing — the
       // handshake ({connected:true}, event defaults to 'message'), periodic
       // stats/health frames on an idle queue, and job:* events all qualify.
-      if (frameIndicatesConnected(frame)) setConnected(true);
+      if (frameIndicatesConnected(frame)) {
+        setConnected(true);
+        setError(null);
+      }
       if (!frame.event.startsWith('job:')) return;
       const d = (frame.data ?? {}) as {
         queue?: string;
@@ -116,7 +130,7 @@ export function useActivityStream(queue?: string) {
       else if (status === 'failed') pc.failed += 1;
       else if (status === 'waiting') pc.waiting += 1;
       else if (status === 'active') pc.active += 1;
-      stamps.current.push(Date.now());
+      stamps.current.push(monoNow());
     };
 
     // Reconnect loop: streamEvents resolves on a clean stream end (server
@@ -124,16 +138,25 @@ export function useActivityStream(queue?: string) {
     // unless we're tearing down, drop the connected flag and retry after a short
     // backoff so the live view recovers instead of silently going dead.
     const RECONNECT_MS = 2000;
+    const MAX_BACKOFF = 8; // × RECONNECT_MS
     const run = async () => {
+      let attempts = 0;
       while (!cancelled) {
+        let failure: Error | null = null;
         try {
           await streamEvents(api.eventsUrl(queue), onFrame, ctrl.signal);
-        } catch {
-          /* network error — fall through to reconnect */
+        } catch (e) {
+          // Not necessarily transient: a 401/404 (no /events endpoint, wrong
+          // token, proxy rejecting text/event-stream) fails identically every
+          // time. Surface it instead of retrying silently forever, and widen
+          // the backoff so a permanent failure isn't hammered twice a second.
+          failure = e as Error;
         }
         if (cancelled) break;
         setConnected(false);
-        await delay(RECONNECT_MS);
+        setError(failure);
+        attempts = failure ? Math.min(attempts + 1, MAX_BACKOFF) : 0;
+        await delay(RECONNECT_MS * Math.max(1, attempts));
       }
     };
     run();
@@ -174,12 +197,12 @@ export function useActivityStream(queue?: string) {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      const now = Date.now();
-      stamps.current = stamps.current.filter((ts) => now - ts < 5000);
+      const now = monoNow();
+      stamps.current = stamps.current.filter((ts) => ts <= now && now - ts < 5000);
       setThroughput(stamps.current.length / 5);
     }, 1000);
     return () => clearInterval(timer);
   }, []);
 
-  return { events, counters, throughput, connected };
+  return { events, counters, throughput, connected, error };
 }

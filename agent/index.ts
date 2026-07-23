@@ -41,7 +41,10 @@ const shutdown = (signal: string) => {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info({ signal }, 'signal received, stopping managed server');
-  void mgr.stop().finally(() => process.exit(0));
+  // shutdown() (not stop()) latches the manager closed first: a plain stop()
+  // racing an in-flight restart() returns successfully *because* restart's
+  // start() already spawned a replacement — which process.exit() would orphan.
+  void mgr.shutdown().finally(() => process.exit(0));
 };
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));

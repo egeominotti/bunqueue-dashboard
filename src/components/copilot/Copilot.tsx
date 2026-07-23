@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { Component, lazy, type ReactNode, Suspense } from 'react';
 import { useCopilotStore } from '@/components/dashboard/stores/copilotStore';
 
 /**
@@ -23,6 +23,47 @@ function SparkleIcon({ className }: { className?: string }) {
   );
 }
 
+/**
+ * Keeps a Copilot failure inside the drawer. A rejected `import('./CopilotPanel')`
+ * (stale hashed chunk after a redeploy, network blip) is re-thrown by Suspense and
+ * would otherwise reach the shell ErrorBoundary in AppLayout — which has no
+ * resetKey, so the only way out is a full reload, and a reload destroys every
+ * deliberately memory-only secret (server/agent tokens, S3 keys, the Copilot key).
+ */
+export class CopilotBoundary extends Component<
+  { onClose: () => void; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-md flex-col items-center justify-center gap-3 border-l border-line bg-surface px-6 text-center">
+        <p className="text-sm text-fg">Copilot failed to load.</p>
+        <p className="text-xs text-muted">
+          The panel is loaded on demand; the request failed. If the dashboard was just redeployed,
+          reload the page. The rest of the dashboard is unaffected.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            this.setState({ failed: false });
+            this.props.onClose();
+          }}
+          className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+        >
+          Close
+        </button>
+      </div>
+    );
+  }
+}
+
 export function Copilot() {
   const open = useCopilotStore((s) => s.open);
   const setOpen = useCopilotStore((s) => s.setOpen);
@@ -44,15 +85,17 @@ export function Copilot() {
         </button>
       )}
       {open && (
-        <Suspense
-          fallback={
-            <div className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-md items-center justify-center border-l border-line bg-surface text-sm text-muted">
-              Loading Copilot…
-            </div>
-          }
-        >
-          <CopilotPanel />
-        </Suspense>
+        <CopilotBoundary onClose={() => setOpen(false)}>
+          <Suspense
+            fallback={
+              <div className="fixed inset-y-0 right-0 z-[60] flex w-full max-w-md items-center justify-center border-l border-line bg-surface text-sm text-muted">
+                Loading Copilot…
+              </div>
+            }
+          >
+            <CopilotPanel />
+          </Suspense>
+        </CopilotBoundary>
       )}
     </>
   );

@@ -10,6 +10,55 @@ exact file so you can confirm or fix it. None of these are catastrophic; the
 dashboard is fully usable. They're documented here because "professional docs"
 means being honest about the rough edges, not hiding them.
 
+## Adversarial audit pass (v0.0.32)
+
+Every module was re-read against the invariants it assumes, each suspected
+defect was challenged by an independent reviewer before being accepted, and the
+92 that survived were fixed with regression tests (170 → 314 tests). The full
+list is in [the changelog](https://github.com/egeominotti/bunqueue-dashboard/blob/main/CHANGELOG.md).
+What matters for operators:
+
+- **`BIND_ADDR=0.0.0.0` no longer exposes a process spawner.** The standalone
+  binary bridged `/agent/*` on its public listener; since the agent's Origin
+  gate allows Origin-less callers by design and its Host gate was off for
+  non-loopback binds, any host on the network could reconfigure and start the
+  managed server. The bridge now requires an explicit opt-in on a non-loopback
+  bind — set `AGENT_TOKEN` (preferred) or `AGENT_ALLOW_REMOTE_CONTROL=1` — and
+  otherwise answers 403 with the reason in the boot log.
+  **`AGENT_TOKEN` gates mutations, not reads.** `GET /agent/db/*`,
+  `/agent/control/status` and `/agent/control/logs` still answer without a
+  token (`agent/server.ts`), so exposing the bridge on a LAN — even with a
+  token set — lets anyone on that network read job payloads and the SQLite
+  inspector. Put it behind a reverse proxy that authenticates, or keep the
+  bind on loopback.
+- **Proxied deployments:** the `/api` and `/agent` Origin gates compare the
+  request's **host**, not its full origin, precisely so a TLS-terminating
+  reverse proxy (browser sends `https://…`, the binary sees `http://…`) does
+  not 403 every mutation while read-only GETs keep working. A proxy that
+  preserves `Host` needs no configuration. A proxy that **rewrites** `Host`
+  must send `X-Forwarded-Host` **and** you must set `TRUST_PROXY=1` — that
+  header is ignored by default, because a direct caller could otherwise send
+  its own `Origin` plus a matching `X-Forwarded-Host` and declare itself
+  same-origin. Listing the public origin in `AGENT_ALLOWED_ORIGINS` also works.
+- **A timed-out `/db/query` is abandoned, not killed.** `Worker.terminate()`
+  cannot preempt a synchronous `sqlite3_step`, so a runaway scan keeps burning
+  its thread until SQLite finishes it. That thread is now counted and the number
+  alive at once is capped (`MAX_CONCURRENT_QUERIES`), so the worst case is a
+  bounded number of busy cores plus a clear "too many queries running" error
+  rather than one leaked core per request. The timeout message no longer claims
+  the query was aborted. Reducing this further needs a killable child process
+  instead of a Worker — not done here.
+- **Coverage floors are enforced on non-`.tsx` code** and were raised to
+  71% lines / 66% functions. A JSX module enters the lcov denominator merely by
+  being imported, so the aggregate tracked test *scope* rather than tested
+  *behaviour*; the overall number is still reported by
+  `scripts/check-coverage.ts`. React components remain largely uncovered by
+  unit tests — that is a real gap, not a measurement artifact.
+- **Known remaining gap:** `Benchmark` can still miscount a run when the target
+  queue already holds jobs — the simulated workers pull pre-existing jobs and
+  count them as the run's own. The pre-run confirm now warns when the queue is
+  non-empty, but the accounting itself is unchanged.
+
 ## Recently fixed (kept here for history)
 
 A security + gate pass resolved these, no longer present:

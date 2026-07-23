@@ -126,6 +126,7 @@ export function usePolledData<T>(
 
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
+    let running = false;
     const hidden = () => typeof document !== 'undefined' && document.hidden;
     const gate = createPollGate(hidden);
 
@@ -135,15 +136,31 @@ export function usePolledData<T>(
     // recurring refreshes pause with the Page Visibility API.
     const tick = async () => {
       if (stopped) return;
-      if (gate()) await load();
+      if (gate() && !running) {
+        running = true;
+        try {
+          await load();
+        } finally {
+          running = false;
+        }
+      }
       if (stopped) return;
       timer = setTimeout(tick, refreshMs);
     };
     tick();
 
-    // Fetch immediately when the tab regains focus (it was skipped while hidden).
+    // Fetch immediately when the tab regains focus (it was skipped while
+    // hidden) — by re-driving the loop, not by calling load() beside it. A
+    // direct call raced the suspended tick(), so N alt-tabs during one slow
+    // fetch issued N+1 concurrent requests. If a fetch is already running the
+    // loop will re-arm on its own, so there is nothing to do.
     const onVisible = () => {
-      if (!hidden() && !stopped) load();
+      if (hidden() || stopped || running) return;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      tick();
     };
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', onVisible);

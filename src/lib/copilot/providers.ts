@@ -120,7 +120,7 @@ export async function createModel(cfg: ModelConfig): Promise<LanguageModel> {
       const { createGoogleGenerativeAI } = await import('@ai-sdk/google');
       return createGoogleGenerativeAI({ apiKey })(cfg.model);
     }
-    default: {
+    case 'compatible': {
       const { createOpenAICompatible } = await import('@ai-sdk/openai-compatible');
       return createOpenAICompatible({
         name: cfg.provider || 'custom',
@@ -128,5 +128,13 @@ export async function createModel(cfg: ModelConfig): Promise<LanguageModel> {
         apiKey,
       })(cfg.model);
     }
+    // An id that is not in PROVIDERS (a stale/rewritten persisted config) used to
+    // fall through to the openai-compatible arm, which would POST the key and the
+    // whole chat to whatever baseURL happened to be persisted — a field the panel
+    // hides for an unknown id. Refuse instead of sending the key somewhere unseen.
+    default:
+      throw new Error(
+        `Unknown Copilot provider "${cfg.provider}". Pick a provider in the Copilot settings.`
+      );
   }
 }

@@ -43,6 +43,9 @@ export function JobInspector() {
     fetched: false,
     value: undefined,
   });
+  // A failed result fetch is NOT "no result stored" — keep the transport error
+  // so the Result card can say so instead of asserting a fact about the data.
+  const [resultError, setResultError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -70,6 +73,7 @@ export function JobInspector() {
         if (my !== lookupGen.current) return;
         setJob(null);
         setResult({ fetched: false, value: undefined });
+        setResultError(null);
         setNotFound(true);
         setParams({}, { replace: true });
         return;
@@ -78,8 +82,16 @@ export function JobInspector() {
       // only learn it once the job comes back — so fetch it after, best-effort.
       // Only completed jobs have a stored result (the Result card renders only for
       // 'completed'), so skip the request for any other state.
-      const resultRes =
-        loaded.state === 'completed' ? await bq.jobResult(loaded.id).catch(() => null) : null;
+      let resultRes: { result: unknown } | null = null;
+      let resultErr: string | null = null;
+      if (loaded.state === 'completed') {
+        try {
+          resultRes = await bq.jobResult(loaded.id);
+        } catch (e) {
+          // Keep it: rendering "No result stored" for a 502 would be a lie.
+          resultErr = (e as Error).message;
+        }
+      }
       if (my !== lookupGen.current) return;
       setJob(loaded);
       setIdInput(mode === 'custom' ? loaded.id : key);
@@ -89,6 +101,7 @@ export function JobInspector() {
           ? { fetched: true, value: resultRes.result }
           : { fetched: false, value: undefined }
       );
+      setResultError(resultErr);
     } catch (e) {
       if (my !== lookupGen.current) return;
       // A missing job is a real 404 or an HTTP-200 `{ok:false, error:"...not
@@ -97,11 +110,22 @@ export function JobInspector() {
       if (e instanceof BqError && (e.status === 404 || /not found/i.test(e.message))) {
         setJob(null);
         setResult({ fetched: false, value: undefined });
+        setResultError(null);
         setNotFound(true);
         // Clear the stale URL param too — otherwise the deep-link effect sees
         // idParam !== job?.id and silently re-fetches the PREVIOUS job,
         // replacing "Job not found" (and the user's typed input) with old data.
         setParams({}, { replace: true });
+      } else if (keepMsg) {
+        // Post-action reload: the mutation itself was ACCEPTED by the server.
+        // Replacing its success line with a red error would read as "the action
+        // failed" and get the operator to run it a second time — report the
+        // read-back failure alongside the outcome, not in place of it.
+        setMsg((m) =>
+          m
+            ? { ok: m.ok, text: `${m.text} — couldn't reload: ${(e as Error).message}` }
+            : { ok: false, text: (e as Error).message }
+        );
       } else {
         // Network error / 5xx: the server being unreachable is not "job
         // removed" — keep whatever is loaded and surface the real error.
@@ -130,6 +154,7 @@ export function JobInspector() {
       if (label === 'Cancel') {
         setJob(null);
         setResult({ fetched: false, value: undefined });
+        setResultError(null);
         // Clear the URL param too — otherwise the deep-link effect immediately
         // re-fetches the just-deleted job and replaces "Cancel ✓" with
         // "Job not found".
@@ -315,6 +340,13 @@ export function JobInspector() {
                 />
                 {result.fetched && result.value !== undefined && result.value !== null ? (
                   <Json value={result.value} />
+                ) : resultError ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-xs text-danger">Couldn't load result — {resultError}</p>
+                    <Button size="sm" disabled={loading} onClick={() => lookup(job.id, 'id')}>
+                      Retry
+                    </Button>
+                  </div>
                 ) : (
                   <p className="text-xs text-faint">No result stored for this job.</p>
                 )}

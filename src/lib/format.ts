@@ -84,7 +84,10 @@ export function jobDuration(startedAt?: number, completedAt?: number): number | 
 /** Uptime seconds → "3d 4h 12m". */
 export function formatUptime(seconds: number | undefined | null): string {
   if (seconds == null || !Number.isFinite(seconds)) return '—';
-  const s = Math.floor(seconds);
+  // Clamp like formatRelativeTime: a backwards clock step makes the caller's
+  // (now - startedAt) negative, and Math.floor of a small negative would render
+  // "-1d -1h -1m" for what is really a sub-second discrepancy.
+  const s = Math.max(0, Math.floor(seconds));
   const d = Math.floor(s / 86400);
   const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
@@ -99,7 +102,12 @@ export function formatUptime(seconds: number | undefined | null): string {
 export function formatCompact(n: number | undefined | null): string {
   if (n == null || !Number.isFinite(n)) return '0';
   if (n >= 1_000_000) return `${(n / 1e6).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  // 999999/1000 is 999.999, which toFixed(1) renders as "1000.0" — promote to
+  // the next unit so the mantissa printed with "K" is always < 1000.
+  if (n >= 1000) {
+    if (Number((n / 1000).toFixed(1)) >= 1000) return `${(n / 1e6).toFixed(1)}M`;
+    return `${(n / 1000).toFixed(1)}K`;
+  }
   return String(Math.round(n));
 }
 
@@ -133,6 +141,13 @@ export function formatBytes(bytes: number | undefined | null): string {
   let v = bytes;
   let i = 0;
   while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  // The loop picks the unit from the unrounded value, but the mantissa is
+  // rounded on the way out — 1023.999 would print "1024.0 KB". Promote once
+  // more when rounding pushes it back onto the boundary.
+  if (i < units.length - 1 && Number(v.toFixed(i === 0 ? 0 : 1)) >= 1024) {
     v /= 1024;
     i++;
   }

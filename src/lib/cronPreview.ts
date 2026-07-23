@@ -140,7 +140,13 @@ export function nextCronRuns(expr: string, count: number, fromMs: number): CronP
   d.setSeconds(0, 0);
   d.setMinutes(d.getMinutes() + 1);
   // Bounded search (>4 years of minutes) so a pathological expression can't spin.
+  // The iteration guard alone is not enough: a well-formed but unsatisfiable
+  // expression (`0 0 31 4 *`, `0 0 30 2 *`) never pushes a run and would burn all
+  // 2.2M day/month steps (~450ms, synchronous, on the render path). Cap the walk
+  // by calendar horizon too — 5 years is well past any preview worth showing.
+  const horizon = fromMs + 5 * 366 * 86_400_000;
   for (let guard = 0; guard < 2_200_000 && runs.length < count; guard++) {
+    if (d.getTime() > horizon) break;
     if (!month.values.has(d.getMonth() + 1)) {
       d.setMonth(d.getMonth() + 1, 1);
       d.setHours(0, 0, 0, 0);

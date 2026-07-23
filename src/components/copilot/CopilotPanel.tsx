@@ -8,7 +8,7 @@ import {
 import { Field, Input, Select } from '@/components/ui/form';
 import { cn } from '@/lib/cn';
 import { PROVIDERS, providerById } from '@/lib/copilot/providers';
-import { abortActive, sendMessage } from '@/lib/copilot/runtime';
+import { abortActive, clearChat, sendMessage } from '@/lib/copilot/runtime';
 
 const SUGGESTIONS = [
   'Which queues are backing up right now?',
@@ -25,8 +25,7 @@ const STATUS_STYLE: Record<ToolEvent['status'], string> = {
 };
 
 export function CopilotPanel() {
-  const { config, setConfig, messages, pending, busy, clear, setOpen, resolveConfirm } =
-    useCopilotStore();
+  const { config, setConfig, messages, pending, busy, setOpen, resolveConfirm } = useCopilotStore();
   const def = providerById(config.provider);
   const configured = config.apiKey.trim().length > 0 && config.model.trim().length > 0;
 
@@ -90,7 +89,7 @@ export function CopilotPanel() {
               <path d="M10 4a2 2 0 014 0 6 6 0 012.6 1.5 2 2 0 002.7 2.7 6 6 0 010 3.6 2 2 0 00-2.7 2.7A6 6 0 0114 18a2 2 0 01-4 0 6 6 0 01-2.6-1.5 2 2 0 00-2.7-2.7 6 6 0 010-3.6 2 2 0 002.7-2.7A6 6 0 0110 4z" />
               <circle cx="12" cy="12" r="2.5" />
             </IconButton>
-            <IconButton label="Clear chat" onClick={clear}>
+            <IconButton label="Clear chat" onClick={clearChat}>
               <path d="M6 7h12M9 7V5h6v2m-7 0v11a1 1 0 001 1h6a1 1 0 001-1V7" />
             </IconButton>
             <IconButton label="Close" onClick={() => setOpen(false)}>

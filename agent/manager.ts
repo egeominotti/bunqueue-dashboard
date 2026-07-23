@@ -48,6 +48,13 @@ export interface StatusSnapshot {
 
 const MAX_LOGS = 800;
 const STOP_TIMEOUT_MS = 8000;
+/**
+ * Hard byte cap for a single log line. The ring buffer trims by COUNT, so a
+ * child that dumps a large blob without a newline (binary file, one-line JSON)
+ * would otherwise grow the reader's in-flight buffer — and then one retained
+ * LogLine — without limit.
+ */
+const MAX_LINE = 8192;
 
 function defaultConfig(): ServerConfig {
   return {
@@ -75,6 +82,15 @@ export class ProcessManager {
    * a concurrent start() brought up (and vice-versa).
    */
   private procToken = 0;
+  /**
+   * The stop() currently in flight (null when none). A stop() still owns a live
+   * child until its await resolves, so start() waits on this before spawning —
+   * otherwise a start racing a stop leaves two managed servers alive at once,
+   * fighting over the ports and the SQLite db.
+   */
+  private stopping: Promise<StatusSnapshot> | null = null;
+  /** Latched by shutdown(): once set, start() refuses to spawn a new child. */
+  private shuttingDown = false;
 
   getConfig(): ServerConfig {
     return this.config;
@@ -135,31 +151,52 @@ export class ProcessManager {
   }
 
   private push(stream: LogLine['stream'], line: string): void {
-    this.logs.push({ seq: this.seq++, ts: Date.now(), stream, line });
+    // Backstop byte cap (the reader also splits oversized chunks) so no single
+    // entry can pin an unbounded amount of memory in the ring buffer.
+    const capped = line.length > MAX_LINE ? `${line.slice(0, MAX_LINE)}…[truncated]` : line;
+    this.logs.push({ seq: this.seq++, ts: Date.now(), stream, line: capped });
     // Amortized trim: only splice once the buffer overshoots by a slack margin, so
     // steady-state logging isn't an O(n) array shift on every single line.
     if (this.logs.length > MAX_LOGS + 256) this.logs.splice(0, this.logs.length - MAX_LOGS);
   }
 
   async start(): Promise<StatusSnapshot> {
+    if (this.shuttingDown) return this.getStatus();
     if (this.status === 'running' || this.status === 'starting') return this.getStatus();
+    // Never spawn while a stop() still owns a live child: wait it out, then
+    // re-check the guards (a concurrent start may have won the race meanwhile).
+    if (this.stopping) await this.stopping;
+    if (this.shuttingDown) return this.getStatus();
+    // Read through a local: TS narrowed `this.status` at the guard above and
+    // doesn't widen it across the await, but a concurrent start() can have
+    // moved it in the meantime — that interleaving is exactly what this checks.
+    const statusAfterWait = this.status as Status;
+    if (statusAfterWait === 'running' || statusAfterWait === 'starting') return this.getStatus();
+
+    // Validate BEFORE mutating status / burning a proc token. Doing it after
+    // (as this once did) means a bad command leaves the manager wedged: an
+    // empty command stranded the previous generation's dead pid + runningConfig
+    // (its stop()/onExit finalizers were already token-stale), and a non-string
+    // `command` from PUT /control/config threw out of `.trim()` with status
+    // pinned at 'starting', disabling every UI control until the agent restarts.
+    const command = typeof this.config.command === 'string' ? this.config.command : '';
+    const parts = command.trim().split(/\s+/);
+    const [cmd, ...args] = parts;
+    if (!cmd) throw new Error('Empty command');
+
     this.status = 'starting';
     this.exitCode = null;
     const token = ++this.procToken;
 
-    const parts = this.config.command.trim().split(/\s+/);
-    const [cmd, ...args] = parts;
-    if (!cmd) {
-      this.status = 'stopped';
-      throw new Error('Empty command');
-    }
-
+    // extraEnv is spread FIRST so the explicit port/data-path config always
+    // wins: otherwise a user env var named HTTP_PORT silently moved the child
+    // while runningConfig (and the agent's /health probe) reported the old port.
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
+      ...this.config.extraEnv,
       HTTP_PORT: String(this.config.httpPort),
       TCP_PORT: String(this.config.tcpPort),
       BUNQUEUE_DATA_PATH: this.config.dataPath,
-      ...this.config.extraEnv,
     };
 
     try {
@@ -214,6 +251,12 @@ export class ProcessManager {
           buffer = buffer.slice(i + 1);
           if (line.trim()) this.push(name, line);
         }
+        // No newline in sight: flush in MAX_LINE slices instead of letting the
+        // buffer (and the eventual single LogLine) grow to the whole output.
+        while (buffer.length > MAX_LINE) {
+          this.push(name, buffer.slice(0, MAX_LINE));
+          buffer = buffer.slice(MAX_LINE);
+        }
       }
     } catch {
       /* stream closed */
@@ -226,6 +269,29 @@ export class ProcessManager {
   }
 
   async stop(): Promise<StatusSnapshot> {
+    // Publish the in-flight stop so a racing start() can await it (see
+    // `stopping`). stopOnce() runs its synchronous prefix — including
+    // status='stopping' and the SIGTERM — before we return the promise.
+    const p = this.stopOnce();
+    this.stopping = p;
+    try {
+      return await p;
+    } finally {
+      if (this.stopping === p) this.stopping = null;
+    }
+  }
+
+  /**
+   * Stop the managed server and latch the manager closed, so a start() racing
+   * process shutdown (e.g. an in-flight restart() whose stop() resolves after
+   * SIGINT) cannot spawn a child that would be orphaned by process.exit().
+   */
+  async shutdown(): Promise<StatusSnapshot> {
+    this.shuttingDown = true;
+    return this.stop();
+  }
+
+  private async stopOnce(): Promise<StatusSnapshot> {
     if (!this.proc) {
       this.status = 'stopped';
       this.runningConfig = null;
@@ -236,17 +302,36 @@ export class ProcessManager {
     const proc = this.proc;
     const token = this.procToken;
     proc.kill();
+    // Timer cleared either way (this is the COMMON path): a pending one keeps
+    // the event loop alive for the full timeout after the race is decided.
+    let stopTimer: ReturnType<typeof setTimeout> | undefined;
     const timedOut = await Promise.race([
       proc.exited.then(() => false),
-      new Promise<boolean>((r) => setTimeout(() => r(true), STOP_TIMEOUT_MS)),
-    ]);
+      new Promise<boolean>((r) => {
+        stopTimer = setTimeout(() => r(true), STOP_TIMEOUT_MS);
+      }),
+    ]).finally(() => clearTimeout(stopTimer));
     // Always escalate to SIGKILL on the CAPTURED proc (never `this.proc`) so a
     // child that ignores SIGTERM is still reaped even if a concurrent start()
     // has since swapped in a new process — `proc` targets this generation only.
     if (timedOut) {
       this.push('sys', 'SIGTERM timed out, sending SIGKILL');
       proc.kill(9);
-      await proc.exited;
+      // Bounded: a child wedged in uninterruptible sleep never resolves
+      // `exited` even after SIGKILL, and start() now awaits this promise, so an
+      // unbounded wait here would pin the manager at 'stopping' and hang every
+      // later start() forever. Give up on the wait (not on the kill) and let the
+      // state below finalize — the pid is already unusable. The timer is always
+      // cleared: a pending one keeps the event loop alive after the race is
+      // decided, which delays process exit for the whole timeout.
+      let reapTimer: ReturnType<typeof setTimeout> | undefined;
+      const reaped = await Promise.race([
+        proc.exited.then(() => true),
+        new Promise<boolean>((r) => {
+          reapTimer = setTimeout(() => r(false), STOP_TIMEOUT_MS);
+        }),
+      ]).finally(() => clearTimeout(reapTimer));
+      if (!reaped) this.push('sys', `pid ${proc.pid} did not exit after SIGKILL — giving up on it`);
     }
     // Only finalize shared state if no newer start() replaced this generation
     // while we awaited — otherwise we'd null out the wrong (live) process.

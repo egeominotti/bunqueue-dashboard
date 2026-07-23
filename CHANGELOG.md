@@ -15,6 +15,153 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.32] - 2026-07-23
+
+An adversarial audit pass: every module was read against the invariants it
+assumes, each suspected defect was challenged by an independent reviewer before
+being accepted, and 92 confirmed bugs were fixed with regression tests. The
+suite grew from 170 to 314 tests. 21 further claims were examined and rejected
+as misreadings rather than "fixed" — the notes below only list real defects.
+
+### Security
+- **The standalone binary no longer hands the LAN a process spawner.** With
+  `BIND_ADDR=0.0.0.0`, `scripts/serve.ts` bridged `/agent/*` to the control
+  agent on the public listener. The agent's Origin gate deliberately allows
+  Origin-less callers (curl, local tooling) and its DNS-rebinding Host gate was
+  switched off on non-loopback binds, so any host on the network could `PUT
+  /agent/control/config` and then `POST /agent/control/start` — unauthenticated
+  remote process execution. The bridge is now mounted on a non-loopback bind
+  only when the operator opts in with `AGENT_TOKEN` (recommended: it gates every
+  mutation) or `AGENT_ALLOW_REMOTE_CONTROL=1`; otherwise it answers 403 and the
+  boot log says what to set. Loopback behaviour is unchanged.
+- **The `/api` proxy in the standalone binary gained an Origin gate**, closing
+  drive-by CSRF into bunqueue's admin API, and the loopback agent listener now
+  always keeps its Host allowlist regardless of how the dashboard is bound. The
+  gate compares the request's *host* rather than its full origin, so a
+  TLS-terminating reverse proxy — where the browser sends `https://…` and the
+  binary only ever sees `http://…` — does not 403 every mutation while
+  read-only GETs keep working. A `Host`-rewriting proxy additionally needs
+  `TRUST_PROXY=1`: `X-Forwarded-Host` is ignored by default, since a direct
+  caller could otherwise pair its own `Origin` with a matching forwarded host
+  and declare itself same-origin. Note `AGENT_TOKEN` gates mutations only;
+  reads stay open (see `docs/known-issues.md`).
+- **The dup-column recovery path could execute a trailing statement.** The new
+  code that disambiguates colliding output column names built its TEMP VIEW
+  with `db.run()`, which executes *every* statement in the string, while the
+  read-only allowlist inspects only the first keyword — so
+  `SELECT 1 a, 2 a; VACUUM INTO '/tmp/x'` reached a readonly connection as an
+  arbitrary file write, and an `ATTACH` + view redefinition as an arbitrary
+  SQLite read. It now uses `db.query().run()`, which compiles only the first
+  statement. Introduced and fixed within this release; covered by a regression
+  test.
+- **Copilot confirmation cards can no longer be crossed.** `uid()` fell back to
+  `Date.now()` whenever `crypto.randomUUID` was unavailable — which is exactly
+  the case on a plain-HTTP LAN origin, the way this dashboard is usually served.
+  Two ids minted in the same millisecond collided, so approving a harmless tool
+  could run a destructive one's resolver (or destroy it, wedging the panel).
+  Both `copilotStore.ts` and `copilot/tools.ts` now use a collision-free id.
+
+### Fixed
+- **Control agent — process lifecycle.** `start()` during an in-flight `stop()`
+  spawned a second bunqueue process with both left running; it now waits out the
+  stop and re-checks. A bad `command` no longer strands a dead pid or wedges the
+  status at `starting` (validation moved ahead of the state mutation). The log
+  reader's line buffer is capped, so a child that never emits a newline can no
+  longer grow the agent's heap without bound. `extraEnv` is spread *before* the
+  injected ports, so the status snapshot and health probe can't report ports the
+  child isn't using. SIGINT/SIGTERM now latch a shutdown instead of racing an
+  in-flight `restart()` into an orphaned child.
+- **SQLite inspector.** A query that outran the timeout was reported as aborted,
+  but `terminate()` cannot preempt a synchronous `sqlite3_step`: the thread kept
+  burning a core, unaccounted, one per request. Worker threads are now counted
+  and capped, a slot is released only when the thread really exits, and the
+  message says the query was abandoned rather than killed. Colliding output
+  column names (`SELECT a.id, b.id`, any self-join) silently dropped a column
+  and showed another's value — they are now disambiguated. `contains` filters
+  escape LIKE metacharacters (`%` matched every row), integers beyond 2^53 keep
+  their value instead of rounding, non-finite offsets are clamped instead of
+  surfacing a raw SQLite error, and a missing database returns 404 like every
+  other `/db/*` route.
+- **HTTP clients.** `bq` and `api` requests had no deadline, so a single hung
+  socket permanently stopped a page's poll loop; both now carry an overridable
+  30s timeout. A 2xx with an empty or non-JSON body no longer throws a bare
+  `SyntaxError`, `storage()` tolerates a degraded `{ok:false}` payload, and a
+  401 from a request issued with the *previous* token no longer re-locks the
+  auth gate right after a correct token was entered.
+- **SSE.** A failed connect no longer leaks its unread body, and an idle
+  deadline replaces the previous behaviour where a half-open socket stayed
+  "connected" forever.
+- **Alerts.** A failing metrics source made the page assert "all clear" while
+  the breach was still live; the last known breach is now re-published instead.
+  The cooldown defers a notification instead of dropping it, so a rule that
+  clears and re-breaches is notified again. The DLQ metric pages past the first
+  500 queues, deleting a rule while the server is unreachable no longer leaves
+  its row triggered forever, and simultaneous alerts collapse into one toast
+  rather than evicting each other before rendering.
+- **Polling and live data.** `useThroughputSeries` validated the `/dashboard`
+  body only after committing it (a malformed payload crashed MetricsPro), its
+  depth trend was a per-sample slope labelled per-second, it spliced two servers
+  into one chart when the target changed, and it swallowed every failure so
+  zeros read as live data. `useActivityStream` surfaces a persistent SSE failure
+  instead of retrying it silently forever, and its throughput window uses a
+  monotonic clock so a backward clock step can't freeze pruning.
+- **Formatting.** `formatBytes` printed "1024.0 KB" just below the next unit and
+  `formatCompact` printed "1000.0K"; both promote on the rounded mantissa now.
+  `formatUptime` rendered "-1d -1h -1m" for a clock-skewed negative. `toCsv`
+  dropped a data row whose cells were all empty. A cycle in a flow graph
+  collapsed the whole downstream layout instead of just the cycle. An
+  unsatisfiable-but-valid cron expression (e.g. Feb 30) froze the render thread
+  for ~450ms per keystroke; the search is now bounded by a calendar horizon.
+- **Job and queue pages.** A failed result fetch was rendered as the factual
+  claim "No result stored for this job", and a mutation that succeeded was
+  reported as failed when only the follow-up reload errored. Job logs gained a
+  generation guard (a stale read erased a just-added line). The Flows viewer
+  reported a partial graph as complete when node fetches failed, and its buttons
+  now single-flight. Diagnostics pings are no longer last-to-finish-wins. The
+  destructive Clean confirm describes the values actually sent. Config forms no
+  longer strand on a value the server never received.
+- **Job creation.** Queue names, cron names and webhook URLs were validated
+  trimmed but submitted raw, silently creating phantom queues and undeliverable
+  webhooks. Bulk import now reconciles created against submitted instead of
+  reporting an unqualified success, warns about option values it cannot
+  transmit, and reports NDJSON parse errors on the right line.
+- **Benchmark.** `percentile()` was off by one rank, so short runs reported
+  p50 == p95 == p99 == max. "Clean queue" reported "0 jobs remain" while waiting
+  and completed jobs were still there, and the Run button stayed enabled during
+  a clean, letting it delete the run's own jobs.
+- **Database inspector.** The CSV escaper missed the leading TAB/CR
+  formula-injection triggers its sibling handles, the export could silently
+  no-op (object URL revoked in the same task as the click), the row-detail
+  drawer showed a previous row's values after the poll re-indexed the page, and
+  `pretty()` altered plain string cells by round-tripping them through JSON.
+- **Demo mode.** A failed demo-chunk load rendered demo chrome with no shim
+  installed, so every request silently hit the real network; it now falls back
+  visibly. The demo `/db/*` fixtures no longer contradict themselves.
+
+### Changed
+- **Coverage floors are enforced on the logic layer** (non-`.tsx`) and raised to
+  71% lines / 66% functions, up from 70% / 58%. A JSX module lands in the lcov
+  denominator merely by being *imported*, so pulling one helper out of a
+  1100-line page component swung the total by tens of points while coverage of
+  real logic rose — the metric tracked test *scope*, not tested *behaviour*.
+  This is a genuine narrowing, not a cosmetic one: the all-scope figure is now
+  ~24 points lower than the enforced one (React components are largely
+  uncovered by unit tests), and it is logged on every run so the gap stays
+  visible. `agent/manager.ts` is additionally excluded from the *line* total —
+  Bun reports 82% function coverage but ~5% line coverage for it, marking lines
+  uncovered that provably execute; its functions still count. A malformed lcov
+  now fails the check instead of passing it with `NaN`.
+- `queryWithTimeout` accepts an injected worker factory so its accounting is
+  testable without spawning a real thread (a real `Worker` aborts the runtime
+  once happy-dom's globals are installed by the DOM suites).
+- **Bulk inserts, drains and obliterates get a 5-minute deadline** instead of
+  the default 30s. Aborting them is worse than waiting: the server has usually
+  committed the write, so a timeout invites a resubmit that duplicates every
+  job without a `jobId`/`uniqueKey`.
+- A child that ignores `SIGKILL` no longer wedges the manager: the post-kill
+  wait is bounded, so `start()` — which now waits out an in-flight `stop()` —
+  cannot hang forever behind an unreapable process.
+
 ## [0.0.31] - 2026-07-20
 
 ### Fixed
@@ -742,7 +889,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.31...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.32...HEAD
+[0.0.32]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.31...v0.0.32
 [0.0.31]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.30...v0.0.31
 [0.0.30]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.29...v0.0.30
 [0.0.29]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.28...v0.0.29
