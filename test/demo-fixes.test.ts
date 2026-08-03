@@ -202,6 +202,44 @@ describe('demo transport lifecycle', () => {
   });
 });
 
+describe('demo fail-closed dashboard payloads', () => {
+  test('queue summary survives the production parser with prioritized counts', async () => {
+    const previousGlobalFetch = globalThis.fetch;
+    globalThis.fetch = window.fetch;
+    try {
+      const summary = await bq.queuesSummary();
+      expect(summary.map((queue) => queue.name)).toEqual([
+        'emails',
+        'image-processing',
+        'reports',
+        'notifications',
+      ]);
+      expect(summary.reduce((total, queue) => total + queue.counts.prioritized, 0)).toBe(7);
+    } finally {
+      globalThis.fetch = previousGlobalFetch;
+    }
+  });
+
+  test('the other strict collection parsers accept their demo contracts', async () => {
+    const previousGlobalFetch = globalThis.fetch;
+    globalThis.fetch = window.fetch;
+    try {
+      const [workers, webhooks] = await Promise.all([bq.workers(), bq.webhooks()]);
+      expect(workers).toMatchObject({
+        ok: true,
+        data: { quarantinedWorkers: [], stats: { total: 3, active: 2 } },
+      });
+      expect(workers.data.workers).toHaveLength(3);
+      expect(webhooks).toMatchObject({
+        ok: true,
+        data: { webhooks: [{ id: '019f252c-f5e3-7000-883c-28cc5dc157a0' }] },
+      });
+    } finally {
+      globalThis.fetch = previousGlobalFetch;
+    }
+  });
+});
+
 describe('demo Job Inspector contract', () => {
   test('canonical and custom lookups survive the production envelope validators', async () => {
     const previousGlobalFetch = globalThis.fetch;

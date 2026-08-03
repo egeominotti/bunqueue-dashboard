@@ -154,22 +154,50 @@
     {
       "name": "emails",
       "paused": false,
-      "counts": { "waiting": 2, "active": 0, "completed": 4, "failed": 2, "delayed": 0 }
+      "counts": {
+        "waiting": 2,
+        "prioritized": 7,
+        "active": 0,
+        "completed": 4,
+        "failed": 2,
+        "delayed": 0
+      }
     },
     {
       "name": "image-processing",
       "paused": false,
-      "counts": { "waiting": 7, "active": 2, "completed": 0, "failed": 0, "delayed": 0 }
+      "counts": {
+        "waiting": 7,
+        "prioritized": 0,
+        "active": 2,
+        "completed": 0,
+        "failed": 0,
+        "delayed": 0
+      }
     },
     {
       "name": "reports",
       "paused": false,
-      "counts": { "waiting": 0, "active": 0, "completed": 0, "failed": 0, "delayed": 6 }
+      "counts": {
+        "waiting": 0,
+        "prioritized": 0,
+        "active": 0,
+        "completed": 0,
+        "failed": 0,
+        "delayed": 6
+      }
     },
     {
       "name": "notifications",
       "paused": false,
-      "counts": { "waiting": 4, "active": 0, "completed": 0, "failed": 0, "delayed": 0 }
+      "counts": {
+        "waiting": 4,
+        "prioritized": 0,
+        "active": 0,
+        "completed": 0,
+        "failed": 0,
+        "delayed": 0
+      }
     }
   ],
   "crons": {

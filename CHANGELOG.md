@@ -15,6 +15,12 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.34] - 2026-08-03
+
+- Fixed the GitHub Pages demo queue-summary fixture to include the v2.8.55
+  `prioritized` counter, restoring Overview, Queues, Jobs, Metrics, Usage and
+  queue-action preflights under the production fail-closed payload parser.
+
 ## [0.0.33] - 2026-08-03
 
 A production-readiness audit aligned every dashboard control and response shape
