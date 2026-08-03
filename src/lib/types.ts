@@ -95,6 +95,7 @@ export interface QueueCounts {
   failed: number;
   delayed: number;
   prioritized: number;
+  'waiting-children': number;
   paused: number;
   [key: string]: number;
 }
@@ -192,6 +193,8 @@ export interface DlqStats {
 export interface StatsResponse {
   ok: boolean;
   stats: OverviewStats & {
+    prioritized: number;
+    'waiting-children': number;
     pushPerSec: number;
     pullPerSec: number;
     completePerSec: number;

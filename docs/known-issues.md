@@ -10,6 +10,52 @@ exact file so you can confirm or fix it. None of these are catastrophic; the
 dashboard is fully usable. They're documented here because "professional docs"
 means being honest about the rough edges, not hiding them.
 
+## [Bunqueue v2.8.55](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.55) server-contract constraints
+
+These constraints are in the upstream HTTP contract and cannot be made atomic
+by a browser client. The dashboard fails closed where it can and names the risk
+at the point of action:
+
+- **Every DLQ retry path is unavailable.** The server exposes a read followed
+  by a separate `POST /queues/:q/dlq/retry`, but the POST has no atomic
+  precondition for job generation/identity, state or topology. Pinning the
+  server, re-reading an exact failed ID and seeing empty topology is therefore
+  insufficient: that job can disappear and a different job can be recreated
+  under the same ID before the POST. Manual row retry, Jobs bulk retry,
+  queue-wide retry and Copilot retry all fail closed.
+- **Completed-job requeue is unavailable.** The upstream `retryCompleted`
+  implementation resets a completed job but does not reconstruct dependency
+  registration or the ordering guarantees of its original flow. The dashboard
+  never calls the single-ID or queue-wide retry-completed route.
+- **DLQ retention is display-only.** Saving a smaller `maxEntries` can
+  immediately evacuate existing entries, while `maxAge` drives destructive
+  expiry; neither path has an atomic generation/topology check for what it
+  removes. The dashboard shows both server values read-only and omits
+  `maxAge`/`maxEntries` from every save. Existing auto-retry can only be turned
+  off, never enabled.
+- **Other flow-destructive mutations are not topology-aware.** Cancel,
+  Discard, Drain, Clean, Obliterate and DLQ Purge can delete a job that another
+  queue still depends on. Bunqueue exposes neither reverse-dependency
+  inspection nor an atomic conditional mutation, so those paths also fail
+  closed. Session-owned Benchmark cleanup is the only queue-clean exception.
+- **Cron creation is an upsert.** `POST /crons` has no create-only/CAS
+  precondition. The dashboard blocks names visible in the current list and runs
+  a fresh fail-closed preflight immediately before POST, but two clients racing
+  the same absent name can still replace one another. The form and confirmation
+  call the command an upstream, last-writer-wins upsert and require operators to
+  authorize that behavior for a globally unique name.
+- **Rate-limit and concurrency policies are write-only over HTTP.** Bunqueue
+  exposes PUT/DELETE but no GET for their current values or remaining TTL. The
+  dashboard deliberately leaves these inputs blank, requires a complete desired
+  state (including an explicit window and TTL mode), labels replacement/clear
+  as blind writes, requires the queue name for a clear, and reports a timestamped
+  write receipt. It never presents that receipt or a cached value as current
+  server truth.
+
+Resolving these items completely requires generation/state/topology-conditional
+mutation APIs, flow-aware retry reconstruction, create-only cron semantics and
+limiter read endpoints in Bunqueue itself.
+
 ## Adversarial audit pass (v0.0.32)
 
 Every module was re-read against the invariants it assumes, each suspected
@@ -18,28 +64,36 @@ defect was challenged by an independent reviewer before being accepted, and the
 list is in [the changelog](https://github.com/egeominotti/bunqueue-dashboard/blob/main/CHANGELOG.md).
 What matters for operators:
 
-- **`BIND_ADDR=0.0.0.0` no longer exposes a process spawner.** The standalone
-  binary bridged `/agent/*` on its public listener; since the agent's Origin
-  gate allows Origin-less callers by design and its Host gate was off for
-  non-loopback binds, any host on the network could reconfigure and start the
-  managed server. The bridge now requires an explicit opt-in on a non-loopback
-  bind — set `AGENT_TOKEN` (preferred) or `AGENT_ALLOW_REMOTE_CONTROL=1` — and
-  otherwise answers 403 with the reason in the boot log.
-  **`AGENT_TOKEN` gates mutations, not reads.** `GET /agent/db/*`,
-  `/agent/control/status` and `/agent/control/logs` still answer without a
-  token (`agent/server.ts`), so exposing the bridge on a LAN — even with a
-  token set — lets anyone on that network read job payloads and the SQLite
-  inspector. Put it behind a reverse proxy that authenticates, or keep the
-  bind on loopback.
+- **Network-facing agent access fails closed.** Non-loopback binds and
+  reverse-proxied loopback binds require `AGENT_TOKEN`; it gates every bridged
+  `/agent/*` route, including database, logs, config, and status reads. Remote
+  policy is selected by the bind, `TRUST_PROXY`, forwarding headers, a public
+  request Host, or explicit non-loopback allowed hosts/origins. Only genuinely
+  loopback access keeps zero-configuration reads. The direct `:6800` listener
+  stays loopback-only and is never the public bridge.
+- **Network-facing admin-API access fails closed.** The all-in-one server uses
+  the same remote-policy signals for `/api/*`: without `BUNQUEUE_TOKEN` it
+  returns `403`, and with one configured every request needs that exact bearer.
+  Enter it as the Server token in Settings. The header is forwarded unchanged,
+  so a Bunqueue server using `AUTH_TOKENS` must accept the same value. Static
+  deployments do not pass through this boundary and still need upstream/front-
+  proxy authentication.
+- **Wildcard Host policy is explicit.** The Host allowlist is enforced on every
+  route, so `BIND_ADDR=0.0.0.0` must list every public/LAN name or address in
+  `AGENT_ALLOWED_HOSTS` (origins in `AGENT_ALLOWED_ORIGINS` count too). It does
+  not infer DHCP addresses, aliases, container service names, or Kubernetes pod
+  IPs.
 - **Proxied deployments:** the `/api` and `/agent` Origin gates compare the
   request's **host**, not its full origin, precisely so a TLS-terminating
   reverse proxy (browser sends `https://…`, the binary sees `http://…`) does
   not 403 every mutation while read-only GETs keep working. A proxy that
-  preserves `Host` needs no configuration. A proxy that **rewrites** `Host`
-  must send `X-Forwarded-Host` **and** you must set `TRUST_PROXY=1` — that
-  header is ignored by default, because a direct caller could otherwise send
-  its own `Origin` plus a matching `X-Forwarded-Host` and declare itself
-  same-origin. Listing the public origin in `AGENT_ALLOWED_ORIGINS` also works.
+  preserves `Host` must first admit that public name via `AGENT_ALLOWED_HOSTS`
+  or `AGENT_ALLOWED_ORIGINS`. A proxy that **rewrites** `Host` must also admit
+  the rewritten raw Host, overwrite `X-Forwarded-Host`, and set
+  `TRUST_PROXY=1`; that header is ignored for Origin matching by default,
+  because a direct caller could otherwise declare itself same-origin. Listing
+  the exact public origin in `AGENT_ALLOWED_ORIGINS` can replace the forwarded
+  value for Origin policy, but never bypasses validation of the raw Host.
 - **A timed-out `/db/query` is abandoned, not killed.** `Worker.terminate()`
   cannot preempt a synchronous `sqlite3_step`, so a runaway scan keeps burning
   its thread until SQLite finishes it. That thread is now counted and the number
@@ -54,10 +108,6 @@ What matters for operators:
   *behaviour*; the overall number is still reported by
   `scripts/check-coverage.ts`. React components remain largely uncovered by
   unit tests — that is a real gap, not a measurement artifact.
-- **Known remaining gap:** `Benchmark` can still miscount a run when the target
-  queue already holds jobs — the simulated workers pull pre-existing jobs and
-  count them as the run's own. The pre-run confirm now warns when the queue is
-  non-empty, but the accounting itself is unchanged.
 
 ## Recently fixed (kept here for history)
 
@@ -67,13 +117,19 @@ A security + gate pass resolved these, no longer present:
   so a token-protected agent 401'd every control action, and the 401 popped the
   wrong (server) token prompt. The client now sends the agent token, the
   `auth:required` event is scoped (server vs agent), and Settings has an **Agent
-  token** field (memory-only / `VITE_BUNQUEUE_AGENT_TOKEN`). See
-  [agent.md](agent.md).
+  token** field that remains in memory for the browser session. See
+  [agent.md](agent.md). Tokens are no longer sourced from `VITE_*`, where they
+  would be visible in the public bundle.
 - **DNS-rebinding read exposure closed.** The agent now enforces a **Host-header
   allowlist** (loopback + `AGENT_ALLOWED_HOSTS`) in addition to the Origin gate,
   so a page whose DNS was rebound to loopback can no longer read `/control/*` or
   `/db/*` over Origin-less same-origin GETs. The standalone binary applies the
-  same gate to `/api`, `/agent` and assets on a loopback bind.
+  same gate to `/api`, `/agent` and assets on loopback and network binds.
+- **Benchmark accounting is run-scoped.** Worker runs first require an empty
+  dedicated per-tab queue, track the exact ids returned by every producer batch,
+  and only ACK/count those ids. If another producer races the preflight, its jobs
+  are returned to waiting and the benchmark stops. The UI does not expose a
+  drain-only mode for arbitrary queues.
 - **Alert channel secrets no longer persisted.** `alertsStore` kept `webhook`/
   `slack` targets (secret URLs) in `localStorage`; they're now memory-only.
 - **`agent/` and `scripts/` are typechecked** by the build gate
@@ -85,7 +141,10 @@ A performance + pagination pass resolved these, no longer present:
 - **Per-poll fan-outs collapsed.** OverviewPro (was 8 req/poll), MetricsPro
   (was 22), DlqPro (was N+2) now issue 2 to 3 requests per poll via
   `GET /queues/summary`; JobsPro is single-queue server-paginated (was up to 25
-  `jobs/list` per poll). `usePolledData` is now self-scheduling (at most one
+  `jobs/list` per poll). Classic Jobs refuses its all-queue mode above 100
+  queues rather than issuing up to 10,000 periodic requests; every permitted
+  pool pins one target and is lifecycle-cancelled. `usePolledData` is now
+  self-scheduling (at most one
   fetch in flight, no pile-ups) and **pauses while the tab is hidden**, except
   the **first** fetch, which always runs (same for `useThroughputSeries`'s first
   sample): a page opened in a background tab used to sit on "Loading…" (and the
@@ -159,7 +218,9 @@ reproduce / impact passes before fixing) resolved the following, gate green, wit
   can no longer stay rendered, with live action buttons, under the new
   selection, so Retry/Cancel can't fire against the wrong entity.
 - **JobDataEditor no longer wipes unsaved edits** on every action-driven job
-  reload, it re-seeds by content, not object identity.
+  reload, it re-seeds by content, not object identity. Flow jobs are read-only:
+  v2.8.55 replaces the full payload and would otherwise erase the reserved
+  parent/children metadata used by FlowReader.
 - **ServerControl shows an amber "agent unreachable" banner** (and disables
   lifecycle buttons, freezes the uptime ticker) when the status poll fails
   after a successful one, it used to keep asserting "Running / healthy" with
@@ -266,8 +327,8 @@ ship with reproducing tests (`test/agent-server.test.ts`, `test/manager.test.ts`
   Queues gets its header totals from the global dashboard summary rather than
   the current page.
 - **Legacy Jobs and Logs no longer advertise unavailable data.** Jobs reads an
-  optional display name from job data, gates Cancel by job state, surfaces
-  cancellation errors and refreshes the queue list every 30 seconds. Logs
+  optional display name from job data, renders Cancel unavailable under the
+  flow-safety policy, and refreshes the queue list every 30 seconds. Logs
   shows the SSE event type instead of a permanently unknown job name.
 
 ## UX gaps

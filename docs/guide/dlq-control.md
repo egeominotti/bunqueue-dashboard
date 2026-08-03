@@ -1,11 +1,13 @@
 ---
 title: DLQ Control
-description: "Pick one queue and deal with the jobs that failed for good, replay them or clear them out, one at a time or all at once."
+description: "Pick one queue to inspect and export failed jobs; all retry and purge mutations fail closed under the v2.8.55 contract."
 ---
 
 # DLQ Control
 
-Pick one queue and deal with the jobs that failed for good, replay them or clear them out, one at a time or all at once.
+Pick one queue to inspect and export the jobs that failed for good. All row,
+bulk and queue-wide retry mutations are unavailable under the v2.8.55
+fail-closed policy.
 
 **Where:** open `/dlq-control` from the sidebar.
 
@@ -30,26 +32,27 @@ When there are more than 25 jobs, use the **pagination** control at the bottom t
 ## What you can do
 
 - **Switch queue**, pick a different queue from the dropdown to load its DLQ. The table jumps back to the first page. On first open, the screen automatically selects the first queue that actually has failed jobs.
-- **Retry one job**, click the retry icon on any row to replay that single job immediately.
-- **Retry all**, the header button replays *every* failed job in the selected queue, not just the ones on screen. You'll be asked to confirm first.
-- **Purge**, the header's danger button permanently deletes *every* failed job in the queue. You'll be asked to confirm first.
+- **Export**, download the currently displayed entries as CSV.
+- **Retry one job**, **Retry all** and **Purge** are visible but permanently
+  disabled. The retry POST cannot atomically require the generation, state and
+  topology observed by a prior GET; purge cannot inspect hidden reverse
+  dependencies.
 
-After any action, a short message appears next to the **Entries** card: green with a count on success (e.g. `Retried 3 entries`), or red with the error if something went wrong. While an action is running, the buttons are disabled until it finishes.
+The disabled controls explain the policy in their tooltips and send no mutation
+request. Export is a browser-side download and does not change the queue.
 
-::: warning Retrying a single row is instant
-The per-row retry icon fires the moment you click it, there's no confirmation dialog and no undo.
-:::
-
-::: warning Purge cannot be undone
-Purge deletes the jobs on the server. There is no recovery from the dashboard, so double-check the queue name in the confirmation prompt before you accept.
+::: warning An exact ID is not an atomic identity
+Between `GET /jobs/:id` and `POST /queues/:q/dlq/retry`, the observed job can be
+removed and a new job created under the same ID. Bunqueue v2.8.55 gives the POST
+no generation/state/topology precondition, so even an exact, fresh,
+topology-empty snapshot cannot make row retry safe.
 :::
 
 ## Good to know
 
-- **Retry all and Purge always act on the whole queue.** The confirmation names the full total, which may be larger than the 25 rows you can see on the current page.
-- **The buttons stay disabled** when no queue is selected, or while another action is still running.
+- **Row retry, Retry all and Purge stay disabled** for every queue and page.
 - **If the DLQ is empty**, you'll see "Dead letter queue is empty" and the **Entries** card reads `0`.
-- **The dropdown count and the Entries card update on slightly different clocks**, so right after an action the number in parentheses may briefly lag behind the card. Give it a moment and they'll line up.
+- **The dropdown count and the Entries card update on slightly different clocks**, so after an external mutation or server-side retention event the number in parentheses may briefly lag behind the card. Give it a moment and they'll line up.
 - **If the server can't be reached**, a banner with a **Retry** button appears and the last loaded rows stay on screen so you don't lose your place.
 - **This is the focused, single-queue view.** For a cross-queue DLQ with filters, use the DLQ Pro screen instead. Avoid the older off-menu classic DLQ page, which is known to break on non-empty queues, see [Known issues](/known-issues).
 
@@ -57,7 +60,7 @@ Purge deletes the jobs on the server. There is no recovery from the dashboard, s
 - Every request uses the `bq` client against the bunqueue HTTP API, never the legacy `api` layer.
 - Queue list: `GET /dashboard/queues`, polled every **30 s** (this feeds the dropdown counts).
 - Table: `GET /queues/:q/dlq?limit=25&offset=…`, polled at the connection store's global cadence (**default 3 s**, floored at 500 ms). Response is flat, `{ ok, entries[], total }`, no `data` wrapper.
-- Retry: `POST /queues/:q/dlq/retry`; sending a `jobId` retries one, omitting it retries all. Returns `{ ok, count }`, which drives the feedback message.
-- Purge: `POST /queues/:q/dlq/purge`, also returning `{ ok, count }`.
+- The page never calls `POST /queues/:q/dlq/retry` (with or without a
+  `jobId`) or the purge route; all corresponding controls are disabled.
 - A DLQ entry is `{ job, enteredAt, reason, error, attempts[] }`, the id and attempt count live nested under `job`, with no top-level `id`.
 :::

@@ -1,5 +1,5 @@
 import { Card, CardHeader } from '@/components/ui/Card';
-import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { api } from '@/lib/api';
@@ -32,18 +32,32 @@ export function Usage() {
   const { data, error, loading, refetch } = usePolledData(() => api.overview(), []);
 
   if (loading && !data && !error) return <LoadingState label="Loading usage…" />;
+  if (error && !data) {
+    return (
+      <div>
+        <PageHeader title="Usage" description="Cumulative resource usage is unavailable." />
+        <ErrorState error={error} onRetry={refetch} />
+      </div>
+    );
+  }
 
   const d = data ?? EMPTY;
   const { stats, memory, workers, crons, storage } = d;
+  const diskKnown = typeof storage.diskFull === 'boolean';
 
   return (
     <div>
       <PageHeader
         title="Usage"
         description="Cumulative resource usage on the connected server."
-        live
+        live={!!data && !error && diskKnown}
       />
-      {error && <OfflineBanner onRetry={refetch} />}
+      {error && (
+        <OfflineBanner
+          message="Usage refresh failed — showing the last successful snapshot."
+          onRetry={refetch}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Jobs Pushed" value={formatNumber(stats.totalPushed)} />
@@ -70,7 +84,10 @@ export function Usage() {
         <Card>
           <CardHeader title="Storage" />
           <dl className="divide-y divide-line text-sm">
-            <Row label="Status" value={storage.diskFull ? 'Disk full' : 'Healthy'} />
+            <Row
+              label="Status"
+              value={!diskKnown ? 'Unavailable' : storage.diskFull ? 'Disk full' : 'Healthy'}
+            />
             <Row
               label="Disk full since"
               value={storage.diskFull ? formatRelativeTime(storage.since) : '—'}

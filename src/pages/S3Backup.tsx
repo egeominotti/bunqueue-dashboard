@@ -1,5 +1,5 @@
 import { Card, CardHeader } from '@/components/ui/Card';
-import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { api } from '@/lib/api';
 import { usePolledData } from '@/lib/usePolledData';
@@ -16,12 +16,29 @@ const ENV_VARS: Array<[string, string]> = [
 ];
 
 export function S3Backup() {
-  const { data, error, loading, refetch } = usePolledData(() => api.storage(), []);
+  const { data, error, loading, refetch } = usePolledData(async () => {
+    const status = await api.storage();
+    // A proxy/older server can still answer 2xx with a structurally incomplete
+    // payload. Missing `diskFull` is unknown health, never evidence of a healthy disk.
+    if (!status?.data || typeof status.data.diskFull !== 'boolean') {
+      throw new Error('Storage status response is missing disk health data');
+    }
+    return status;
+  }, []);
 
   return (
     <div>
-      {error && <OfflineBanner onRetry={refetch} />}
-      <PageHeader title="S3 Backup" description="SQLite snapshot backups to object storage." live />
+      {error && data && (
+        <OfflineBanner
+          message="Storage refresh failed — showing the last successful status."
+          onRetry={refetch}
+        />
+      )}
+      <PageHeader
+        title="S3 Backup"
+        description="SQLite snapshot backups to object storage."
+        live={!!data?.data && !error}
+      />
 
       <div className="mb-6 rounded-lg border border-line bg-surface/60 px-4 py-3 text-sm text-muted">
         S3 backup runs on the server and is configured via environment variables — it cannot be
@@ -31,7 +48,9 @@ export function S3Backup() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Storage status" />
-          {loading && !data && !error ? (
+          {error && !data ? (
+            <ErrorState error={error} onRetry={refetch} />
+          ) : loading && !data ? (
             <LoadingState />
           ) : (
             <dl className="divide-y divide-line text-sm">
@@ -39,12 +58,14 @@ export function S3Backup() {
                 <dt className="text-muted">Disk</dt>
                 <dd
                   className={
-                    data?.data?.diskFull
-                      ? 'font-medium text-red-400'
-                      : 'font-medium text-emerald-400'
+                    !data?.data
+                      ? 'font-medium text-muted'
+                      : data.data.diskFull
+                        ? 'font-medium text-red-400'
+                        : 'font-medium text-emerald-400'
                   }
                 >
-                  {data?.data?.diskFull ? 'Full' : 'Healthy'}
+                  {!data?.data ? 'Unavailable' : data.data.diskFull ? 'Full' : 'Healthy'}
                 </dd>
               </div>
               <div className="flex items-center justify-between py-2.5">

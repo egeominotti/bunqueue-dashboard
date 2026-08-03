@@ -14,44 +14,159 @@
  *      browser, where loopback :6800 would be unreachable.
  *
  * Control-plane exposure rule (the agent can spawn processes):
- *   - Loopback bind (the default): /agent/* is bridged, and the loopback :6800
- *     listener keeps its Host allowlist (DNS-rebinding defense).
- *   - Non-loopback bind (BIND_ADDR=0.0.0.0): the bridge would hand the whole
- *     LAN an unauthenticated process spawner (the agent's Origin gate lets an
- *     Origin-less curl through by design), so it is REFUSED with 403 unless the
- *     operator opts in with AGENT_TOKEN (recommended — it gates every mutation)
- *     or AGENT_ALLOW_REMOTE_CONTROL=1 (explicit, unauthenticated).
+ *   - Truly local loopback access (the default): /agent/* keeps zero-config
+ *     reads, and the direct loopback :6800 listener remains local-only.
+ *   - Non-loopback bind (BIND_ADDR=0.0.0.0): AGENT_TOKEN is mandatory and gates
+ *     EVERY agent route, including status/log/database reads. The public
+ *     listener also keeps a Host allowlist; put every public/LAN hostname or IP
+ *     in AGENT_ALLOWED_HOSTS (or AGENT_ALLOWED_ORIGINS) to admit it. There is no
+ *     unauthenticated remote-control opt-in.
+ *   - A loopback bind reached through a reverse proxy follows the same remote
+ *     rule. TRUST_PROXY, non-loopback allowlists/origins, forwarding headers or
+ *     a non-loopback request Host all switch the bridge to all-route token auth.
+ *   - The same signals gate the administrative /api proxy independently with
+ *     BUNQUEUE_TOKEN; without it, remote/proxied /api access is disabled.
  *
  * Env: PORT (dashboard, default 8080) · BIND_ADDR (default 127.0.0.1) ·
  *      BUNQUEUE_URL · AGENT_PORT · AGENT_ALLOWED_ORIGINS · AGENT_ALLOWED_HOSTS ·
- *      AGENT_TOKEN · AGENT_ALLOW_REMOTE_CONTROL · TRUST_PROXY · BUNQUEUE_START_CMD ·
+ *      AGENT_TOKEN · BUNQUEUE_TOKEN · TRUST_PROXY · BUNQUEUE_START_CMD ·
  *      HTTP_PORT · TCP_PORT · BUNQUEUE_DATA_PATH · LOG_LEVEL (pino level, info)
  */
+import { timingSafeEqual } from 'node:crypto';
 import { logger } from '../agent/logger';
 import { setQueryWorkerUrl } from '../agent/db';
 import {
   createFetchHandler,
+  hostnameOf,
   isHostAllowed,
   isOriginAllowed,
   resolveAllowedHosts,
   resolveAllowedOrigins,
 } from '../agent/server';
 
-/** Hostnames that mean "only this machine can reach the listener". */
+export const RESPONSE_SECURITY_HEADERS = {
+  'Content-Security-Policy': "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+  'X-Frame-Options': 'DENY',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+} as const;
+
+export function withSecurityHeaders(response: Response): Response {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(RESPONSE_SECURITY_HEADERS)) headers.set(name, value);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+/** True loopback names/addresses. 0.0.0.0 is a wildcard, never local-only. */
+export function isLoopbackHost(host: string): boolean {
+  const value = hostnameOf(host);
+  const octets = value.split('.');
+  const ipv4Loopback =
+    octets.length === 4 &&
+    octets[0] === '127' &&
+    octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255);
+  return (
+    value === 'localhost' ||
+    value === '::1' ||
+    value === '0:0:0:0:0:0:0:1' ||
+    ipv4Loopback
+  );
+}
+
+/** Bind addresses that mean "only this machine can reach the listener". */
 export function isLoopbackBind(host: string): boolean {
-  return host === '127.0.0.1' || host === '::1' || host === 'localhost';
+  return isLoopbackHost(host);
+}
+
+function configuredValues(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 /**
- * May the process-spawning control plane be reachable over the network?
- * Loopback always yes; a non-loopback bind requires an explicit opt-in.
+ * A loopback socket can still be public through a reverse proxy. These are
+ * operator-controlled signals that the same-origin /agent bridge is intended
+ * to be reachable beyond the machine, so its reads and writes must both use
+ * the bearer-token policy.
  */
-export function remoteControlEnabled(
+export function remoteBridgeRequiresToken(
   loopbackBind: boolean,
   env: Record<string, string | undefined> = process.env
 ): boolean {
-  if (loopbackBind) return true;
-  return Boolean(env.AGENT_TOKEN) || env.AGENT_ALLOW_REMOTE_CONTROL === '1';
+  if (!loopbackBind || env.TRUST_PROXY === '1') return true;
+  const configured = [
+    ...configuredValues(env.AGENT_ALLOWED_HOSTS),
+    ...configuredValues(env.AGENT_ALLOWED_ORIGINS),
+  ];
+  return configured.some((value) => !isLoopbackHost(value));
+}
+
+const PROXY_HINT_HEADERS = [
+  'forwarded',
+  'x-forwarded-for',
+  'x-forwarded-host',
+  'x-forwarded-proto',
+] as const;
+
+/**
+ * Per-request backstop for a public Host/Origin or a proxy that adds forwarding
+ * metadata. Forwarded-header presence is only used to demand stronger auth;
+ * values remain untrusted unless TRUST_PROXY enables the Origin comparison.
+ */
+export function isRemoteBridgeRequest(req: Request, remotePolicy = false): boolean {
+  if (remotePolicy || PROXY_HINT_HEADERS.some((name) => req.headers.has(name))) return true;
+  const origin = req.headers.get('origin');
+  if (origin && !isLoopbackHost(origin)) return true;
+  const host = req.headers.get('host') ?? new URL(req.url).hostname;
+  return !isLoopbackHost(host);
+}
+
+/** Exact, timing-safe bearer comparison for the standalone admin-API proxy. */
+export function apiTokenOk(req: Request, token: string | undefined): boolean {
+  if (!token) return false;
+  const authorization = req.headers.get('authorization');
+  if (!authorization?.startsWith('Bearer ')) return false;
+  const supplied = Buffer.from(authorization.slice('Bearer '.length));
+  const expected = Buffer.from(token);
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+}
+
+/** Host policy shared by main() and deployment regression tests. */
+export function resolveServeAllowedHosts(
+  bindHost: string,
+  allowedOrigins: string[],
+  env: Record<string, string | undefined> = process.env
+): string[] {
+  const originHosts = allowedOrigins
+    .map((origin) => {
+      try {
+        return new URL(origin).hostname;
+      } catch {
+        return '';
+      }
+    })
+    .filter(Boolean);
+  const concreteBindHosts = bindHost === '0.0.0.0' || bindHost === '::' ? [] : [bindHost];
+  return resolveAllowedHosts(env, [...originHosts, ...concreteBindHosts]);
+}
+
+/**
+ * May the process-spawning bridge be enabled? Truly local access stays
+ * zero-config; any remote deployment policy requires a real token. This
+ * intentionally ignores the former unauthenticated escape hatch.
+ */
+export function remoteControlEnabled(
+  remotePolicy: boolean,
+  env: Record<string, string | undefined> = process.env
+): boolean {
+  if (!remotePolicy) return true;
+  return Boolean(env.AGENT_TOKEN?.trim());
 }
 
 /**
@@ -74,12 +189,24 @@ export interface ServeHandlerOptions {
   indexHtml: string;
   /** embedded dist assets: request path → on-disk path. */
   assets: Record<string, string>;
-  /** in-process control agent handler. */
+  /** Local policy: zero-config reads, configured token on mutations. */
   agentHandle: (req: Request) => Response | Promise<Response>;
+  /** Remote/proxied policy: configured token on every agent route. */
+  remoteAgentHandle: (req: Request) => Response | Promise<Response>;
   allowedOrigins: string[];
   allowedHosts?: string[];
-  /** false → /agent/* is refused (non-loopback bind without opt-in). */
+  /** false → /agent/* is refused under a remote policy without AGENT_TOKEN. */
   agentBridge: boolean;
+  /** Whether the remote bridge has a non-empty AGENT_TOKEN to enforce. */
+  agentTokenConfigured: boolean;
+  /**
+   * Bearer required by /api on every remote/proxied request. It is deliberately
+   * independent of AGENT_TOKEN because the two credentials protect different
+   * principals and can be rotated independently.
+   */
+  apiToken?: string;
+  /** Deployment-level signal that even a loopback bind is externally proxied. */
+  remoteBridgePolicy?: boolean;
   /**
    * TRUST_PROXY=1 — a reverse proxy in front of us owns X-Forwarded-Host, so it
    * may be believed. Off by default: the header is otherwise client-settable
@@ -98,11 +225,16 @@ export function createServeHandler(opts: ServeHandlerOptions) {
     indexHtml,
     assets,
     agentHandle,
+    remoteAgentHandle,
     allowedOrigins,
     allowedHosts,
     agentBridge,
+    agentTokenConfigured,
+    apiToken,
+    remoteBridgePolicy = false,
     trustProxy = false,
   } = opts;
+  const secure = withSecurityHeaders;
   const indexResponse = () =>
     new Response(indexHtml, { headers: { 'content-type': 'text/html; charset=utf-8' } });
 
@@ -110,10 +242,10 @@ export function createServeHandler(opts: ServeHandlerOptions) {
     const url = new URL(req.url);
 
     // DNS-rebinding defense across every route (/api proxy, /agent, assets):
-    // a page rebound to this loopback port sends its own domain as Host. No-op
-    // on non-loopback binds (allowedHosts is undefined there).
+    // a rebound page sends its own domain as Host. Main configures this on both
+    // loopback and network binds; tests/custom embedders may omit the policy.
     if (!isHostAllowed(req.headers.get('host'), allowedHosts)) {
-      return new Response('Host not allowed', { status: 403 });
+      return secure(new Response('Host not allowed', { status: 403 }));
     }
 
     // A request whose Origin is the origin this listener serves from is by
@@ -152,17 +284,20 @@ export function createServeHandler(opts: ServeHandlerOptions) {
 
     // Same-origin bridge to the control agent: strip the /agent prefix and
     // hand the request to the in-process agent handler (no loopback hop).
-    // The agent's own Origin allowlist + optional AGENT_TOKEN still apply —
-    // this changes reachability, not authorization.
+    // The selected agent handler still applies Host, Origin and token policy;
+    // this bridge changes reachability, never authorization.
     if (url.pathname === '/agent' || url.pathname.startsWith('/agent/')) {
-      if (!agentBridge) {
-        return Response.json(
-          {
-            ok: false,
-            error:
-              'Control agent disabled on a non-loopback bind. Set AGENT_TOKEN (recommended) or AGENT_ALLOW_REMOTE_CONTROL=1 to expose it.',
-          },
-          { status: 403 }
+      const remoteRequest = isRemoteBridgeRequest(req, remoteBridgePolicy);
+      if (!agentBridge || (remoteRequest && !agentTokenConfigured)) {
+        return secure(
+          Response.json(
+            {
+              ok: false,
+              error:
+                'Control agent disabled for remote or proxied access. Set AGENT_TOKEN to expose it.',
+            },
+            { status: 403 }
+          )
         );
       }
       const sub = agentSubUrl(url.pathname, url.search);
@@ -171,7 +306,17 @@ export function createServeHandler(opts: ServeHandlerOptions) {
       // (a LAN IP / hostname alias). Loopback origins are already allowlisted,
       // so they are forwarded untouched and CORS behaviour is unchanged.
       if (sameOrigin && origin && !isOriginAllowed(origin, allowedOrigins)) headers.delete('origin');
-      return agentHandle(new Request(sub.href, { method: req.method, headers, body: req.body }));
+      const handleAgent = remoteRequest ? remoteAgentHandle : agentHandle;
+      return secure(
+        await handleAgent(
+          new Request(sub.href, {
+            method: req.method,
+            headers,
+            body: req.body,
+            signal: req.signal,
+          })
+        )
+      );
     }
 
     // Same-origin proxy to the bunqueue server (mirrors the Vite dev proxy).
@@ -179,7 +324,34 @@ export function createServeHandler(opts: ServeHandlerOptions) {
       // The proxy talks to bunqueue's admin API, so it needs the same drive-by
       // CSRF gate as the agent: a cross-site page must not reach it.
       if (!sameOrigin && !isOriginAllowed(origin, allowedOrigins)) {
-        return Response.json({ ok: false, error: 'Origin not allowed' }, { status: 403 });
+        return secure(
+          Response.json({ ok: false, error: 'Origin not allowed' }, { status: 403 })
+        );
+      }
+      // Host/Origin checks stop browser CSRF and DNS rebinding; they do not
+      // authenticate curl, LAN peers or callers whose upstream has AUTH_TOKENS
+      // disabled. Fail closed for every public/proxied request at this boundary.
+      if (isRemoteBridgeRequest(req, remoteBridgePolicy)) {
+        if (!apiToken) {
+          return secure(
+            Response.json(
+              {
+                ok: false,
+                error:
+                  'Admin API proxy disabled for remote or proxied access. Set BUNQUEUE_TOKEN to expose it.',
+              },
+              { status: 403 }
+            )
+          );
+        }
+        if (!apiTokenOk(req, apiToken)) {
+          return secure(
+            Response.json(
+              { ok: false, error: 'A valid BUNQUEUE_TOKEN bearer token is required.' },
+              { status: 401, headers: { 'WWW-Authenticate': 'Bearer' } }
+            )
+          );
+        }
       }
       const target = api + (url.pathname.slice(4) || '/') + url.search;
       let res: Response;
@@ -189,13 +361,16 @@ export function createServeHandler(opts: ServeHandlerOptions) {
           headers: req.headers,
           body: req.body,
           redirect: 'manual',
+          signal: req.signal,
         });
       } catch (err) {
         // bunqueue not running / wrong BUNQUEUE_URL: answer in the shape the
         // dashboard parses instead of letting Bun render an HTML error page.
-        return Response.json(
-          { ok: false, error: `bunqueue unreachable at ${api}: ${(err as Error).message}` },
-          { status: 502 }
+        return secure(
+          Response.json(
+            { ok: false, error: `bunqueue unreachable at ${api}: ${(err as Error).message}` },
+            { status: 502 }
+          )
         );
       }
       // Bun's fetch advertises accept-encoding upstream and transparently
@@ -207,7 +382,9 @@ export function createServeHandler(opts: ServeHandlerOptions) {
       headers.delete('content-encoding');
       headers.delete('content-length');
       headers.delete('transfer-encoding');
-      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+      return secure(
+        new Response(res.body, { status: res.status, statusText: res.statusText, headers })
+      );
     }
 
     // Embedded static assets with SPA history fallback. A missing fingerprinted
@@ -215,11 +392,13 @@ export function createServeHandler(opts: ServeHandlerOptions) {
     // index.html would feed HTML to a stale chunk import() and mask the miss.
     // index.html (direct or via fallback) is served from the injected copy.
     const key = url.pathname === '/' ? '/index.html' : url.pathname;
-    if (key === '/index.html') return indexResponse();
+    if (key === '/index.html') return secure(indexResponse());
     const asset = assets[key];
-    if (asset) return new Response(Bun.file(asset));
-    if (url.pathname.startsWith('/assets/')) return new Response('Not found', { status: 404 });
-    return indexResponse();
+    if (asset) return secure(new Response(Bun.file(asset)));
+    if (url.pathname.startsWith('/assets/')) {
+      return secure(new Response('Not found', { status: 404 }));
+    }
+    return secure(indexResponse());
   };
 }
 
@@ -252,24 +431,14 @@ async function main(): Promise<void> {
     ])
   );
 
-  // DNS-rebinding defense (see agent/server.ts). Always enforced on the loopback
-  // :6800 listener. On the public dashboard listener it is only enforced for a
-  // loopback bind — when the user binds a non-loopback interface
-  // (BIND_ADDR=0.0.0.0) a fixed host allowlist would break legitimate LAN-IP
-  // access, and the control plane there is gated by remoteControlEnabled()
-  // instead (AGENT_TOKEN / AGENT_ALLOW_REMOTE_CONTROL).
+  // DNS-rebinding defense (see agent/server.ts). Enforced on the loopback :6800
+  // listener AND on the dashboard listener for every bind. For a concrete bind
+  // address, admit that address automatically. A wildcard bind cannot reveal
+  // which LAN/public address clients use, so the operator must list those names
+  // or IPs in AGENT_ALLOWED_HOSTS (origins in AGENT_ALLOWED_ORIGINS also count).
   const loopbackBind = isLoopbackBind(HOST);
-  const originHosts = allowedOrigins
-    .map((o) => {
-      try {
-        return new URL(o).hostname;
-      } catch {
-        return '';
-      }
-    })
-    .filter(Boolean);
-  const agentHosts = resolveAllowedHosts(process.env, originHosts);
-  const allowedHosts = loopbackBind ? agentHosts : undefined;
+  const remoteBridgePolicy = remoteBridgeRequiresToken(loopbackBind, process.env);
+  const allowedHosts = resolveServeAllowedHosts(HOST, allowedOrigins, process.env);
 
   // Imported here rather than at module scope: this file's exported policy
   // helpers are unit-tested, and a top-level import would pull the whole
@@ -278,31 +447,48 @@ async function main(): Promise<void> {
   // the coverage report and hides that module's real coverage.
   const { ProcessManager } = await import('../agent/manager');
   const mgr = new ProcessManager();
-  const token = process.env.AGENT_TOKEN || undefined;
+  const token = process.env.AGENT_TOKEN?.trim() || undefined;
+  const apiToken = process.env.BUNQUEUE_TOKEN?.trim() || undefined;
   // Two handlers, same manager: the loopback :6800 listener keeps the Host gate
   // unconditionally (it is always reached as localhost/127.0.0.1), while the
   // bridged one sees the dashboard client's Host and follows `allowedHosts`.
-  const agentHandle = createFetchHandler(mgr, { allowedOrigins, allowedHosts, token });
-  const loopbackAgentHandle = createFetchHandler(mgr, {
+  const localAgentHandle = createFetchHandler(mgr, {
     allowedOrigins,
-    allowedHosts: agentHosts,
+    allowedHosts,
     token,
+  });
+  const remoteAgentHandle = createFetchHandler(mgr, {
+    allowedOrigins,
+    allowedHosts,
+    token,
+    requireTokenForAll: true,
   });
   // `error` is a backstop: without it an unexpected throw renders Bun's HTML
   // error page (with a stack trace) to the client instead of a plain 500.
-  const onError = () => new Response('Internal error', { status: 500 });
+  const onError = () => withSecurityHeaders(new Response('Internal error', { status: 500 }));
   Bun.serve({
     port: AGENT_PORT,
     hostname: '127.0.0.1',
-    fetch: loopbackAgentHandle,
+    fetch: localAgentHandle,
     error: onError,
   });
 
-  const agentBridge = remoteControlEnabled(loopbackBind, process.env);
+  const agentBridge = remoteControlEnabled(remoteBridgePolicy, process.env);
   if (!agentBridge) {
     logger.warn(
-      { bind: HOST },
-      'non-loopback bind without AGENT_TOKEN / AGENT_ALLOW_REMOTE_CONTROL=1 — /agent is disabled (403)'
+      { bind: HOST, remoteBridgePolicy },
+      'remote or proxied bridge policy without AGENT_TOKEN — /agent is disabled (403)'
+    );
+  }
+  if (remoteBridgePolicy && !apiToken) {
+    logger.warn(
+      { apiProxy: API },
+      'remote or proxied bridge policy without BUNQUEUE_TOKEN — /api is disabled (403)'
+    );
+  } else if (remoteBridgePolicy) {
+    logger.info(
+      { apiProxy: API },
+      'remote or proxied /api requires the configured BUNQUEUE_TOKEN bearer'
     );
   }
 
@@ -324,10 +510,14 @@ async function main(): Promise<void> {
       api: API,
       indexHtml,
       assets: ASSETS,
-      agentHandle,
+      agentHandle: localAgentHandle,
+      remoteAgentHandle,
       allowedOrigins,
       allowedHosts,
       agentBridge,
+      agentTokenConfigured: Boolean(token),
+      apiToken,
+      remoteBridgePolicy,
       trustProxy: process.env.TRUST_PROXY === '1',
     }),
     error: onError,
@@ -355,6 +545,8 @@ async function main(): Promise<void> {
       apiProxy: API,
       agent: `http://127.0.0.1:${AGENT_PORT}/control`,
       agentBridge,
+      remoteBridgePolicy,
+      allowedHosts,
     },
     'bunqueue dashboard (standalone) ready'
   );

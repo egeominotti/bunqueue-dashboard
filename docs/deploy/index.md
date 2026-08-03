@@ -61,8 +61,16 @@ So you have two wiring strategies:
 | **Direct (cross-origin)** | Set `VITE_BUNQUEUE_URL` to the server's public origin, e.g. `https://queue.example.com` | Simplest to deploy. The bunqueue server must allow the dashboard's origin (CORS). |
 | **Same-origin proxy** | Serve the dashboard and forward `/api/*` to bunqueue from the same host | No CORS. The **all-in-one server** does this automatically; with the Caddy image, add a `reverse_proxy` (see [Docker](/deploy/docker#same-origin-api-proxy)). |
 
-If the bunqueue server itself needs a bearer token (`AUTH_TOKENS`), set
-`VITE_BUNQUEUE_TOKEN` at build time, or paste it into Settings.
+If the bunqueue server needs a bearer token (`AUTH_TOKENS`), enter it in
+Settings for the current browser session or authenticate at the front proxy.
+Never bake a secret into `VITE_*`; build-time values are public bundle text.
+
+For a LAN/reverse-proxied **all-in-one server**, also configure
+`BUNQUEUE_TOKEN`: `/api/*` otherwise returns `403`, and every request must carry
+that bearer. Enter the same value as the Server token in Settings. If Bunqueue
+uses `AUTH_TOKENS`, configure that value upstream too because Authorization is
+forwarded. This gate belongs to the all-in-one server; static hosting still
+depends on Bunqueue or the front proxy for authentication.
 
 ## Pick your target
 

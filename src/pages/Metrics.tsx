@@ -1,5 +1,5 @@
 import { Card, CardHeader } from '@/components/ui/Card';
-import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { api } from '@/lib/api';
@@ -35,6 +35,14 @@ export function Metrics() {
   const { data, error, loading, refetch } = usePolledData(() => api.overview(), []);
 
   if (loading && !data && !error) return <LoadingState label="Loading metrics…" />;
+  if (error && !data) {
+    return (
+      <div>
+        <PageHeader title="Metrics" description="Throughput, latency, and resource internals." />
+        <ErrorState error={error} onRetry={refetch} />
+      </div>
+    );
+  }
 
   const { stats, throughput, latency, memory, collections } = data ?? EMPTY;
 
@@ -52,8 +60,17 @@ export function Metrics() {
 
   return (
     <div>
-      {error && <OfflineBanner onRetry={refetch} />}
-      <PageHeader title="Metrics" description="Throughput, latency, and resource internals." live />
+      {error && (
+        <OfflineBanner
+          message="Metrics refresh failed — showing the last successful snapshot."
+          onRetry={refetch}
+        />
+      )}
+      <PageHeader
+        title="Metrics"
+        description="Throughput, latency, and resource internals."
+        live={!!data && !error}
+      />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Pushed /s" value={throughput.pushPerSec.toFixed(1)} compact />

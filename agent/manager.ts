@@ -56,6 +56,10 @@ const STOP_TIMEOUT_MS = 8000;
  */
 const MAX_LINE = 8192;
 
+interface CancelablePipeReader {
+  cancel(reason?: unknown): Promise<void>;
+}
+
 function defaultConfig(): ServerConfig {
   return {
     command: process.env.BUNQUEUE_START_CMD || 'bunqueue start',
@@ -64,6 +68,92 @@ function defaultConfig(): ServerConfig {
     dataPath: process.env.BUNQUEUE_DATA_PATH || './data/bunq.db',
     extraEnv: {},
   };
+}
+
+const CONFIG_KEYS = new Set<keyof ServerConfig>([
+  'command',
+  'httpPort',
+  'tcpPort',
+  'dataPath',
+  'extraEnv',
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+function validatePort(name: 'httpPort' | 'tcpPort', value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 65_535) {
+    throw new Error(`${name} must be an integer between 1 and 65535`);
+  }
+  return value;
+}
+
+/**
+ * Validate an untrusted PUT /control/config body before any field is merged.
+ * Returning a fresh object (including a fresh extraEnv) makes setConfig atomic:
+ * one invalid field cannot leave earlier fields applied, and the caller cannot
+ * mutate the accepted config later through a retained object reference.
+ */
+export function validateConfigPatch(value: unknown): Partial<ServerConfig> {
+  if (!isRecord(value)) throw new Error('Config must be an object');
+
+  for (const key of Object.keys(value)) {
+    if (!CONFIG_KEYS.has(key as keyof ServerConfig)) {
+      throw new Error(`Unknown config key: ${key}`);
+    }
+  }
+
+  const patch: Partial<ServerConfig> = {};
+  if (Object.hasOwn(value, 'command')) {
+    if (typeof value.command !== 'string' || value.command.trim() === '') {
+      throw new Error('command must be a non-empty string');
+    }
+    patch.command = value.command;
+  }
+  if (Object.hasOwn(value, 'httpPort')) {
+    patch.httpPort = validatePort('httpPort', value.httpPort);
+  }
+  if (Object.hasOwn(value, 'tcpPort')) {
+    patch.tcpPort = validatePort('tcpPort', value.tcpPort);
+  }
+  if (Object.hasOwn(value, 'dataPath')) {
+    if (typeof value.dataPath !== 'string') throw new Error('dataPath must be a string');
+    patch.dataPath = value.dataPath;
+  }
+  if (Object.hasOwn(value, 'extraEnv')) {
+    if (!isRecord(value.extraEnv)) {
+      throw new Error('extraEnv must be an object containing only string values');
+    }
+    const entries = Object.entries(value.extraEnv);
+    for (const [key, entry] of entries) {
+      if (typeof entry !== 'string') {
+        throw new Error(`extraEnv.${key} must be a string`);
+      }
+    }
+    // fromEntries defines "__proto__" as ordinary data instead of invoking the
+    // legacy Object.prototype setter via indexed assignment.
+    patch.extraEnv = Object.fromEntries(entries) as Record<string, string>;
+  }
+  return patch;
+}
+
+/** Validate the complete snapshot start() is about to pass to the child. */
+function validateServerConfig(value: unknown): ServerConfig {
+  if (!isRecord(value)) throw new Error('Config must be an object');
+  const config = validateConfigPatch(value);
+  for (const key of CONFIG_KEYS) {
+    if (!Object.hasOwn(value, key)) {
+      throw new Error(`Missing config key: ${key}`);
+    }
+  }
+  return config as ServerConfig;
+}
+
+function copyConfig(config: ServerConfig): ServerConfig {
+  return { ...config, extraEnv: { ...config.extraEnv } };
 }
 
 export class ProcessManager {
@@ -91,9 +181,27 @@ export class ProcessManager {
   private stopping: Promise<StatusSnapshot> | null = null;
   /** Latched by shutdown(): once set, start() refuses to spawn a new child. */
   private shuttingDown = false;
+  /** Active stdout/stderr readers, grouped by the process generation they own. */
+  private pipeReaders = new Map<number, Set<CancelablePipeReader>>();
+
+  /**
+   * Actively break pending reader.read() calls for a finished generation. A
+   * descendant may inherit the child's pipe descriptor and keep it open after
+   * the managed process exits; token checks alone cannot release that reader.
+   */
+  private cancelPipes(token: number): void {
+    const readers = this.pipeReaders.get(token);
+    if (!readers) return;
+    this.pipeReaders.delete(token);
+    for (const reader of readers) {
+      void reader.cancel('process generation ended').catch(() => {
+        /* already closed/cancelled */
+      });
+    }
+  }
 
   getConfig(): ServerConfig {
-    return this.config;
+    return copyConfig(this.config);
   }
 
   /**
@@ -103,8 +211,13 @@ export class ProcessManager {
    * changed in place.
    */
   setConfig(patch: Partial<ServerConfig>): ServerConfig {
-    this.config = { ...this.config, ...patch, extraEnv: patch.extraEnv ?? this.config.extraEnv };
-    return this.config;
+    const valid = validateConfigPatch(patch);
+    this.config = {
+      ...this.config,
+      ...valid,
+      extraEnv: valid.extraEnv ?? this.config.extraEnv,
+    };
+    return copyConfig(this.config);
   }
 
   getStatus(): StatusSnapshot {
@@ -113,8 +226,8 @@ export class ProcessManager {
       pid: this.proc?.pid ?? null,
       startedAt: this.startedAt,
       exitCode: this.exitCode,
-      config: this.config,
-      runningConfig: this.runningConfig,
+      config: copyConfig(this.config),
+      runningConfig: this.runningConfig ? copyConfig(this.runningConfig) : null,
     };
   }
 
@@ -173,16 +286,14 @@ export class ProcessManager {
     const statusAfterWait = this.status as Status;
     if (statusAfterWait === 'running' || statusAfterWait === 'starting') return this.getStatus();
 
-    // Validate BEFORE mutating status / burning a proc token. Doing it after
-    // (as this once did) means a bad command leaves the manager wedged: an
-    // empty command stranded the previous generation's dead pid + runningConfig
-    // (its stop()/onExit finalizers were already token-stale), and a non-string
-    // `command` from PUT /control/config threw out of `.trim()` with status
-    // pinned at 'starting', disabling every UI control until the agent restarts.
-    const command = typeof this.config.command === 'string' ? this.config.command : '';
-    const parts = command.trim().split(/\s+/);
+    // Validate the COMPLETE launch snapshot BEFORE mutating status / burning a
+    // proc token. setConfig() already validates API patches, but defaultConfig()
+    // also reads environment values; e.g. HTTP_PORT=70000 must not reach spawn.
+    // Doing this later can wedge status at 'starting' and strand stale process
+    // metadata when validation throws.
+    const launchConfig = validateServerConfig(this.config);
+    const parts = launchConfig.command.trim().split(/\s+/);
     const [cmd, ...args] = parts;
-    if (!cmd) throw new Error('Empty command');
 
     this.status = 'starting';
     this.exitCode = null;
@@ -193,10 +304,10 @@ export class ProcessManager {
     // while runningConfig (and the agent's /health probe) reported the old port.
     const env: Record<string, string> = {
       ...(process.env as Record<string, string>),
-      ...this.config.extraEnv,
-      HTTP_PORT: String(this.config.httpPort),
-      TCP_PORT: String(this.config.tcpPort),
-      BUNQUEUE_DATA_PATH: this.config.dataPath,
+      ...launchConfig.extraEnv,
+      HTTP_PORT: String(launchConfig.httpPort),
+      TCP_PORT: String(launchConfig.tcpPort),
+      BUNQUEUE_DATA_PATH: launchConfig.dataPath,
     };
 
     try {
@@ -205,6 +316,9 @@ export class ProcessManager {
         stdout: 'pipe',
         stderr: 'pipe',
         onExit: (_p, code) => {
+          // Always tear down this generation's readers, even if shared state
+          // already belongs to a replacement process.
+          this.cancelPipes(token);
           // Ignore the exit of a process a newer start() has already replaced.
           if (this.procToken !== token) return;
           this.exitCode = code ?? null;
@@ -227,45 +341,69 @@ export class ProcessManager {
 
     this.startedAt = Date.now();
     this.status = 'running';
-    this.runningConfig = { ...this.config, extraEnv: { ...this.config.extraEnv } };
-    this.push('sys', `started: ${this.config.command} (pid ${this.proc.pid})`);
+    this.runningConfig = copyConfig(launchConfig);
+    this.push('sys', `started: ${launchConfig.command} (pid ${this.proc.pid})`);
     // stdout/stderr are spawned as pipes, so they are ReadableStreams at
     // runtime; Bun types them as a union that also includes a numeric fd.
-    void this.pipe(this.proc.stdout as unknown as ReadableStream<Uint8Array>, 'stdout');
-    void this.pipe(this.proc.stderr as unknown as ReadableStream<Uint8Array>, 'stderr');
+    void this.pipe(this.proc.stdout as unknown as ReadableStream<Uint8Array>, 'stdout', token);
+    void this.pipe(this.proc.stderr as unknown as ReadableStream<Uint8Array>, 'stderr', token);
     return this.getStatus();
   }
 
-  private async pipe(stream: ReadableStream<Uint8Array>, name: 'stdout' | 'stderr'): Promise<void> {
+  private async pipe(
+    stream: ReadableStream<Uint8Array>,
+    name: 'stdout' | 'stderr',
+    token: number
+  ): Promise<void> {
     const reader = stream.getReader();
+    let readers = this.pipeReaders.get(token);
+    if (!readers) {
+      readers = new Set();
+      this.pipeReaders.set(token, readers);
+    }
+    readers.add(reader);
     const decoder = new TextDecoder();
     let buffer = '';
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let i: number;
-        while ((i = buffer.indexOf('\n')) !== -1) {
-          const line = buffer.slice(0, i);
-          buffer = buffer.slice(i + 1);
-          if (line.trim()) this.push(name, line);
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          // A process can exit while a descendant keeps its inherited pipe
+          // open. If a replacement has started by the time bytes arrive, those
+          // bytes belong to the obsolete generation and must never enter the
+          // current log view.
+          if (this.procToken !== token) return;
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let i: number;
+          while ((i = buffer.indexOf('\n')) !== -1) {
+            const line = buffer.slice(0, i);
+            buffer = buffer.slice(i + 1);
+            if (line.trim() && this.procToken === token) this.push(name, line);
+          }
+          // No newline in sight: flush in MAX_LINE slices instead of letting the
+          // buffer (and the eventual single LogLine) grow to the whole output.
+          while (buffer.length > MAX_LINE) {
+            if (this.procToken !== token) return;
+            this.push(name, buffer.slice(0, MAX_LINE));
+            buffer = buffer.slice(MAX_LINE);
+          }
         }
-        // No newline in sight: flush in MAX_LINE slices instead of letting the
-        // buffer (and the eventual single LogLine) grow to the whole output.
-        while (buffer.length > MAX_LINE) {
-          this.push(name, buffer.slice(0, MAX_LINE));
-          buffer = buffer.slice(MAX_LINE);
-        }
+      } catch {
+        /* stream closed */
       }
-    } catch {
-      /* stream closed */
+      if (this.procToken !== token) return;
+      // Flush the final chunk when the stream ends without a trailing newline
+      // (e.g. a crash cause written via a bare write()) — otherwise the last,
+      // often most important, line never reaches the log buffer.
+      const tail = buffer + decoder.decode();
+      if (tail.trim() && this.procToken === token) this.push(name, tail);
+    } finally {
+      const activeReaders = this.pipeReaders.get(token);
+      activeReaders?.delete(reader);
+      if (activeReaders?.size === 0) this.pipeReaders.delete(token);
+      reader.releaseLock();
     }
-    // Flush the final chunk when the stream ends without a trailing newline
-    // (e.g. a crash cause written via a bare write()) — otherwise the last,
-    // often most important, line never reaches the log buffer.
-    const tail = buffer + decoder.decode();
-    if (tail.trim()) this.push(name, tail);
   }
 
   async stop(): Promise<StatusSnapshot> {
@@ -333,6 +471,9 @@ export class ProcessManager {
       ]).finally(() => clearTimeout(reapTimer));
       if (!reaped) this.push('sys', `pid ${proc.pid} did not exit after SIGKILL — giving up on it`);
     }
+    // onExit normally performs this cancellation. Repeat it idempotently for
+    // a process whose `exited` promise/callback never settles after SIGKILL.
+    this.cancelPipes(token);
     // Only finalize shared state if no newer start() replaced this generation
     // while we awaited — otherwise we'd null out the wrong (live) process.
     if (this.procToken !== token) return this.getStatus();

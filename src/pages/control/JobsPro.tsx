@@ -2,17 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button, IconButton } from '@/components/ui/Button';
-import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
-import { SegmentedControl, Select } from '@/components/ui/form';
-import {
-  IconClose,
-  IconDownload,
-  IconEye,
-  IconPlay,
-  IconRefresh,
-  IconSearch,
-  IconTrash,
-} from '@/components/ui/icons';
+import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { Select } from '@/components/ui/form';
+import { IconDownload, IconEye, IconPlay, IconSearch } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { StatCard } from '@/components/ui/StatCard';
@@ -30,15 +22,26 @@ import {
 } from '@/lib/format';
 import { actionGates } from '@/lib/jobActions';
 import { usePolledData } from '@/lib/usePolledData';
+import { assertSuccessfulMutationResponse, useServerActionGuard } from '@/lib/useServerActionGuard';
 
-const STATUS = ['all', 'waiting', 'active', 'completed', 'failed'] as const;
+const STATUS = [
+  'all',
+  'waiting',
+  'prioritized',
+  'active',
+  'delayed',
+  'waiting-children',
+  'paused',
+  'completed',
+  'failed',
+] as const;
 type StatusFilter = (typeof STATUS)[number];
 const PAGE_SIZE = 25;
 
 /**
  * Bulk-bar count. The bulk buttons only ever target rows the ID filter leaves
  * VISIBLE, so a bare `selected.size` next to them overstates what they do
- * ("25 selected" → 1 job cancelled) whenever the filter hides selected rows.
+ * ("25 selected" → 1 job acted on) whenever the filter hides selected rows.
  */
 export function selectionLabel(visible: number, total: number): string {
   return visible === total
@@ -59,14 +62,6 @@ function priorityLabel(p = 0) {
   return { t: 'LOW', c: 'text-faint' };
 }
 
-/** Route a job to whichever retry endpoint applies to its current state. */
-function retryJobByState(j: JobFull): Promise<unknown> {
-  const g = actionGates(j.state);
-  if (g.retryActive) return bq.retryJob(j.id);
-  if (g.retryDlq) return bq.retryDlq(j.queue ?? '', j.id);
-  return Promise.reject(new Error(`"${j.state ?? 'unknown'}" is not retryable`));
-}
-
 export function JobsPro() {
   const [params, setParams] = useSearchParams();
   const [queue, setQueue] = useState(params.get('queue') ?? '');
@@ -83,9 +78,19 @@ export function JobsPro() {
 
   // Queue dropdown: one /queues/summary call (all queues), polled slowly — the
   // queue set changes rarely, so it doesn't ride the fast job cadence.
-  const { data: summary } = usePolledData(() => bq.queuesSummary(), [], { intervalMs: 30000 });
-  // Server-wide totals for the stat cards — slower cadence than the job table.
-  const { data: overview } = usePolledData(() => bq.overview(), [], { intervalMs: 10000 });
+  const {
+    data: summary,
+    error: discoveryError,
+    loading: discoveryLoading,
+    refetch: refetchSummary,
+  } = usePolledData(() => bq.queuesSummary(), [], { intervalMs: 30000 });
+  // `/dashboard` omits prioritized and waiting-children in v2.8.55. `/stats`
+  // carries every state needed by the inventory cards.
+  const {
+    data: overview,
+    error: overviewError,
+    refetch: refetchOverview,
+  } = usePolledData(() => bq.stats(), [], { intervalMs: 10000 });
 
   // Default to the first queue once the list arrives (there is no cross-queue
   // job-list endpoint, so jobs are always fetched one queue at a time, paginated
@@ -98,6 +103,7 @@ export function JobsPro() {
   // any of them can't leave the previous view's rows rendered — with live
   // action buttons — under the new selection for one round-trip.
   const view = `${queue}|${status}|${page}`;
+  const actionGuard = useServerActionGuard(`jobs:${queue}`);
   const fetcher = useCallback(async () => {
     if (!queue) return { view, jobs: [] as JobFull[] };
     const states = status === 'all' ? undefined : [status];
@@ -106,6 +112,13 @@ export function JobsPro() {
   }, [queue, status, page, view]);
   const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue, status, page]);
   const jobs = raw && raw.view === view ? raw.jobs : null;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection+queue lifecycle boundary
+  useEffect(() => {
+    setBusyIds(new Set());
+    setBulkBusy(false);
+    setActionMsg(null);
+  }, [actionGuard.scopeKey]);
 
   // No `total` from jobs/list — a full page means there may be a next one.
   const hasNext = (jobs?.length ?? 0) === PAGE_SIZE;
@@ -120,10 +133,10 @@ export function JobsPro() {
   // Recorded counts (stats.completed + per-queue failed sums) — the
   // totalCompleted/totalFailed session counters zero on every server restart.
   const failedTotal = useMemo(
-    () => (summary ?? []).reduce((a, q) => a + (q.counts?.failed ?? 0), 0),
+    () => summary?.reduce((a, q) => a + (q.counts?.failed ?? 0), 0) ?? null,
     [summary]
   );
-  const rate = stats ? errorRate(stats.completed, failedTotal) : null;
+  const rate = stats && failedTotal != null ? errorRate(stats.completed, failedTotal) : null;
   // While the overview poll is still in flight the cards would render hard
   // zeros — a "0" that looks like data. Show placeholders until it arrives.
   const stat = (n: number | undefined) => (stats ? formatNumber(n) : '—');
@@ -166,22 +179,29 @@ export function JobsPro() {
     confirmText?: string
   ) => {
     if (confirmText && !window.confirm(confirmText)) return;
+    const lease = actionGuard.begin(`job:${job.id}`);
+    if (!lease) return;
     setBusyIds((s) => new Set(s).add(job.id));
     setActionMsg(null);
     try {
-      await fn();
+      const response = await fn();
+      assertSuccessfulMutationResponse(response, label);
+      if (!lease.isCurrent()) return;
       setActionMsg({ ok: true, text: `${label} ✓` });
       toast.success(`${label} ✓`, job.id);
+      void refetch();
     } catch (e) {
+      if (!lease.isCurrent()) return;
       setActionMsg({ ok: false, text: `${label} failed: ${(e as Error).message}` });
       toast.error(`${label} failed`, (e as Error).message);
     } finally {
-      setBusyIds((s) => {
-        const n = new Set(s);
-        n.delete(job.id);
-        return n;
-      });
-      refetch();
+      if (lease.finish()) {
+        setBusyIds((s) => {
+          const n = new Set(s);
+          n.delete(job.id);
+          return n;
+        });
+      }
     }
   };
 
@@ -197,40 +217,42 @@ export function JobsPro() {
     const targets = rows.filter((r) => selected.has(r.id) && eligible(r));
     if (targets.length === 0) return;
     if (confirmText && !window.confirm(confirmText(targets.length))) return;
+    // The bulk lock serializes bulk buttons; the per-id locks atomically keep a
+    // targeted row action and this fan-out from mutating the same job together.
+    const lease = actionGuard.begin(['bulk', ...targets.map((job) => `job:${job.id}`)]);
+    if (!lease) return;
     setBulkBusy(true);
     setActionMsg(null);
-    const results = await Promise.allSettled(targets.map(fn));
-    const okCount = results.filter((r) => r.status === 'fulfilled').length;
-    const failCount = results.length - okCount;
-    const text = `${label}: ${okCount} succeeded${failCount ? `, ${failCount} failed` : ''}`;
-    setActionMsg({ ok: failCount === 0, text });
-    if (failCount === 0) toast.success(text);
-    else toast.error(text);
-    const actedIds = targets.map((t) => t.id);
-    setSelected((s) => withoutActed(s, actedIds));
-    setBulkBusy(false);
-    refetch();
+    try {
+      const results = await Promise.allSettled(
+        targets.map(async (job) => {
+          const response = await fn(job);
+          assertSuccessfulMutationResponse(response, `${label} ${job.id}`);
+        })
+      );
+      if (!lease.isCurrent()) return;
+      const okCount = results.filter((r) => r.status === 'fulfilled').length;
+      const failCount = results.length - okCount;
+      const text = `${label}: ${okCount} succeeded${failCount ? `, ${failCount} failed` : ''}`;
+      setActionMsg({ ok: failCount === 0, text });
+      if (failCount === 0) toast.success(text);
+      else toast.error(text);
+      const actedIds = targets.map((t) => t.id);
+      setSelected((s) => withoutActed(s, actedIds));
+      void refetch();
+    } finally {
+      if (lease.finish()) setBulkBusy(false);
+    }
   };
 
   // Per-action eligibility, shared by the button-enable check and runBulk's
   // target filter so the two can't drift.
   const eligibleFor = {
-    retry: (j: JobFull) => {
-      const g = actionGates(j.state);
-      return g.retryActive || g.retryDlq;
-    },
     promote: (j: JobFull) => actionGates(j.state).promote,
-    requeue: (j: JobFull) => actionGates(j.state).requeueCompleted,
-    fail: (j: JobFull) => actionGates(j.state).fail,
-    cancel: (j: JobFull) => actionGates(j.state).cancel,
   };
   const selectedRows = rows.filter((r) => selected.has(r.id));
   const canBulk = {
-    retry: selectedRows.some(eligibleFor.retry),
     promote: selectedRows.some(eligibleFor.promote),
-    requeue: selectedRows.some(eligibleFor.requeue),
-    fail: selectedRows.some(eligibleFor.fail),
-    cancel: selectedRows.some(eligibleFor.cancel),
   };
 
   const exportRows = () => {
@@ -262,31 +284,13 @@ export function JobsPro() {
 
   // Targets are pre-filtered to eligible rows by runBulk, so each fn is a direct
   // call — no per-job state guard needed (it can never receive an ineligible job).
-  const bulkRetry = () => runBulk('Retry', retryJobByState, eligibleFor.retry);
   const bulkPromote = () => runBulk('Promote', (j) => bq.promoteJob(j.id), eligibleFor.promote);
-  const bulkRequeue = () =>
-    runBulk('Requeue', (j) => bq.retryCompleted(j.queue ?? '', j.id), eligibleFor.requeue);
-  const bulkFail = () =>
-    runBulk(
-      'Fail',
-      (j) => bq.failJob(j.id),
-      eligibleFor.fail,
-      (n) => `Force-fail ${n} job(s)?`
-    );
-  const bulkCancel = () =>
-    runBulk(
-      'Cancel',
-      (j) => bq.cancelJob(j.id),
-      eligibleFor.cancel,
-      (n) => `Cancel ${n} job(s)? This cannot be undone.`
-    );
-
   return (
     <div>
       <PageHeader
         title="Jobs Explorer"
         description="Browse, inspect, and manage individual jobs."
-        live
+        live={!!queue && jobs != null && !error && !discoveryError && !overviewError}
         actions={
           <Button size="sm" disabled={!jobs || rows.length === 0} onClick={exportRows}>
             <IconDownload className="size-3.5" /> Export CSV
@@ -294,26 +298,66 @@ export function JobsPro() {
         }
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+      {discoveryError && (
+        <OfflineBanner
+          onRetry={refetchSummary}
+          message={
+            summary
+              ? `Queue inventory refresh failed — showing the last successful queue totals. ${discoveryError.message}`
+              : `Could not discover queues — ${discoveryError.message}. Select an existing queue from the URL or retry.`
+          }
+        />
+      )}
+      {overviewError && (
+        <OfflineBanner
+          onRetry={refetchOverview}
+          message={
+            overview
+              ? `Server-wide totals refresh failed — showing the last successful totals. ${overviewError.message}`
+              : `Server-wide job totals are unavailable — ${overviewError.message}. The selected queue page may still be current.`
+          }
+        />
+      )}
+
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
         <StatCard
           label="Total"
-          value={stat(
-            (stats?.completed ?? 0) +
-              failedTotal +
-              (stats?.waiting ?? 0) +
-              (stats?.active ?? 0) +
-              (stats?.delayed ?? 0)
-          )}
+          value={
+            stats && failedTotal != null
+              ? formatNumber(
+                  stats.completed +
+                    failedTotal +
+                    stats.waiting +
+                    stats.prioritized +
+                    stats.active +
+                    stats.delayed +
+                    stats['waiting-children']
+                )
+              : '—'
+          }
           hint="all queues"
           compact
         />
-        <StatCard label="Waiting" value={stat(stats?.waiting)} tone="amber" compact />
+        <StatCard
+          label="Waiting"
+          value={stat(stats?.waiting)}
+          tone="amber"
+          hint="standard priority"
+          compact
+        />
+        <StatCard label="Prioritized" value={stat(stats?.prioritized)} tone="amber" compact />
         <StatCard label="Active" value={stat(stats?.active)} tone="blue" compact />
+        <StatCard
+          label="Flow-blocked"
+          value={stat(stats?.['waiting-children'])}
+          tone="blue"
+          compact
+        />
         <StatCard label="Completed" value={stat(stats?.completed)} tone="green" compact />
         <StatCard
           label="Failed"
-          value={stat(failedTotal)}
-          tone={failedTotal ? 'red' : 'default'}
+          value={failedTotal == null ? '—' : formatNumber(failedTotal)}
+          tone={failedTotal != null && failedTotal > 0 ? 'red' : 'default'}
           compact
         />
         <StatCard
@@ -329,6 +373,8 @@ export function JobsPro() {
           <Select
             value={queue}
             aria-label="Queue"
+            name="jobs-queue"
+            autoComplete="off"
             onChange={(e) => {
               setQueue(e.target.value);
               resetPage();
@@ -342,15 +388,25 @@ export function JobsPro() {
             ))}
           </Select>
         </div>
-        <SegmentedControl
-          options={STATUS}
-          value={status}
-          onChange={(v) => {
-            setStatus(v);
-            resetPage();
-            syncUrl(queue, v);
-          }}
-        />
+        <div className="w-48">
+          <Select
+            aria-label="Job state"
+            name="jobs-state"
+            value={status}
+            onChange={(event) => {
+              const v = event.target.value as StatusFilter;
+              setStatus(v);
+              resetPage();
+              syncUrl(queue, v);
+            }}
+          >
+            {STATUS.map((state) => (
+              <option key={state} value={state}>
+                {state === 'all' ? 'All states' : state}
+              </option>
+            ))}
+          </Select>
+        </div>
         <div className="relative ml-auto min-w-56 flex-1 md:max-w-xs">
           <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
           <input
@@ -358,6 +414,8 @@ export function JobsPro() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter this page by ID…"
             aria-label="Filter by job ID"
+            name="jobs-id-filter"
+            autoComplete="off"
             className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
           />
         </div>
@@ -371,42 +429,18 @@ export function JobsPro() {
           <span className="mr-1 text-muted">
             {selectionLabel(selectedRows.length, selected.size)}
           </span>
-          {canBulk.retry && (
-            <Button size="sm" disabled={bulkBusy} onClick={bulkRetry}>
-              Retry selected
-            </Button>
-          )}
           {canBulk.promote && (
             <Button size="sm" disabled={bulkBusy} onClick={bulkPromote}>
               Promote selected
             </Button>
           )}
-          {canBulk.requeue && (
-            <Button size="sm" disabled={bulkBusy} onClick={bulkRequeue}>
-              Requeue selected
-            </Button>
+          {!canBulk.promote && (
+            <span className="text-xs text-faint">
+              {selectedRows.length === 0
+                ? 'The selected jobs are hidden by the filter — clear it to act on them.'
+                : 'No actions apply to the selected job states.'}
+            </span>
           )}
-          {canBulk.fail && (
-            <Button variant="warning" size="sm" disabled={bulkBusy} onClick={bulkFail}>
-              Fail selected
-            </Button>
-          )}
-          {canBulk.cancel && (
-            <Button variant="danger" size="sm" disabled={bulkBusy} onClick={bulkCancel}>
-              Cancel selected
-            </Button>
-          )}
-          {!canBulk.retry &&
-            !canBulk.promote &&
-            !canBulk.requeue &&
-            !canBulk.fail &&
-            !canBulk.cancel && (
-              <span className="text-xs text-faint">
-                {selectedRows.length === 0
-                  ? 'The selected jobs are hidden by the filter — clear it to act on them.'
-                  : 'No actions apply to the selected job states.'}
-              </span>
-            )}
         </div>
       )}
 
@@ -419,9 +453,18 @@ export function JobsPro() {
         </div>
       )}
 
-      {error && <OfflineBanner onRetry={refetch} />}
+      {error && jobs && (
+        <OfflineBanner
+          message="Job refresh failed — showing the last successful page."
+          onRetry={refetch}
+        />
+      )}
 
-      {loading && !jobs && !error ? (
+      {error && !jobs ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : discoveryLoading && !summary && !queue && !discoveryError ? (
+        <LoadingState label="Discovering queues…" />
+      ) : loading && !jobs ? (
         <LoadingState label="Loading jobs…" />
       ) : (
         <>
@@ -442,6 +485,12 @@ export function JobsPro() {
                     <input
                       type="checkbox"
                       checked={allSelected}
+                      ref={(element) => {
+                        if (element) {
+                          element.indeterminate = selected.size > 0 && !allSelected;
+                        }
+                      }}
+                      aria-checked={selected.size > 0 && !allSelected ? 'mixed' : allSelected}
                       onChange={toggleAll}
                       aria-label="Select all jobs on page"
                       className="accent-accent"
@@ -475,14 +524,16 @@ export function JobsPro() {
                         ? 'No jobs on this page match your ID filter.'
                         : queue
                           ? 'No jobs found.'
-                          : 'Select a queue.'}
+                          : discoveryError
+                            ? 'Queue discovery failed. Retry above.'
+                            : 'Select a queue.'}
                     </td>
                   </tr>
                 ) : (
                   rows.map((j) => {
                     const pr = priorityLabel(j.priority);
                     const gates = actionGates(j.state);
-                    const rowBusy = busyIds.has(j.id);
+                    const rowBusy = bulkBusy || busyIds.has(j.id);
                     return (
                       <tr
                         key={j.id}
@@ -517,10 +568,12 @@ export function JobsPro() {
                         </td>
                         <td className="px-5 py-3">
                           <div className="flex justify-end gap-1">
-                            <Link to={`/job?id=${encodeURIComponent(j.id)}`}>
-                              <IconButton aria-label="Inspect job">
-                                <IconEye className="size-3.5" />
-                              </IconButton>
+                            <Link
+                              to={`/job?id=${encodeURIComponent(j.id)}`}
+                              aria-label={`Inspect job ${j.id}`}
+                              className="inline-flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                            >
+                              <IconEye className="size-3.5" />
                             </Link>
                             {gates.promote && (
                               <IconButton
@@ -529,53 +582,6 @@ export function JobsPro() {
                                 onClick={() => runOne(j, 'Promote', () => bq.promoteJob(j.id))}
                               >
                                 <IconPlay className="size-3.5" />
-                              </IconButton>
-                            )}
-                            {(gates.retryActive || gates.retryDlq) && (
-                              <IconButton
-                                aria-label="Retry job"
-                                disabled={rowBusy}
-                                onClick={() => runOne(j, 'Retry', () => retryJobByState(j))}
-                              >
-                                <IconRefresh className="size-3.5" />
-                              </IconButton>
-                            )}
-                            {gates.requeueCompleted && (
-                              <IconButton
-                                aria-label="Requeue job"
-                                disabled={rowBusy}
-                                onClick={() =>
-                                  runOne(j, 'Requeue', () => bq.retryCompleted(j.queue ?? '', j.id))
-                                }
-                              >
-                                <IconRefresh className="size-3.5" />
-                              </IconButton>
-                            )}
-                            {gates.fail && (
-                              <IconButton
-                                aria-label="Fail job"
-                                disabled={rowBusy}
-                                onClick={() =>
-                                  runOne(
-                                    j,
-                                    'Fail',
-                                    () => bq.failJob(j.id),
-                                    'Force-fail this active job?'
-                                  )
-                                }
-                              >
-                                <IconClose className="size-3.5" />
-                              </IconButton>
-                            )}
-                            {gates.cancel && (
-                              <IconButton
-                                aria-label="Cancel job"
-                                disabled={rowBusy}
-                                onClick={() =>
-                                  runOne(j, 'Cancel', () => bq.cancelJob(j.id), 'Cancel this job?')
-                                }
-                              >
-                                <IconTrash className="size-3.5" />
                               </IconButton>
                             )}
                           </div>

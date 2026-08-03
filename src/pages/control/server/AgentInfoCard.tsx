@@ -61,16 +61,18 @@ export function AgentInfoCard({ agentBase }: { agentBase: string }) {
           <div>
             <div className="mb-1 font-medium text-fg">Security</div>
             <p>
-              The agent can spawn processes, so it binds <Code>127.0.0.1</Code> only, locks CORS to
-              an allowlist (never <Code>*</Code>), rejects any disallowed <Code>Origin</Code> or{' '}
-              <Code>Host</Code> with a <Code>403</Code> (the latter blocks DNS-rebinding reads), and
-              honours an optional <Code>AGENT_TOKEN</Code> on state-changing requests. Keep its port
-              on loopback.
+              The direct agent listener binds <Code>127.0.0.1</Code>, locks CORS to an allowlist
+              (never <Code>*</Code>), and rejects a disallowed <Code>Origin</Code> or{' '}
+              <Code>Host</Code> with <Code>403</Code>. The all-in-one server's <Code>/agent</Code>{' '}
+              bridge treats LAN and reverse-proxy access as remote: <Code>AGENT_TOKEN</Code> is then
+              mandatory for status, logs, database reads and changes alike. Without it, the bridge
+              stays disabled.
             </p>
             <p>
               If you started the agent with <Code>AGENT_TOKEN</Code>, enter that token under{' '}
               <span className="text-fg">Settings → Agent token</span> (or when the lock screen
-              prompts) so start / stop / restart and config changes are authorized.
+              prompts). It stays in memory for this browser session; never bake it into a public{' '}
+              <Code>VITE_*</Code> value.
             </p>
           </div>
         </div>

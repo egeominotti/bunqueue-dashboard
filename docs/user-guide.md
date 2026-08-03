@@ -33,8 +33,9 @@ component → API-client table, see [Pages & routes](/pages).
 - [**Queues**](/guide/queues), the fleet view: every queue with per-state counts
   and inline pause/resume.
 - [**Jobs Explorer**](/guide/jobs), server-paginated jobs for a queue, with
-  filters, multi-select and bulk actions.
-- [**Dead Letter Queue**](/guide/dlq), cross-queue DLQ dashboard: reasons, per-row retry, retry-all / purge.
+  filters, multi-select and Promote as the only job-lifecycle mutation.
+- [**Dead Letter Queue**](/guide/dlq), cross-queue DLQ dashboard: reasons,
+  attempt history and CSV export; every retry and purge path fails closed.
 - [**Cron Jobs**](/guide/cron), list and create scheduled jobs (cron expression
   or interval).
 
@@ -42,7 +43,7 @@ component → API-client table, see [Pages & routes](/pages).
 
 - [**Metrics**](/guide/metrics), rolling throughput chart, queue-depth trend, latency percentiles, per-queue counts.
 - [**Workers**](/guide/workers), registered workers, active/stale status, and
-  per-worker unregister.
+  guarded stale-worker registry cleanup (it does not stop worker processes).
 - [**Logs**](/guide/logs), the live SSE event feed with filters and search.
 
 ## Control
@@ -52,8 +53,9 @@ component → API-client table, see [Pages & routes](/pages).
 - [**Add Job**](/guide/add-job), enqueue a job with payload, options, priority
   and delay.
 - [**Job Inspector**](/guide/job-inspector), a single job's full timeline, payload, result and state-gated actions.
-- [**Queue Control**](/guide/queue-control), per-queue actions plus rate-limit, concurrency and stall/DLQ configuration.
-- [**DLQ Control**](/guide/dlq-control), single-queue dead-letter actions.
+- [**Queue Control**](/guide/queue-control), per-queue actions plus rate-limit,
+  concurrency and stall/DLQ configuration; DLQ retention is read-only.
+- [**DLQ Control**](/guide/dlq-control), read-only single-queue dead-letter triage.
 - [**Webhooks**](/guide/webhooks), register, test and remove webhook endpoints.
 - [**Diagnostics**](/guide/diagnostics), connectivity and health checks.
 - [**Benchmark**](/guide/benchmark), drive synthetic load and watch throughput.

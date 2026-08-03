@@ -1,7 +1,7 @@
 /**
  * Demo backend. Patches `window.fetch` (and, since the SSE reader is fetch-based,
  * the live activity stream too) to answer every bunqueue API call from a bundled
- * fixture captured from a real bunqueue 2.8.26 server. No network, no server.
+ * representative fixture aligned with bunqueue 2.8.55. No network, no server.
  *
  * Loaded lazily by `main.tsx` only when {@link isDemo} is true, so neither this
  * module nor its ~21 KB fixture is part of the normal app bundle.
@@ -109,9 +109,17 @@ const DB_DATA: Record<
       ['019f252b-8769-7000-bc44-cfc168232f53', '{"bytes":184320}', 1783035038220],
       ['019f252b-87d8-7000-8f0c-e8ca5fec7d18', '{"rows":128}', 1783035038511],
       ['019f252b-8a02-7000-9b21-4c1f0b7e2a55', '{"error":"handler threw"}', 1783035039300],
+      // Database content is untrusted even in a read-only viewer. Keep one
+      // formula-shaped TEXT value so the real demo export exercises the same
+      // spreadsheet-injection neutralization as the control agent.
+      ['demo-csv-formula', '=SUM(1,2)', 1783035039400],
     ],
   },
 };
+
+function demoDbTable(table: string) {
+  return Object.hasOwn(DB_DATA, table) ? DB_DATA[table] : undefined;
+}
 
 // Derived, never hand-written: the sidebar's advertised row/column counts must
 // match what /db/tables/:t and its /schema actually serve, or the inspector
@@ -126,7 +134,7 @@ const DB_TABLES = {
 };
 
 function dbSchema(table: string): Json {
-  const t = DB_DATA[table];
+  const t = demoDbTable(table);
   const cols = t?.columns ?? ['id', 'data'];
   const types = t?.types ?? {};
   return {
@@ -152,15 +160,25 @@ const DEMO_FLOW: Record<string, Json> = {
   'flow-order-9a3f': {
     id: 'flow-order-9a3f',
     queue: 'orders',
-    state: 'active',
+    data: {
+      name: 'process-order',
+      orderId: 'demo-9a3f',
+      __childrenIds: ['flow-charge-1', 'flow-ship-2', 'flow-notify-3'],
+    },
+    state: 'waiting-children',
     priority: 1,
     parentId: null,
     childrenIds: ['flow-charge-1', 'flow-ship-2', 'flow-notify-3'],
-    dependsOn: [],
+    dependsOn: ['flow-charge-1', 'flow-ship-2', 'flow-notify-3'],
   },
   'flow-charge-1': {
     id: 'flow-charge-1',
     queue: 'payments',
+    data: {
+      name: 'charge-payment',
+      __parentId: 'flow-order-9a3f',
+      __parentQueue: 'orders',
+    },
     state: 'completed',
     priority: 2,
     parentId: 'flow-order-9a3f',
@@ -170,15 +188,26 @@ const DEMO_FLOW: Record<string, Json> = {
   'flow-ship-2': {
     id: 'flow-ship-2',
     queue: 'shipping',
-    state: 'active',
+    data: {
+      name: 'ship-order',
+      __parentId: 'flow-order-9a3f',
+      __parentQueue: 'orders',
+      __childrenIds: ['flow-label-4'],
+    },
+    state: 'waiting-children',
     priority: 1,
     parentId: 'flow-order-9a3f',
     childrenIds: ['flow-label-4'],
-    dependsOn: [],
+    dependsOn: ['flow-label-4'],
   },
   'flow-label-4': {
     id: 'flow-label-4',
     queue: 'shipping',
+    data: {
+      name: 'create-label',
+      __parentId: 'flow-ship-2',
+      __parentQueue: 'shipping',
+    },
     state: 'waiting',
     priority: 0,
     parentId: 'flow-ship-2',
@@ -188,6 +217,11 @@ const DEMO_FLOW: Record<string, Json> = {
   'flow-notify-3': {
     id: 'flow-notify-3',
     queue: 'emails',
+    data: {
+      name: 'notify-customer',
+      __parentId: 'flow-order-9a3f',
+      __parentQueue: 'orders',
+    },
     state: 'delayed',
     priority: 0,
     parentId: 'flow-order-9a3f',
@@ -195,6 +229,42 @@ const DEMO_FLOW: Record<string, Json> = {
     dependsOn: ['flow-charge-1'],
   },
 };
+
+const fixtureJobs = (key: string): Json[] => (F[key] as { jobs?: Json[] })?.jobs ?? [];
+const DEMO_FALLBACK_JOB = (F.oneJob as { job?: Json }).job;
+const DEMO_JOB_POOL: Json[] = [
+  ...fixtureJobs('emailsWaiting'),
+  ...fixtureJobs('emailsCompleted'),
+  ...(DEMO_FALLBACK_JOB ? [DEMO_FALLBACK_JOB] : []),
+];
+const DEMO_QUEUE_NAMES = ['emails', 'image-processing', 'reports', 'notifications'];
+
+function retagDemoJob(job: Json, queue: string, index: number): Json {
+  return queue === 'emails'
+    ? job
+    : { ...job, id: `${queue}-${String(job.id).slice(-12)}-${index}`, queue };
+}
+
+/** Return the same canonical id/state snapshot that a demo list links to. */
+function demoJobForId(id: string): Json {
+  if (DEMO_FLOW[id]) return DEMO_FLOW[id];
+  const exact = DEMO_JOB_POOL.find((job) => job.id === id);
+  if (exact) return exact;
+  for (const queue of DEMO_QUEUE_NAMES) {
+    const retagged = DEMO_JOB_POOL.map((job, index) => retagDemoJob(job, queue, index)).find(
+      (job) => job.id === id
+    );
+    if (retagged) return retagged;
+  }
+
+  const fallback = DEMO_FALLBACK_JOB ?? { queue: 'emails', state: 'failed' };
+  const customPrefix = 'demo-custom:';
+  return {
+    ...fallback,
+    id,
+    customId: id.startsWith(customPrefix) ? id.slice(customPrefix.length) : null,
+  };
+}
 
 // The control agent (process lifecycle) isn't present in the demo. Synthesize a
 // healthy "running" server so ServerControl renders a realistic snapshot rather
@@ -212,7 +282,7 @@ const demoStatus = (): Json => ({
   startedAt: Date.now() - 3_600_000,
   exitCode: null,
   healthy: true,
-  version: '2.8.26',
+  version: '2.8.55',
   config: DEMO_CONFIG,
   runningConfig: DEMO_CONFIG,
   db: {
@@ -299,7 +369,7 @@ const demoControlLogs = (): Json => {
   return {
     lines: [
       line(1, 8000, 'sys', 'starting: bunqueue start'),
-      line(2, 7800, 'stdout', 'bunqueue v2.8.26 — HTTP :6790, TCP :6791'),
+      line(2, 7800, 'stdout', 'bunqueue v2.8.55 — HTTP :6790, TCP :6791'),
       line(3, 7600, 'stdout', 'SQLite ready (WAL) at ./data/bunqueue.db'),
       line(4, 5000, 'stdout', 'worker registered: image-processing'),
       line(5, 1200, 'stdout', 'health ok — 4 queues, 34 jobs'),
@@ -307,10 +377,113 @@ const demoControlLogs = (): Json => {
   };
 };
 
-function dbRows(table: string, search: string): Json {
-  const t = DB_DATA[table];
+type DemoDbFilter = { column: string; op: 'contains' | 'eq' | 'ne'; value: string };
+
+interface DemoDbView {
+  table: string;
+  columns: string[];
+  rows: unknown[][];
+  orderBy: string | null;
+  dir: 'asc' | 'desc';
+  filter: DemoDbFilter | null;
+}
+
+const asciiFold = (value: string): string =>
+  value.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+
+/** Build the filtered/sorted view used by both the demo grid and raw export. */
+function dbView(table: string, search: string, strictExport = false): DemoDbView {
+  const t = demoDbTable(table);
+  if (strictExport && !t) throw new Error(`No such table: ${table}`);
   const columns = t?.columns ?? ['id', 'data'];
   const all = t?.rows ?? [];
+  const sp = new URLSearchParams(search);
+
+  if (strictExport) {
+    const allowed = new Set(['orderBy', 'dir', 'fcol', 'fop', 'fval']);
+    for (const key of sp.keys()) {
+      if (!allowed.has(key)) throw new Error(`Unknown database export option: ${key}`);
+      if (sp.getAll(key).length !== 1) {
+        throw new Error(`Duplicate database export option: ${key}`);
+      }
+    }
+  }
+
+  const orderByParam = sp.get('orderBy');
+  if (strictExport && orderByParam === '') {
+    throw new Error('Database export orderBy must not be empty');
+  }
+  const orderBy = orderByParam || null;
+  const dirParam = sp.get('dir');
+  if (strictExport && dirParam !== null && dirParam !== 'asc' && dirParam !== 'desc') {
+    throw new Error('Database export dir must be "asc" or "desc"');
+  }
+  const dir: 'asc' | 'desc' = dirParam === 'desc' ? 'desc' : 'asc';
+
+  const fCol = sp.get('fcol');
+  const fOp = sp.get('fop');
+  const fVal = sp.get('fval');
+  const hasAnyFilterPart = fCol !== null || fOp !== null || fVal !== null;
+  if (
+    strictExport &&
+    hasAnyFilterPart &&
+    (!fCol || !fVal || (fOp !== 'contains' && fOp !== 'eq' && fOp !== 'ne'))
+  ) {
+    throw new Error('Database export filter requires valid fcol, fop and fval values');
+  }
+  const filter: DemoDbFilter | null =
+    fCol && fVal
+      ? {
+          column: fCol,
+          op: fOp === 'eq' ? 'eq' : fOp === 'ne' ? 'ne' : 'contains',
+          value: fVal,
+        }
+      : null;
+
+  const filterColumn = filter ? columns.indexOf(filter.column) : -1;
+  if (filter && filterColumn < 0 && strictExport) {
+    throw new Error(`No such column: ${filter.column}`);
+  }
+  const filtered =
+    filter && filterColumn >= 0
+      ? all.filter((row) => {
+          const value = row[filterColumn];
+          // SQL comparisons against NULL do not pass a WHERE predicate.
+          if (value == null) return false;
+          const text = String(value);
+          if (filter.op === 'eq') return text === filter.value;
+          if (filter.op === 'ne') return text !== filter.value;
+          // SQLite LIKE is ASCII case-insensitive by default. `%`, `_` and `\`
+          // are literal here, matching the agent's escaped contains predicate.
+          return asciiFold(text).includes(asciiFold(filter.value));
+        })
+      : all;
+
+  const sortColumn = orderBy ? columns.indexOf(orderBy) : -1;
+  if (orderBy && sortColumn < 0 && strictExport) throw new Error(`No such column: ${orderBy}`);
+  const rows =
+    sortColumn >= 0
+      ? [...filtered].sort((a, b) => {
+          const x = a[sortColumn] as string | number | null;
+          const y = b[sortColumn] as string | number | null;
+          const cmp = x == null ? (y == null ? 0 : -1) : y == null ? 1 : x < y ? -1 : x > y ? 1 : 0;
+          return dir === 'desc' ? -cmp : cmp;
+        })
+      : filtered;
+
+  return {
+    table,
+    columns,
+    rows,
+    orderBy: sortColumn >= 0 ? orderBy : null,
+    dir,
+    filter: filterColumn >= 0 ? filter : null,
+  };
+}
+
+function dbRows(table: string, search: string): Json {
+  const view = dbView(table, search);
+  const { columns, orderBy, dir, filter } = view;
   const sp = new URLSearchParams(search);
   const num = (v: string | null, fallback: number): number => {
     const n = Number(v);
@@ -318,21 +491,9 @@ function dbRows(table: string, search: string): Json {
   };
   const limit = num(sp.get('limit'), 50);
   const offset = num(sp.get('offset'), 0);
-  const orderBy = sp.get('orderBy');
-  const dir = sp.get('dir') === 'desc' ? 'desc' : 'asc';
   // Honour orderBy/limit/offset instead of just echoing them back, so sorting or
   // paging the demo grid actually changes what it shows.
-  const col = orderBy ? columns.indexOf(orderBy) : -1;
-  const sorted =
-    col >= 0
-      ? [...all].sort((a, b) => {
-          const x = a[col] as string | number;
-          const y = b[col] as string | number;
-          const cmp = x < y ? -1 : x > y ? 1 : 0;
-          return dir === 'desc' ? -cmp : cmp;
-        })
-      : all;
-  const rows = sorted.slice(offset, offset + (limit > 0 ? limit : sorted.length));
+  const rows = view.rows.slice(offset, offset + (limit > 0 ? limit : view.rows.length));
   return {
     ok: true,
     table,
@@ -340,13 +501,106 @@ function dbRows(table: string, search: string): Json {
     rows,
     rowids: rows.map((_, i) => offset + i + 1),
     truncatedCells: rows.map((r) => r.map(() => false)),
-    total: all.length,
+    total: view.rows.length,
     limit,
     offset,
     orderBy,
     dir,
-    filter: null,
+    filter,
   };
+}
+
+const DEMO_DB_EXPORT_MAX_ROWS = 200_000;
+const DEMO_DB_EXPORT_MAX_BYTES = 16 * 1024 * 1024;
+const DEMO_DB_EXPORT_MAX_TEXT_BYTES = 2000;
+const DEMO_DB_EXPORT_TEXT_PREFIX_CHARS = 2000;
+
+/** RFC-4180 cell with the agent's spreadsheet-formula neutralization. */
+function dbCsvCell(value: unknown): string {
+  let text: string;
+  let textual = false;
+  if (value == null) text = '';
+  else if (typeof value === 'string') {
+    text =
+      new TextEncoder().encode(value).byteLength > DEMO_DB_EXPORT_MAX_TEXT_BYTES
+        ? `${[...value].slice(0, DEMO_DB_EXPORT_TEXT_PREFIX_CHARS).join('')}…`
+        : value;
+    textual = true;
+  } else if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
+    text = String(value);
+  } else if (value instanceof Uint8Array) {
+    text = `<blob ${value.byteLength} B>`;
+    textual = true;
+  } else {
+    throw new Error('Database export produced an unsupported SQLite value');
+  }
+
+  const safe = textual && /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return /[",\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
+}
+
+/** Raw CSV response matching the control-agent database export contract. */
+function dbExportResponse(table: string, search: string): Response {
+  try {
+    const view = dbView(table, search, true);
+    const encoder = new TextEncoder();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    let rowCount = 0;
+    let cap: 'rows' | 'bytes' | null = null;
+    const append = (line: string): boolean => {
+      const encoded = encoder.encode(line);
+      if (bytes + encoded.byteLength > DEMO_DB_EXPORT_MAX_BYTES) return false;
+      chunks.push(encoded);
+      bytes += encoded.byteLength;
+      return true;
+    };
+
+    if (!append(view.columns.map(dbCsvCell).join(','))) {
+      throw new Error(
+        `Database export header exceeds the ${DEMO_DB_EXPORT_MAX_BYTES}-byte export limit`
+      );
+    }
+    for (const row of view.rows) {
+      if (rowCount >= DEMO_DB_EXPORT_MAX_ROWS) {
+        cap = 'rows';
+        break;
+      }
+      if (!append(`\r\n${row.map(dbCsvCell).join(',')}`)) {
+        cap = 'bytes';
+        break;
+      }
+      rowCount++;
+    }
+
+    const content = new Uint8Array(bytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      content.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return new Response(content, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Length': String(bytes),
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Bunqueue-Db-Export-Version': '1',
+        'X-Bunqueue-Db-Export-Table': encodeURIComponent(view.table),
+        'X-Bunqueue-Db-Export-Rows': String(rowCount),
+        'X-Bunqueue-Db-Export-Bytes': String(bytes),
+        'X-Bunqueue-Db-Export-Cap': cap ?? 'none',
+        'Access-Control-Expose-Headers':
+          'Content-Length, X-Bunqueue-Db-Export-Version, X-Bunqueue-Db-Export-Table, X-Bunqueue-Db-Export-Rows, X-Bunqueue-Db-Export-Bytes, X-Bunqueue-Db-Export-Cap',
+      },
+    });
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
 }
 
 // First path segment of a bunqueue API request. Anything else (assets, etc.) is
@@ -491,18 +745,17 @@ function resolve(path: string, method: string, search: string): Json {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
-      const jobsOf = (key: string): Json[] => (F[key] as { jobs?: Json[] })?.jobs ?? [];
-      const failedJob = (F.oneJob as { job?: Json })?.job;
-      const pool: Json[] = [...jobsOf('emailsWaiting'), ...jobsOf('emailsCompleted')];
-      if (failedJob) pool.push(failedJob);
       const matches = (state: unknown) =>
         wanted.length === 0 ||
         wanted.includes(String(state)) ||
         // The UI's "waiting" bucket includes prioritized jobs.
         (wanted.includes('waiting') && state === 'prioritized');
-      const retag = (j: Json, i: number): Json =>
-        q === 'emails' ? j : { ...j, id: `${q}-${String(j.id).slice(-12)}-${i}`, queue: q };
-      return { ok: true, jobs: pool.filter((j) => matches(j.state)).map(retag) };
+      return {
+        ok: true,
+        jobs: DEMO_JOB_POOL.filter((job) => matches(job.state)).map((job, index) =>
+          retagDemoJob(job, q, index)
+        ),
+      };
     }
   }
 
@@ -510,8 +763,13 @@ function resolve(path: string, method: string, search: string): Json {
   if (seg[0] === 'jobs' && seg[1]) {
     const jid = decodeURIComponent(seg[1]);
     // /jobs/custom/:customId — resolve a custom/idempotency id to a job.
-    if (seg[1] === 'custom' && seg[2]) return F.oneJob;
-    if (seg[2] === 'result') return { ok: true, result: { sent: true, provider: 'demo' } };
+    if (seg[1] === 'custom' && seg[2]) {
+      const customId = decodeURIComponent(seg[2]);
+      return { ok: true, job: demoJobForId(`demo-custom:${customId}`) };
+    }
+    if (seg[2] === 'result') {
+      return { ok: true, id: jid, result: { sent: true, provider: 'demo' } };
+    }
     if (seg[2] === 'logs') {
       // bq.jobLogs reads { data: { logs, count } }; lines render as strings.
       const logs = [
@@ -521,7 +779,7 @@ function resolve(path: string, method: string, search: string): Json {
       ];
       return { ok: true, data: { logs, count: logs.length } };
     }
-    if (!seg[2]) return DEMO_FLOW[jid] ? { ok: true, job: DEMO_FLOW[jid] } : F.oneJob;
+    if (!seg[2]) return { ok: true, job: demoJobForId(jid) };
   }
 
   // /db/* — the read-only SQLite inspector (served by the agent, faked here).
@@ -599,13 +857,14 @@ function sseResponse(signal?: AbortSignal | null): Response {
 
 let installed = false;
 
-export function installDemo(): void {
-  if (installed || typeof window === 'undefined') return;
+export function installDemo(): () => void {
+  if (installed || typeof window === 'undefined') return () => undefined;
   installed = true;
-  const realFetch = window.fetch.bind(window);
+  const previousFetch = window.fetch;
+  const realFetch = previousFetch.bind(window);
   const base = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
 
-  window.fetch = ((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const demoFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const req = input instanceof Request ? input : null;
     const rawUrl =
       typeof input === 'string' ? input : input instanceof URL ? input.href : (req?.url ?? '');
@@ -629,6 +888,24 @@ export function installDemo(): void {
     if (!root || !API_ROOTS.has(root)) return realFetch(input, init);
 
     if (root === 'events') return Promise.resolve(sseResponse(init?.signal ?? req?.signal));
+    if (method === 'GET') {
+      const seg = path.replace(/\/+$/, '').split('/').filter(Boolean);
+      if (seg.length === 4 && seg[0] === 'db' && seg[1] === 'tables' && seg[3] === 'export') {
+        return Promise.resolve(dbExportResponse(decodeURIComponent(seg[2]), u.search));
+      }
+    }
     return Promise.resolve(json(resolve(path, method, u.search)));
-  }) as typeof window.fetch;
+  };
+  window.fetch = demoFetch as typeof window.fetch;
+
+  // Production keeps the shim for the page lifetime. Returning an idempotent
+  // cleanup makes test/watch and embedding lifecycles reversible without
+  // exposing module-private state or leaving a permanently `installed` module.
+  let cleaned = false;
+  return () => {
+    if (cleaned) return;
+    cleaned = true;
+    if (window.fetch === demoFetch) window.fetch = previousFetch;
+    installed = false;
+  };
 }

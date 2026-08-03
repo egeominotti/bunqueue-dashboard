@@ -47,26 +47,44 @@ request to `http://127.0.0.1:6800` (CSRF → RCE). Defenses:
    `Origin`), so the agent also rejects `403` any request whose `Host` header is
    a hostname outside the allowlist, so an attacker domain rebound to loopback
    fails it, while `Host: localhost` / `127.0.0.1` pass. A missing `Host` (a
-   non-browser caller) is trusted.
-4. **Optional bearer token**, set `AGENT_TOKEN` to require it on state-changing
-   requests (`Authorization: Bearer <t>` or `x-agent-token: <t>`). The dashboard
-   sends it too when you enter it under **Settings → Agent token** (or
-   `VITE_BUNQUEUE_AGENT_TOKEN`), so a token-protected agent stays usable.
+   non-browser caller) is rejected once the allowlist is enabled. Host and
+   Origin are validated before an `OPTIONS` preflight receives `204`.
+4. **Scoped bearer token**, on loopback `AGENT_TOKEN` protects state-changing
+   requests (`Authorization: Bearer <t>` or `x-agent-token: <t>`) while local
+   reads remain zero-configuration. A LAN or reverse-proxied all-in-one bridge
+   requires the token and applies it to **every** agent route, including status,
+   logs, config, and database reads. Enter the token under **Settings → Agent
+   token** or in the authentication prompt; it remains in browser memory for
+   the current session. Never put it in a `VITE_*` value, which is public bundle
+   plaintext.
 
 Env: `AGENT_ALLOWED_ORIGINS` (comma-separated; merged with dev defaults
 `http://localhost:5273`, `http://127.0.0.1:5273`), `AGENT_ALLOWED_HOSTS` and
-`AGENT_TOKEN`.
+`AGENT_TOKEN`; the all-in-one server also reads `TRUST_PROXY` and the separate
+`BUNQUEUE_TOKEN`, which gates every remote/proxied `/api/*` request.
 
 > **Reverse proxy / custom hostname on a loopback bind.** The Host allowlist is
-> loopback hostnames plus the hostnames of your allowed origins. If you reach the
-> agent (or the standalone binary) via a `/etc/hosts` alias or a same-host
-> reverse proxy that forwards `Host: <your-domain>`, add that hostname to
-> `AGENT_ALLOWED_HOSTS` (comma-separated, bracket IPv6 literals), otherwise the
-> request is `403`ed as a rebinding attempt. The plain `bun run agent`
-> (`agent/index.ts`) always binds `127.0.0.1` with the Host gate on, so
-> `AGENT_ALLOWED_HOSTS` is its only lever. Only the **standalone binary**
-> (`scripts/serve.ts`) reads `BIND_ADDR`: a non-loopback value (e.g. `0.0.0.0`)
-> turns the Host check off there (you've opted into network exposure).
+> loopback names plus `AGENT_ALLOWED_HOSTS`; the all-in-one binary also includes
+> hostnames from `AGENT_ALLOWED_ORIGINS`. A proxy that preserves public `Host`
+> must list it in either variable. A Host-rewriting proxy must list its raw
+> replacement Host, overwrite `X-Forwarded-Host` with the external authority,
+> and set `TRUST_PROXY=1`. Any such non-loopback configuration switches the
+> `/agent` bridge to all-route token authentication and disables it with `403`
+> if `AGENT_TOKEN` is missing. Merely binding the socket to loopback does not
+> make a public proxy local.
+
+> **The `/api` credential is separate.** Remote/proxied all-in-one deployments
+> also fail `/api/*` closed without `BUNQUEUE_TOKEN`; when configured, every API
+> request must carry it as a bearer. Enter that value as the Server token in
+> Settings. If Bunqueue enables `AUTH_TOKENS`, the same value must be accepted
+> upstream because the Authorization header is forwarded unchanged.
+
+> The plain `bun run agent` (`agent/index.ts`) direct listener intentionally
+> remains a zero-config loopback tool. Do **not** publish port `6800` through a
+> reverse proxy; use the all-in-one `/agent` bridge or put independent
+> authentication in front of it. Only the all-in-one binary reads `BIND_ADDR`.
+> For `0.0.0.0`, list every public/LAN name or IP in `AGENT_ALLOWED_HOSTS` (or
+> its full origin in `AGENT_ALLOWED_ORIGINS`); wildcard binds cannot infer them.
 
 ## Endpoints (`http://127.0.0.1:6800`)
 
@@ -85,7 +103,10 @@ disk for the SQLite main file plus its WAL/SHM sidecars.
 
 ## Configuration
 
-`ServerConfig` = `{ command, httpPort, tcpPort, dataPath, extraEnv }`. The agent
+`ServerConfig` = `{ command, httpPort, tcpPort, dataPath, extraEnv }`. Updates
+are validated atomically: unknown keys, an empty/non-string command, invalid
+ports, a non-string data path, or a non-string environment map return HTTP 400
+without partially changing the previous configuration. The agent
 launches `command` (default `bunqueue start`, e.g. `bun run ../src/main.ts` when
 developing) with `HTTP_PORT`, `TCP_PORT`, `BUNQUEUE_DATA_PATH` and `extraEnv`
 injected into the environment. Config is **editable at any time**; a running
@@ -113,4 +134,4 @@ stop-then-start race** no longer orphans the newly-started process.
 (no port bound): the Origin allowlist / no-wildcard CORS, a cross-origin
 `PUT /control/config` rejected `403` **without** mutating the launch command
 (the CSRF-to-RCE vector), same-origin + non-browser requests succeeding, OPTIONS
-preflight ACAO, and the optional `AGENT_TOKEN` gate on mutations.
+preflight ACAO, loopback mutation auth, and all-route auth for network exposure.

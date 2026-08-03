@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
 import { Card } from '@/components/ui/Card';
-import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconArrowRight } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
@@ -23,11 +23,17 @@ import { usePolledData } from '@/lib/usePolledData';
 interface QueueHealth {
   name: string;
   paused: boolean;
-  counts: { waiting: number; active: number; completed: number; failed: number } | null;
+  counts: {
+    waiting: number;
+    prioritized: number;
+    active: number;
+    completed: number;
+    failed: number;
+  } | null;
 }
 
-// Safe zeroed shape so the page renders its full layout when the server is
-// unreachable (down, or embedded with no HTTP) instead of a blocking error.
+// Defensive fallback for the render after a successful poll. Initial failures
+// return an ErrorState above rather than presenting these zeroes as facts.
 const EMPTY = {
   overview: {
     stats: {
@@ -49,11 +55,52 @@ const EMPTY = {
   queuesTotal: 0,
   details: [] as QueueHealth[],
   failedTotal: 0,
+  readyTotal: 0,
 };
 
 // Backlog size above which the Waiting card turns amber — a small standing
 // queue is normal operation, not a warning.
 const WAITING_AMBER_THRESHOLD = 100;
+
+type JsonObject = Record<string, unknown>;
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasFiniteNumbers(value: unknown, keys: readonly string[]): value is JsonObject {
+  return (
+    isJsonObject(value) &&
+    keys.every((key) => typeof value[key] === 'number' && Number.isFinite(value[key]))
+  );
+}
+
+/**
+ * Validate only the /dashboard fields this page renders. bunqueue v2.8.55 may
+ * omit newer, unrelated sections, so requiring the complete current type here
+ * would reject a response the page can safely display.
+ */
+export function assertRenderableOverview(value: unknown): void {
+  if (
+    !isJsonObject(value) ||
+    !hasFiniteNumbers(value.stats, [
+      'waiting',
+      'active',
+      'completed',
+      'dlq',
+      'totalPushed',
+      'totalPulled',
+      'uptime',
+    ]) ||
+    !hasFiniteNumbers(value.throughput, ['pushPerSec', 'pullPerSec']) ||
+    !hasFiniteNumbers(value.memory, ['rss']) ||
+    !hasFiniteNumbers(value.crons, ['total'])
+  ) {
+    throw new Error(
+      'Malformed /dashboard response: required overview metrics are missing or non-numeric.'
+    );
+  }
+}
 
 export function OverviewPro() {
   const baseUrl = useConnectionStore((s) => s.baseUrl);
@@ -66,28 +113,47 @@ export function OverviewPro() {
     // carries every queue's waiting/active/completed/failed counts, so the
     // Queue Health cards need no per-queue queueDetail calls.
     const [overview, summary] = await Promise.all([bq.overview(), bq.queuesSummary()]);
+    // The HTTP client verifies status and JSON syntax, but TypeScript types do
+    // not validate a 2xx body at runtime. Reject an incomplete snapshot before
+    // render-time destructuring so usePolledData can expose an error (or retain
+    // the previous good snapshot in degraded mode).
+    assertRenderableOverview(overview);
     // Show the WORST queues, not the first six the server happens to list:
-    // failed desc, then waiting desc. (Summary carries no per-queue DLQ count,
+    // failed desc, then all ready work (regular + priority). Summary carries no per-queue DLQ count,
     // so dlq can't participate in the ranking without an N-queue fan-out.)
     const details: QueueHealth[] = [...summary]
       .sort(
         (a, b) =>
           (b.counts?.failed ?? 0) - (a.counts?.failed ?? 0) ||
-          (b.counts?.waiting ?? 0) - (a.counts?.waiting ?? 0)
+          (b.counts?.waiting ?? 0) +
+            (b.counts?.prioritized ?? 0) -
+            ((a.counts?.waiting ?? 0) + (a.counts?.prioritized ?? 0))
       )
       .slice(0, 6)
       .map((q) => ({ name: q.name, paused: q.paused, counts: q.counts }));
     // Failed jobs summed across queues — unlike stats.totalFailed (a session
     // counter that resets on every server restart), these are recorded jobs.
     const failedTotal = summary.reduce((a, q) => a + (q.counts?.failed ?? 0), 0);
+    const readyTotal = summary.reduce(
+      (total, q) => total + q.counts.waiting + q.counts.prioritized,
+      0
+    );
     lastOkAt.current = Date.now();
-    return { overview, queuesTotal: summary.length, details, failedTotal };
+    return { overview, queuesTotal: summary.length, details, failedTotal, readyTotal };
   }, []);
 
   if (loading && !data && !error) return <LoadingState label="Loading overview…" />;
+  if (error && !data) {
+    return (
+      <div>
+        <PageHeader title="Overview" description="Real-time system health is unavailable." />
+        <ErrorState error={error} onRetry={refetch} />
+      </div>
+    );
+  }
 
   const d = data ?? EMPTY;
-  const { overview, queuesTotal, details, failedTotal } = d;
+  const { overview, queuesTotal, details, failedTotal, readyTotal } = d;
   const { stats, throughput, memory, crons } = overview;
   // Recorded counts (stats.completed + per-queue failed sums), not the
   // totalCompleted/totalFailed session counters that zero on server restart.
@@ -102,8 +168,17 @@ export function OverviewPro() {
 
   return (
     <div>
-      <PageHeader title="Overview" description="Real-time system health at a glance." live />
-      {error && <OfflineBanner onRetry={refetch} />}
+      <PageHeader
+        title="Overview"
+        description="Real-time system health at a glance."
+        live={!!data && !error}
+      />
+      {error && (
+        <OfflineBanner
+          message="Connection lost — showing the last successful overview snapshot."
+          onRetry={refetch}
+        />
+      )}
 
       {/* Connection banner */}
       <div
@@ -179,9 +254,10 @@ export function OverviewPro() {
         <StatCard label="Completed" value={formatNumber(stats.completed)} tone="green" compact />
         <StatCard label="Active" value={formatNumber(stats.active)} tone="blue" compact />
         <StatCard
-          label="Waiting"
-          value={formatNumber(stats.waiting)}
-          tone={stats.waiting > WAITING_AMBER_THRESHOLD ? 'amber' : 'default'}
+          label="Ready backlog"
+          value={formatNumber(readyTotal)}
+          tone={readyTotal > WAITING_AMBER_THRESHOLD ? 'amber' : 'default'}
+          hint="waiting + prioritized"
           compact
         />
         <StatCard
@@ -238,6 +314,7 @@ export function OverviewPro() {
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-faint">
                   <Metric label="W" value={qd.counts?.waiting} tone="text-warning" />
+                  <Metric label="P" value={qd.counts?.prioritized} tone="text-orange-400" />
                   <Metric label="A" value={qd.counts?.active} tone="text-blue-400" />
                   <Metric label="C" value={qd.counts?.completed} tone="text-success" />
                   <Metric label="F" value={qd.counts?.failed} tone="text-danger" />
@@ -256,19 +333,26 @@ export function OverviewPro() {
 }
 
 function RecentActivity() {
-  const { events, connected } = useActivityStream();
+  const { events, connected, error } = useActivityStream();
   return (
     <div className="mt-8">
       <SectionHeading title="Recent Activity" to="/logs" />
       <Card padded={false}>
-        {!connected && events.length > 0 && (
+        {error && events.length > 0 && (
           <p className="border-b border-line px-5 py-2 text-xs text-warning">
-            Event stream disconnected — reconnecting…
+            Event stream unavailable — {error.message}. Reconnecting…
           </p>
         )}
         {events.length === 0 ? (
-          <p className="py-8 text-center text-sm text-faint">
-            {connected ? 'Waiting for live activity…' : 'Connecting to the event stream…'}
+          <p
+            role={error ? 'alert' : undefined}
+            className={cn('py-8 text-center text-sm', error ? 'text-warning' : 'text-faint')}
+          >
+            {error
+              ? `Event stream unavailable — ${error.message}. Reconnecting…`
+              : connected
+                ? 'Waiting for live activity…'
+                : 'Connecting to the event stream…'}
           </p>
         ) : (
           <ul className="divide-y divide-line">

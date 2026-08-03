@@ -14,6 +14,47 @@ export interface SseFrame {
   data: unknown;
 }
 
+/** Connect/response failure with the HTTP status preserved for retry policy. */
+export class SseConnectError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly lastEventIdSent = false
+  ) {
+    super(message);
+    this.name = 'SseConnectError';
+  }
+}
+
+const LAST_EVENT_ID_REJECTION_STATUSES = new Set([400, 409, 413, 431]);
+
+/**
+ * Whether a frame-less HTTP response plausibly rejected Last-Event-ID itself.
+ * Authentication, server failures, and transport errors must retain the
+ * checkpoint so a transient outage does not silently create a replay gap.
+ */
+export function shouldDiscardLastEventId(error: unknown): boolean {
+  return (
+    error instanceof SseConnectError &&
+    error.lastEventIdSent &&
+    LAST_EVENT_ID_REJECTION_STATUSES.has(error.status)
+  );
+}
+
+/**
+ * Event IDs are later copied into an HTTP header. Real server IDs are tiny
+ * (usually counters/UUIDs); 4 KiB leaves ample protocol headroom while avoiding
+ * an unbounded reconnect header and common proxy header-size limits.
+ */
+export const SSE_MAX_EVENT_ID_CHARS = 4096;
+
+function usableEventId(value: string): boolean {
+  // The event-stream spec requires an `id` field containing U+0000 to be
+  // ignored. Oversized IDs are likewise ignored, but never invalidate the data
+  // event that carried them.
+  return !value.includes('\0') && value.length <= SSE_MAX_EVENT_ID_CHARS;
+}
+
 /**
  * Whether a delivered frame proves the SSE link is live. ANY parsed frame does:
  * the server's handshake sets `data.connected` with the event defaulting to
@@ -39,7 +80,7 @@ export function parseFrame(raw: string): SseFrame | null {
     const value = idx === -1 ? '' : line.slice(idx + 1).replace(/^ /, '');
     if (field === 'event') event = value;
     else if (field === 'data') dataLines.push(value);
-    else if (field === 'id') id = value;
+    else if (field === 'id' && usableEventId(value)) id = value;
   }
 
   if (dataLines.length === 0) return null;
@@ -63,6 +104,13 @@ export function parseFrame(raw: string): SseFrame | null {
 export const SSE_IDLE_MS = 45_000;
 
 /**
+ * Maximum UTF-16 length of one not-yet-dispatched SSE frame. Queue events are
+ * tiny; this generous ceiling prevents a peer that never sends a blank-line
+ * delimiter (or sends one enormous event) from growing `buffer` without bound.
+ */
+export const SSE_MAX_FRAME_CHARS = 256 * 1024;
+
+/**
  * Consume an SSE endpoint until `signal` aborts. Calls `onFrame` for each event.
  * Resolves when the stream ends; rejects on network error (unless aborted), and
  * on `idleMs` without a single byte so the caller can reconnect.
@@ -71,7 +119,8 @@ export async function streamEvents(
   url: string,
   onFrame: (frame: SseFrame) => void,
   signal: AbortSignal,
-  idleMs: number = SSE_IDLE_MS
+  idleMs: number = SSE_IDLE_MS,
+  lastEventId?: string
 ): Promise<void> {
   // Local controller = caller teardown OR idle deadline. Aborting it in the
   // finally also closes the connection if the loop exits abnormally.
@@ -87,8 +136,22 @@ export async function streamEvents(
 
   try {
     armIdle();
+    const headers = new Headers({ Accept: 'text/event-stream', ...getAuthHeaders() });
+    let lastEventIdSent = false;
+    if (lastEventId && usableEventId(lastEventId)) {
+      // A caller can supply an ID directly instead of obtaining it from
+      // parseFrame. If the platform rejects another control/non-ByteString
+      // character, omit replay for this attempt instead of making every future
+      // reconnect throw before fetch is even reached.
+      try {
+        headers.set('Last-Event-ID', lastEventId);
+        lastEventIdSent = true;
+      } catch {
+        headers.delete('Last-Event-ID');
+      }
+    }
     const res = await fetch(url, {
-      headers: { Accept: 'text/event-stream', ...getAuthHeaders() },
+      headers,
       signal: ctrl.signal,
     });
     if (!res.ok || !res.body) {
@@ -96,10 +159,26 @@ export async function streamEvents(
       // a persistent failure (401/404/502), and abandoning a Response per attempt
       // pins its socket and buffers until GC.
       await res.body?.cancel().catch(() => {});
-      throw new Error(
+      throw new SseConnectError(
         res.ok
           ? 'SSE connect failed: empty response body'
-          : `SSE connect failed: HTTP ${res.status}`
+          : `SSE connect failed: HTTP ${res.status}`,
+        res.status,
+        lastEventIdSent
+      );
+    }
+
+    // A reverse proxy can return a successful HTML/JSON login or error page.
+    // Treating that payload as SSE leaves the UI in a misleading reconnecting
+    // state (and may even parse an accidental `data:` line). Per the SSE
+    // protocol, a usable stream must explicitly advertise text/event-stream.
+    const contentType = res.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+    if (contentType !== 'text/event-stream') {
+      await res.body.cancel().catch(() => {});
+      throw new SseConnectError(
+        `SSE connect failed: expected text/event-stream, received ${contentType || 'no Content-Type'}`,
+        res.status,
+        lastEventIdSent
       );
     }
 
@@ -129,7 +208,15 @@ export async function streamEvents(
             sep = crlf;
             width = 4;
           } else {
+            if (buffer.length > SSE_MAX_FRAME_CHARS) {
+              throw new Error(`SSE frame exceeds the ${SSE_MAX_FRAME_CHARS}-character limit`);
+            }
             break;
+          }
+          // Check before slicing/parsing so a delimited oversized frame cannot
+          // evade the incomplete-buffer cap merely by appending `\n\n`.
+          if (sep > SSE_MAX_FRAME_CHARS) {
+            throw new Error(`SSE frame exceeds the ${SSE_MAX_FRAME_CHARS}-character limit`);
           }
           const raw = buffer.slice(0, sep);
           buffer = buffer.slice(sep + width);

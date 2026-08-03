@@ -1,5 +1,6 @@
 import { isStepCount, streamText } from 'ai';
 import { useCopilotStore } from '@/components/dashboard/stores/copilotStore';
+import { captureServerRequestTarget } from '@/lib/bq';
 import { createModel, providerById } from './providers';
 import { buildTools } from './tools';
 
@@ -7,7 +8,7 @@ const SYSTEM = `You are the bunqueue Copilot, an AI assistant embedded in a dash
 
 You help the operator understand and control their queues, jobs, dead-letter queue (DLQ), workers, and crons. Use the provided tools to read LIVE state instead of guessing — never invent queue names, job ids, counts, or states; look them up. Prefer the smallest set of tool calls that answers the question.
 
-Mutating tools (retry, promote, remove, pause/resume, retry/purge DLQ) are gated: when you call one, the user is shown a confirmation and must approve it before it runs, so it is safe to propose a concrete action. If the user's request is ambiguous about which queue or job, ask a brief clarifying question or look it up first.
+The only mutating tools are: promote one delayed job, pause one queue, and resume one queue. Each is confirmation-gated and the confirmation names the immutable target server. Generic retry, completed-job requeue, every DLQ retry, cancel/remove, and DLQ purge are unavailable: never claim you can perform them. If the user's request is ambiguous about which queue or job, ask a brief clarifying question or look it up first.
 
 Be concise and practical. When you report data, summarize the important numbers rather than dumping raw JSON. Format with short markdown (bold, lists) when helpful.`;
 
@@ -59,9 +60,33 @@ function friendly(msg: string, providerId: string): string {
   return msg;
 }
 
-// The in-flight turn's abort controller lives at module scope (not in the panel
-// component) so Stop keeps working even if the panel is closed and reopened.
-let activeAbort: AbortController | null = null;
+interface ActiveTurn {
+  readonly id: number;
+  readonly controller: AbortController;
+}
+
+// The lease lives at module scope (not in the panel component), so acquisition
+// is synchronous even when two submit events happen before React re-renders.
+// It also makes Stop work after the panel is closed and reopened.
+let turnSequence = 0;
+let activeTurn: ActiveTurn | null = null;
+
+function acquireTurn(): ActiveTurn | null {
+  if (activeTurn) return null;
+  const turn = { id: ++turnSequence, controller: new AbortController() };
+  activeTurn = turn;
+  return turn;
+}
+
+function ownsTurn(turn: ActiveTurn): boolean {
+  return activeTurn === turn && !turn.controller.signal.aborted;
+}
+
+function releaseTurn(turn: ActiveTurn): void {
+  if (activeTurn !== turn) return;
+  activeTurn = null;
+  useCopilotStore.getState().setBusy(false);
+}
 
 /**
  * Abort the current turn and deterministically unwind. In the AI SDK, a Stop
@@ -72,12 +97,12 @@ let activeAbort: AbortController | null = null;
  * the stream. Resolving the confirmation also lets the aborted stream settle.
  */
 export function abortActive(): void {
-  const ac = activeAbort;
-  activeAbort = null;
+  const turn = activeTurn;
+  activeTurn = null;
   const store = useCopilotStore.getState();
   store.cancelPending();
   store.setBusy(false);
-  ac?.abort();
+  turn?.controller.abort();
 }
 
 /**
@@ -94,67 +119,88 @@ export function clearChat(): void {
 
 /** Run one user turn: stream the assistant reply, executing tools as it goes. */
 export async function sendMessage(text: string): Promise<void> {
+  // This is the authoritative mutex. `busy` is presentation state and may be
+  // stale in a click handler until React commits the next render.
+  const turn = acquireTurn();
+  if (!turn) return;
+
   const store = useCopilotStore.getState();
-  const { config } = store;
+  const config = { ...store.config };
 
-  if (!config.apiKey.trim()) {
-    store.addUser(text);
-    const id = store.startAssistant();
-    store.finishAssistant(id, {
-      error: 'Add your API key in the Copilot settings (the gear) first.',
-    });
-    return;
-  }
-
-  // History = prior turns (captured before we add this one), then the new user turn.
-  const history = store.messages
-    .filter((m) => m.content.trim().length > 0)
-    .map((m) => ({ role: m.role, content: m.content }));
-  store.addUser(text);
-  const assistantId = store.startAssistant();
-  store.setBusy(true);
-  const ac = new AbortController();
-  activeAbort = ac;
-
-  let failed: string | null = null;
   try {
-    const model = await createModel(config);
-    const result = streamText({
-      model,
-      system: SYSTEM,
-      messages: [...history, { role: 'user' as const, content: text }],
-      tools: buildTools(assistantId),
-      stopWhen: isStepCount(8),
-      abortSignal: ac.signal,
-      onError: ({ error }) => {
-        failed = error instanceof Error ? error.message : String(error);
-      },
-    });
-    for await (const delta of result.textStream) {
-      store.appendAssistant(assistantId, delta);
-    }
-  } catch (e) {
-    if ((e as Error).name === 'AbortError') {
-      // abortActive() already cleared pending + busy for the turn it stopped
-      // (and a suspended mutating tool was declined there, before ac.abort()).
-      // Do NOT repeat cancelPending()/setBusy(false) here: a newer turn may have
-      // started in between, and doing so would decline ITS confirmations and
-      // release ITS busy lock. Only close this turn's own (by-id) bubble.
-      store.finishAssistant(assistantId);
-      if (activeAbort === ac) activeAbort = null;
+    if (!config.apiKey.trim()) {
+      store.addUser(text);
+      const id = store.startAssistant();
+      store.finishAssistant(id, {
+        error: 'Add your API key in the Copilot settings (the gear) first.',
+      });
       return;
     }
-    failed = failed || (e as Error).message;
-  }
 
-  store.finishAssistant(
-    assistantId,
-    failed ? { error: friendly(failed, config.provider) } : undefined
-  );
-  // Only release the shared busy lock if this turn is still the active one — a
-  // turn superseded via abortActive() must not flip a newer turn's busy.
-  if (activeAbort === ac) {
-    store.setBusy(false);
-    activeAbort = null;
+    // History = prior turns (captured before we add this one), then the new user turn.
+    const history = store.messages
+      .filter((m) => m.content.trim().length > 0)
+      .map((m) => ({ role: m.role, content: m.content }));
+    // Publish busy before adding either message. A render can now disable the
+    // form, while the module lease already protects this same tick.
+    store.setBusy(true);
+    store.addUser(text);
+    const assistantId = store.startAssistant();
+
+    let failed: string | null = null;
+    try {
+      // One assistant turn owns one immutable server URL + bearer pair. Every
+      // tool closure receives this snapshot and the same cancellation signal.
+      const serverTarget = captureServerRequestTarget();
+      const model = await createModel(config);
+      if (!ownsTurn(turn)) {
+        store.finishAssistant(assistantId);
+        return;
+      }
+
+      const result = streamText({
+        model,
+        system: SYSTEM,
+        messages: [...history, { role: 'user' as const, content: text }],
+        tools: buildTools(assistantId, serverTarget, turn.controller.signal),
+        stopWhen: isStepCount(8),
+        abortSignal: turn.controller.signal,
+        onError: ({ error }) => {
+          failed = error instanceof Error ? error.message : String(error);
+        },
+      });
+      for await (const delta of result.textStream) {
+        // Some providers/test transports can ignore AbortSignal. Ownership is
+        // therefore checked independently before any late text is published.
+        if (!ownsTurn(turn)) {
+          store.finishAssistant(assistantId);
+          return;
+        }
+        store.appendAssistant(assistantId, delta);
+      }
+    } catch (e) {
+      if (
+        turn.controller.signal.aborted ||
+        activeTurn !== turn ||
+        (e as Error).name === 'AbortError'
+      ) {
+        // abortActive() already cleared pending + busy. Only close this turn's
+        // own bubble; a newer turn may already own both shared resources.
+        store.finishAssistant(assistantId);
+        return;
+      }
+      failed = failed || (e as Error).message;
+    }
+
+    if (!ownsTurn(turn)) {
+      store.finishAssistant(assistantId);
+      return;
+    }
+    store.finishAssistant(
+      assistantId,
+      failed ? { error: friendly(failed, config.provider) } : undefined
+    );
+  } finally {
+    releaseTurn(turn);
   }
 }

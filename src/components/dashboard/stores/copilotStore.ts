@@ -1,10 +1,12 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 
 /**
  * Copilot chat state. The API key lives in memory only (never persisted — an
  * LLM key in plaintext-at-rest is readable by any same-origin XSS); the provider
- * choice, base URL, and model id ARE persisted so the panel remembers the setup.
+ * choice, custom-provider base URL, and model id ARE persisted so the panel
+ * remembers the setup. Named providers always discard baseURL because their
+ * fixed destination is the boundary that protects the model API key.
  * Mutating tools pause on a confirmation gate: the tool's execute() awaits a
  * Promise held in `resolvers`, and the UI resolves it when the user clicks
  * Confirm/Decline.
@@ -43,6 +45,65 @@ export interface CopilotConfig {
   baseURL: string;
   model: string;
   apiKey: string;
+}
+
+export const COPILOT_STORAGE_KEY = 'bq-dash-copilot';
+const COPILOT_STORAGE_VERSION = 1;
+// Keep in sync with lib/copilot/providers.ts. Persisted provider ids are a
+// trust boundary because the selected provider determines where an API key and
+// chat payload may be sent.
+const COPILOT_PROVIDER_IDS = new Set([
+  'anthropic',
+  'openai',
+  'google',
+  'zai',
+  'openrouter',
+  'custom',
+]);
+const DEFAULT_COPILOT_CONFIG: CopilotConfig = {
+  provider: 'anthropic',
+  baseURL: '',
+  model: 'claude-opus-4-8',
+  apiKey: '',
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function safeString(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function safeProvider(value: unknown): string {
+  return typeof value === 'string' && COPILOT_PROVIDER_IDS.has(value)
+    ? value
+    : DEFAULT_COPILOT_CONFIG.provider;
+}
+
+function sanitizedConfig(value: unknown, apiKey = ''): CopilotConfig {
+  const stored = isRecord(value) ? value : {};
+  const provider = safeProvider(stored.provider);
+  return {
+    provider,
+    baseURL:
+      provider === 'custom'
+        ? safeString(stored.baseURL, DEFAULT_COPILOT_CONFIG.baseURL)
+        : DEFAULT_COPILOT_CONFIG.baseURL,
+    model: safeString(stored.model, DEFAULT_COPILOT_CONFIG.model),
+    apiKey,
+  };
+}
+
+/** Sanitize the persisted projection and always discard historical API keys. */
+export function sanitizedPersistedCopilotState(value: unknown): {
+  config: Omit<CopilotConfig, 'apiKey'>;
+} {
+  const stored = isRecord(value) ? value : {};
+  const config = sanitizedConfig(stored.config);
+  return {
+    config: { provider: config.provider, baseURL: config.baseURL, model: config.model },
+  };
 }
 
 // Ids must be unique even without crypto.randomUUID — that API is gated on a
@@ -87,26 +148,105 @@ const patchMessage = (messages: ChatMessage[], id: string, fn: (m: ChatMessage) 
 /**
  * The subset written to localStorage. The API key is deliberately EXCLUDED — an
  * LLM key in plaintext-at-rest is readable by any same-origin XSS or extension
- * and never expires. Only the non-secret setup (provider/baseURL/model) is kept.
+ * and never expires. Only the non-secret setup (provider/custom baseURL/model)
+ * is kept. Fixed providers persist an empty baseURL so a stale hidden field can
+ * never become a credential-exfiltration destination.
  */
 export function persistedCopilotState(s: Pick<CopilotState, 'config'>) {
-  return {
-    config: { provider: s.config.provider, baseURL: s.config.baseURL, model: s.config.model },
-  };
+  return sanitizedPersistedCopilotState(s);
 }
+
+function browserStorage(): Storage | null {
+  try {
+    return (globalThis as { localStorage?: Storage }).localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeStoredEnvelope(raw: string): { hydration: string; canonical: string } | null {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const envelope = isRecord(parsed) ? parsed : {};
+    const rawState = 'state' in envelope ? envelope.state : envelope;
+    const state = sanitizedPersistedCopilotState(rawState);
+    const version = typeof envelope.version === 'number' ? envelope.version : undefined;
+    return {
+      hydration: JSON.stringify({ state, ...(version === undefined ? {} : { version }) }),
+      canonical: JSON.stringify({ state, version: COPILOT_STORAGE_VERSION }),
+    };
+  } catch {
+    return null;
+  }
+}
+
+const resilientCopilotStorage: StateStorage = {
+  getItem(name) {
+    const storage = browserStorage();
+    if (!storage) return null;
+    let raw: string | null;
+    try {
+      raw = storage.getItem(name);
+    } catch {
+      return null;
+    }
+    if (raw === null || name !== COPILOT_STORAGE_KEY) return raw;
+    const sanitized = sanitizeStoredEnvelope(raw);
+    if (!sanitized) {
+      try {
+        storage.removeItem(name);
+      } catch {
+        // Corrupt optional storage falls back to the default provider config.
+      }
+      return null;
+    }
+    if (raw !== sanitized.canonical) {
+      try {
+        storage.setItem(name, sanitized.canonical);
+      } catch {
+        // If rewrite is blocked, deleting the legacy API-key blob is safer than
+        // leaving it at rest. The sanitized in-memory setup still hydrates.
+        try {
+          storage.removeItem(name);
+        } catch {
+          // Storage is externally controlled; no exception may escape hydration.
+        }
+      }
+    }
+    return sanitized.hydration;
+  },
+  setItem(name, value) {
+    try {
+      browserStorage()?.setItem(name, value);
+    } catch {
+      // The session config remains usable if storage is blocked/full.
+    }
+  },
+  removeItem(name) {
+    try {
+      browserStorage()?.removeItem(name);
+    } catch {
+      // Durable cleanup is best-effort.
+    }
+  },
+};
 
 export const useCopilotStore = create<CopilotState>()(
   persist(
     (set) => ({
       open: false,
-      config: { provider: 'anthropic', baseURL: '', model: 'claude-opus-4-8', apiKey: '' },
+      config: { ...DEFAULT_COPILOT_CONFIG },
       messages: [],
       pending: [],
       busy: false,
 
       setOpen: (v) => set({ open: v }),
       toggle: () => set((s) => ({ open: !s.open })),
-      setConfig: (patch) => set((s) => ({ config: { ...s.config, ...patch } })),
+      setConfig: (patch) =>
+        set((s) => {
+          const next = { ...s.config, ...patch };
+          return { config: sanitizedConfig(next, safeString(next.apiKey, '')) };
+        }),
       clear: () => {
         for (const resolve of resolvers.values()) resolve(false);
         resolvers.clear();
@@ -184,12 +324,15 @@ export const useCopilotStore = create<CopilotState>()(
       },
     }),
     {
-      name: 'bq-dash-copilot',
+      name: COPILOT_STORAGE_KEY,
+      version: COPILOT_STORAGE_VERSION,
+      storage: createJSONStorage(() => resilientCopilotStorage),
       // Persist the setup but NEVER the API key (or transient chat/confirm state).
       partialize: (s) => persistedCopilotState(s),
+      migrate: sanitizedPersistedCopilotState,
       merge: (persisted, current) => {
-        const p = (persisted ?? {}) as { config?: Partial<CopilotConfig> };
-        return { ...current, config: { ...current.config, ...(p.config ?? {}), apiKey: '' } };
+        const sanitized = sanitizedPersistedCopilotState(persisted);
+        return { ...current, config: { ...sanitized.config, apiKey: '' } };
       },
     }
   )

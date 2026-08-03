@@ -15,6 +15,111 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.33] - 2026-08-03
+
+A production-readiness audit aligned every dashboard control and response shape
+with Bunqueue v2.8.55, exercised the complete route surface through integration
+tests and local HTTP smoke checks, and expanded the regression suite substantially
+beyond its previous 314 tests.
+
+### Security
+- Hardened the standalone `/api` and `/agent` bridges against cross-origin
+  mutations, DNS rebinding, untrusted proxy headers, and remote operation
+  without an explicit token. Agent and Bunqueue bearer tokens are independently
+  scoped and are no longer persisted in browser storage.
+- Made the all-in-one `/api` proxy fail closed for every LAN/proxied request:
+  `BUNQUEUE_TOKEN` is now mandatory there and is checked before Bunqueue is
+  contacted, including for Origin-less clients such as `curl`.
+- Added request deadlines, response-shape validation, strict `{ ok: false }`
+  handling, and credential correlation so stale 401 responses cannot reopen an
+  authentication prompt or retarget a newer session.
+- Made the SQLite inspector fail closed on unsafe queries, exact for 64-bit
+  rowids, bounded in worker concurrency, and safe against CSV formula injection.
+- Upgraded and pinned the dependency/tooling surface, added frozen-install and
+  high-severity audit gates, and hardened CI, release, Docker and Pages workflows.
+
+### Added
+- Complete v2.8.55 job inputs across single, bulk and cron forms, including
+  retry/backoff, priority, delay, timeout, TTL, tags, groups, deduplication,
+  cleanup policies and safe interval repeats.
+- Queue Control support for every state bucket, explicit desired-state rate
+  duration/TTL and concurrency writes, stall configuration and DLQ policy.
+- Flow integrity diagnostics for malformed snapshots, missing backlinks, real
+  dependency cycles, failed nodes and bounded/truncated graphs.
+- Honest loading, stale, degraded and unavailable states across dashboard,
+  metrics, alerts, activity, diagnostics, storage and control pages.
+- Route titles, nested-scroll restoration, accessible dialogs/focus traps,
+  responsive navigation and a connection badge shared by the application shell.
+
+### Changed
+- Flows now follow Bunqueue's canonical topology: structural children present
+  in both `childrenIds` and `dependsOn` render once, parent resolution supports
+  the full 100-level limit, and `waiting-children` is a first-class state.
+- Queue discovery reads every bounded 500-item page and fails closed if the
+  non-snapshot upstream list changes, overlaps or becomes malformed mid-read.
+- Demo startup is lazy, idempotent and reversible; its fixtures now mirror the
+  exact v2.8.55 response and flow shapes.
+- Database full-table CSV now comes from one agent-side SQLite read snapshot,
+  preserving the selected sort/filter without client pagination. Responses are
+  capped at 200,000 rows or 16 MiB on complete-record boundaries, expose
+  validated row/byte/cap metadata, and neutralize spreadsheet formulas; demo
+  mode serves the same raw CSV contract. Browsed pages bind count and rows to
+  one read snapshot, while an open detail drawer stays pinned to its row.
+- Pollers, streams, alerts and throughput samplers now isolate data by server,
+  token, route generation and component lifetime.
+- Single and bulk enqueue validate and send the same captured JSON
+  representation, so mutable getters or root `toJSON()` hooks cannot change
+  repeat, ID, dependency or forbidden topology fields after the safety checks.
+  Bulk transport is additionally capped at 10,000 jobs and a measured 64 MiB
+  envelope before aggregate serialization; repeated Count submissions can no
+  longer turn a valid 10 MiB per-job payload into a browser OOM.
+- Classic Jobs keeps its target and bearer immutable for each cancellable
+  fan-out, and requires a specific queue when more than 100 are discovered
+  instead of issuing up to 10,000 list requests every 15 seconds.
+- Flow-unsafe mutations now fail closed: Cancel, Drain, Clean, Obliterate,
+  every DLQ retry, completed-job requeue, Purge and auto-retry are unavailable.
+  The separate DLQ GET + retry POST has no atomic job-generation/topology
+  precondition, while completed requeue does not rebuild flow dependencies.
+- DLQ `maxAge` and `maxEntries` are read-only and omitted from dashboard writes:
+  v2.8.55 can immediately evict or later expire a flow child without an atomic
+  reverse-dependency check.
+- Cron creation is labelled and confirmed as the upstream last-writer-wins
+  upsert it actually is; write-only limiter controls use complete desired-state
+  confirmations and timestamped receipts instead of implying readable state.
+
+### Fixed
+- Removed executable Queue Control deletion paths that no dashboard-side check
+  can make flow-safe; the disabled controls explain the upstream contract gap.
+- Fixed custom-id inspection to resolve the authoritative live job state and
+  canonical internal id without duplicate requests or incorrect action gates.
+- Fixed stale async responses overwriting another queue/server, post-unmount
+  state updates, same-name config saves surviving a server retarget,
+  double-submit races, swallowed partial failures and factual empty/healthy
+  claims after failed requests.
+- Fixed alert-rule capacity/sanitization failures being silently discarded and
+  zero-sample or unavailable metrics being reported as an all-clear state.
+- Fixed same-tick Copilot submissions sharing/overwriting turn cancellation;
+  one atomic turn lease now owns provider streaming, confirmations and every
+  tool request through Stop.
+- Fixed AlertEngine mixing queue pages, summaries and overview data across a
+  Settings retarget; one cancellable URL+bearer snapshot now owns a full tick.
+- Fixed benchmark telemetry relabelling a run after a server retarget, bulk-file
+  last-reader-wins races, pre-parse job-data bounds, and incomplete classic DLQ
+  and Activity queue discovery beyond the first 500 queues.
+- Fixed opaque Flow lookups for percent, bracket and pipe job IDs while rejecting
+  encoded WHATWG dot segments, and made Flow job data read-only so a full-payload
+  update cannot erase Bunqueue's reserved topology metadata.
+- Fixed Cron data validation to enforce the shared pre-parse UTF-8 budget, and
+  kept valid large Bunqueue stacktraces inspectable through a bounded UI preview.
+- Fixed invalid/oversized SSE replay IDs poisoning every reconnect, and actively
+  cancelled stdout/stderr readers whose exited process left inherited pipes open.
+- Propagated browser disconnects through the embedded agent and Bunqueue API
+  bridges so abandoned reads and exports release their in-flight work promptly.
+- Fixed malformed-success handling, unsafe numeric coercions, pagination drift,
+  mobile overflow/focus issues, classic-page links and incomplete demo routes.
+- Updated deployment, API mapping, security, operations and feature guides to
+  describe the verified v2.8.55 behavior and production constraints.
+
 ## [0.0.32] - 2026-07-23
 
 An adversarial audit pass: every module was read against the invariants it
@@ -529,7 +634,7 @@ as misreadings rather than "fixed" — the notes below only list real defects.
   which can never satisfy an **agent** 401 (an unfixable loop). Now the agent
   client sends the agent token, the `auth:required` event is **scoped**
   (`server` vs `agent`) so the lock screen asks for the right one, and there's
-  an **Agent token** field in Settings (memory-only, or `VITE_BUNQUEUE_AGENT_TOKEN`).
+  an **Agent token** field in Settings (memory-only for the browser session).
 - **DNS-rebinding read exposure closed on the control agent.** The Origin
   allowlist doesn't cover a *same-origin* request, so a page whose DNS was
   rebound to `127.0.0.1` could read `/control/status`, `/control/logs` and the
@@ -889,7 +994,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.32...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.33...HEAD
+[0.0.33]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.32...v0.0.33
 [0.0.32]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.31...v0.0.32
 [0.0.31]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.30...v0.0.31
 [0.0.30]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.29...v0.0.30

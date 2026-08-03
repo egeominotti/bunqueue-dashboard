@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ElementType, ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
 export function Card({
@@ -21,17 +21,21 @@ export function CardHeader({
   title,
   action,
   icon,
+  headingLevel = 2,
 }: {
   title: ReactNode;
   action?: ReactNode;
   icon?: ReactNode;
+  /** Match the card to the surrounding document outline. Page-level cards are h2 by default. */
+  headingLevel?: 2 | 3 | 4 | 5 | 6;
 }) {
+  const Heading = `h${headingLevel}` as ElementType;
   return (
     <div className="mb-4 flex items-center justify-between gap-3">
-      <h3 className="flex items-center gap-2 text-base font-semibold text-fg">
+      <Heading className="flex items-center gap-2 text-base font-semibold text-fg">
         {icon}
         {title}
-      </h3>
+      </Heading>
       {action}
     </div>
   );

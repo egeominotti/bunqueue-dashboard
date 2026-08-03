@@ -6,14 +6,22 @@
  *   check-coverage.ts — a malformed lcov must fail, not pass.
  */
 import { describe, expect, it, mock } from 'bun:test';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { ProcessManager } from '../agent/manager';
+import { createFetchHandler, isHostAllowed } from '../agent/server';
 import {
   agentSubUrl,
+  apiTokenOk,
   createServeHandler,
   isLoopbackBind,
+  isLoopbackHost,
+  isRemoteBridgeRequest,
+  RESPONSE_SECURITY_HEADERS,
+  remoteBridgeRequiresToken,
   remoteControlEnabled,
+  resolveServeAllowedHosts,
   type ServeHandlerOptions,
 } from '../scripts/serve';
 
@@ -34,23 +42,122 @@ function handler(over: Partial<ServeHandlerOptions> = {}) {
     indexHtml: '<html>ok</html>',
     assets: {},
     agentHandle: echoAgent,
+    remoteAgentHandle: echoAgent,
     allowedOrigins: ALLOWED,
     agentBridge: true,
+    agentTokenConfigured: false,
     ...over,
   });
+}
+
+async function within<T>(promise: Promise<T>, ms = 250): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Operation did not settle within ${ms} ms`)), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 describe('serve.ts control-plane exposure', () => {
   it('allows the bridge on a loopback bind', () => {
     expect(isLoopbackBind('127.0.0.1')).toBe(true);
+    expect(isLoopbackBind('127.0.0.42')).toBe(true);
+    expect(isLoopbackBind('::1')).toBe(true);
     expect(isLoopbackBind('0.0.0.0')).toBe(false);
-    expect(remoteControlEnabled(true, {})).toBe(true);
+    expect(remoteControlEnabled(false, {})).toBe(true);
   });
 
-  it('refuses remote control on a non-loopback bind without an explicit opt-in', () => {
-    expect(remoteControlEnabled(false, {})).toBe(false);
-    expect(remoteControlEnabled(false, { AGENT_TOKEN: 's3cret' })).toBe(true);
-    expect(remoteControlEnabled(false, { AGENT_ALLOW_REMOTE_CONTROL: '1' })).toBe(true);
+  it('recognizes deployment signals that make a loopback bridge remote', () => {
+    expect(remoteBridgeRequiresToken(true, {})).toBe(false);
+    expect(remoteBridgeRequiresToken(false, {})).toBe(true);
+    expect(remoteBridgeRequiresToken(true, { TRUST_PROXY: '1' })).toBe(true);
+    expect(remoteBridgeRequiresToken(true, { AGENT_ALLOWED_HOSTS: 'dashboard.example.com' })).toBe(
+      true
+    );
+    expect(
+      remoteBridgeRequiresToken(true, {
+        AGENT_ALLOWED_ORIGINS: 'https://dashboard.example.com',
+      })
+    ).toBe(true);
+    expect(
+      remoteBridgeRequiresToken(true, {
+        AGENT_ALLOWED_HOSTS: 'localhost,127.0.0.2',
+        AGENT_ALLOWED_ORIGINS: 'http://localhost:8080',
+      })
+    ).toBe(false);
+  });
+
+  it('treats public Hosts and forwarding metadata as remote without trusting their values', () => {
+    expect(isLoopbackHost('localhost:8080')).toBe(true);
+    expect(isLoopbackHost('0.0.0.0')).toBe(false);
+    expect(isRemoteBridgeRequest(new Request('http://localhost:8080/agent'))).toBe(false);
+    expect(isRemoteBridgeRequest(new Request('http://dashboard.example.com/agent'))).toBe(true);
+    expect(
+      isRemoteBridgeRequest(
+        new Request('http://localhost:8080/agent', {
+          headers: { Origin: 'https://dashboard.example.com' },
+        })
+      )
+    ).toBe(true);
+    expect(
+      isRemoteBridgeRequest(
+        new Request('http://localhost:8080/agent', {
+          headers: { 'X-Forwarded-Host': 'dashboard.example.com' },
+        })
+      )
+    ).toBe(true);
+    expect(isRemoteBridgeRequest(new Request('http://localhost:8080/agent'), true)).toBe(true);
+  });
+
+  it('requires wildcard LAN/container Hosts to be listed explicitly', async () => {
+    const defaults = resolveServeAllowedHosts('0.0.0.0', ALLOWED, {});
+    expect(isHostAllowed('192.168.1.50:8080', defaults)).toBe(false);
+    expect(isHostAllowed('dashboard:8080', defaults)).toBe(false);
+    expect(
+      (
+        await handler({ allowedHosts: defaults })(
+          new Request('http://192.168.1.50:8080/', {
+            headers: { Host: '192.168.1.50:8080' },
+          })
+        )
+      ).status
+    ).toBe(403);
+
+    const listed = resolveServeAllowedHosts('0.0.0.0', ALLOWED, {
+      AGENT_ALLOWED_HOSTS: '192.168.1.50,dashboard',
+    });
+    expect(isHostAllowed('192.168.1.50:8080', listed)).toBe(true);
+    expect(isHostAllowed('dashboard:8080', listed)).toBe(true);
+    expect(
+      (
+        await handler({ allowedHosts: listed })(
+          new Request('http://192.168.1.50:8080/', {
+            headers: { Host: '192.168.1.50:8080' },
+          })
+        )
+      ).status
+    ).toBe(200);
+
+    const concrete = resolveServeAllowedHosts('192.168.1.50', ALLOWED, {});
+    expect(isHostAllowed('192.168.1.50:8080', concrete)).toBe(true);
+    const originListed = resolveServeAllowedHosts(
+      '0.0.0.0',
+      [...ALLOWED, 'http://dashboard.lan:8080'],
+      {}
+    );
+    expect(isHostAllowed('dashboard.lan:8080', originListed)).toBe(true);
+  });
+
+  it('requires a non-empty token for remote control on a non-loopback bind', () => {
+    expect(remoteControlEnabled(true, {})).toBe(false);
+    expect(remoteControlEnabled(true, { AGENT_TOKEN: 's3cret' })).toBe(true);
+    expect(remoteControlEnabled(true, { AGENT_TOKEN: '   ' })).toBe(false);
+    // The former unauthenticated escape hatch must stay closed.
+    expect(remoteControlEnabled(true, { AGENT_ALLOW_REMOTE_CONTROL: '1' })).toBe(false);
   });
 
   it('403s the /agent bridge (no process spawn) when it is disabled', async () => {
@@ -68,11 +175,186 @@ describe('serve.ts control-plane exposure', () => {
     expect(res.status).toBe(200);
     expect((await res.json()).url).toBe('http://agent.internal/control/status');
   });
+
+  it('propagates a caller abort through the in-process agent bridge', async () => {
+    const controller = new AbortController();
+    let innerSignal: AbortSignal | undefined;
+    const abortAwareAgent = (req: Request) => {
+      innerSignal = req.signal;
+      return new Promise<Response>((resolve) => {
+        req.signal.addEventListener(
+          'abort',
+          () => resolve(Response.json({ ok: false, aborted: true })),
+          { once: true }
+        );
+      });
+    };
+    const pending = handler({
+      agentHandle: abortAwareAgent,
+      remoteAgentHandle: abortAwareAgent,
+    })(
+      new Request('http://localhost:8080/agent/db/tables/jobs/export', {
+        signal: controller.signal,
+      })
+    );
+
+    await Promise.resolve();
+    expect(innerSignal?.aborted).toBe(false);
+    controller.abort(new Error('browser disconnected'));
+    const res = await within(pending);
+    expect(innerSignal?.aborted).toBe(true);
+    expect((await res.json()).aborted).toBe(true);
+  });
+
+  it('fails a public or proxied bridge closed when no AGENT_TOKEN is configured', async () => {
+    for (const req of [
+      new Request('http://dashboard.example.com/agent/control/status'),
+      new Request('http://localhost:8080/agent/control/status', {
+        headers: { 'X-Forwarded-Host': 'dashboard.example.com' },
+      }),
+    ]) {
+      const res = await handler()(req);
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as { error: string }).error).toContain('AGENT_TOKEN');
+    }
+  });
+});
+
+function realAgentBridge({
+  token,
+  remoteBridgePolicy = false,
+  trustProxy = false,
+}: {
+  token?: string;
+  remoteBridgePolicy?: boolean;
+  trustProxy?: boolean;
+} = {}) {
+  const manager = new ProcessManager();
+  const allowedHosts = ['localhost', '127.0.0.1', 'dashboard.example.com', 'dashboard-internal'];
+  const localAgent = createFetchHandler(manager, {
+    allowedOrigins: ALLOWED,
+    allowedHosts,
+    token,
+  });
+  const remoteAgent = createFetchHandler(manager, {
+    allowedOrigins: ALLOWED,
+    allowedHosts,
+    token,
+    requireTokenForAll: true,
+  });
+  return {
+    manager,
+    handle: createServeHandler({
+      api: 'http://127.0.0.1:6790',
+      indexHtml: '<html>ok</html>',
+      assets: {},
+      agentHandle: localAgent,
+      remoteAgentHandle: remoteAgent,
+      allowedOrigins: ALLOWED,
+      allowedHosts,
+      agentBridge: !remoteBridgePolicy || Boolean(token),
+      agentTokenConfigured: Boolean(token),
+      remoteBridgePolicy,
+      trustProxy,
+    }),
+  };
+}
+
+describe('serve.ts proxied agent bridge authentication', () => {
+  const PUBLIC_HOST = { Host: 'dashboard.example.com' };
+
+  it('requires AGENT_TOKEN on every sensitive read and mutation with a preserved public Host', async () => {
+    const { handle } = realAgentBridge({ token: 's3cret', remoteBridgePolicy: true });
+    for (const path of [
+      '/agent/control/status',
+      '/agent/control/logs',
+      '/agent/control/config',
+      '/agent/db/tables',
+      '/agent/control/start',
+    ]) {
+      const mutation = path.endsWith('/start');
+      const res = await handle(
+        new Request(`http://dashboard.example.com${path}`, {
+          method: mutation ? 'POST' : 'GET',
+          headers: PUBLIC_HOST,
+        })
+      );
+      expect(res.status).toBe(401);
+    }
+
+    const allowed = await handle(
+      new Request('http://dashboard.example.com/agent/control/config', {
+        headers: { ...PUBLIC_HOST, Authorization: 'Bearer s3cret' },
+      })
+    );
+    expect(allowed.status).toBe(200);
+  });
+
+  it('fails every remote route closed when the deployment has no AGENT_TOKEN', async () => {
+    const { handle } = realAgentBridge({ remoteBridgePolicy: true });
+    for (const [path, method] of [
+      ['/agent/control/status', 'GET'],
+      ['/agent/control/logs', 'GET'],
+      ['/agent/control/config', 'GET'],
+      ['/agent/db/tables', 'GET'],
+      ['/agent/control/start', 'POST'],
+    ] as const) {
+      const res = await handle(
+        new Request(`http://dashboard.example.com${path}`, { method, headers: PUBLIC_HOST })
+      );
+      expect(res.status).toBe(403);
+      expect(((await res.json()) as { error: string }).error).toContain('AGENT_TOKEN');
+    }
+  });
+
+  it('uses remote all-route auth when a trusted proxy rewrites Host to loopback', async () => {
+    const { handle } = realAgentBridge({
+      token: 's3cret',
+      remoteBridgePolicy: true,
+      trustProxy: true,
+    });
+    const headers = {
+      Host: '127.0.0.1:8080',
+      Origin: 'https://dashboard.example.com',
+      'X-Forwarded-Host': 'dashboard.example.com',
+    };
+    const denied = await handle(
+      new Request('http://127.0.0.1:8080/agent/control/config', { headers })
+    );
+    expect(denied.status).toBe(401);
+
+    const allowed = await handle(
+      new Request('http://127.0.0.1:8080/agent/control/config', {
+        headers: { ...headers, Authorization: 'Bearer s3cret' },
+      })
+    );
+    expect(allowed.status).toBe(200);
+  });
+
+  it('keeps the truly local bridge zero-config', async () => {
+    const { handle, manager } = realAgentBridge();
+    const read = await handle(
+      new Request('http://localhost:8080/agent/control/config', {
+        headers: { Host: 'localhost:8080' },
+      })
+    );
+    expect(read.status).toBe(200);
+
+    const write = await handle(
+      new Request('http://localhost:8080/agent/control/config', {
+        method: 'PUT',
+        headers: { Host: 'localhost:8080', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ httpPort: 8123 }),
+      })
+    );
+    expect(write.status).toBe(200);
+    expect(manager.getConfig().httpPort).toBe(8123);
+  });
 });
 
 describe('serve.ts same-origin normalization', () => {
   it('drops a LAN same-origin Origin the agent allowlist cannot know', async () => {
-    const res = await handler()(
+    const res = await handler({ agentTokenConfigured: true })(
       new Request('http://192.168.1.5:8080/agent/control/start', {
         method: 'POST',
         headers: { origin: 'http://192.168.1.5:8080' },
@@ -97,7 +379,7 @@ describe('serve.ts same-origin normalization', () => {
   });
 
   it('keeps a cross-site Origin so the agent can reject it', async () => {
-    const res = await handler()(
+    const res = await handler({ agentTokenConfigured: true })(
       new Request('http://localhost:8080/agent/control/start', {
         method: 'POST',
         headers: { origin: 'http://evil.example' },
@@ -125,6 +407,31 @@ describe('serve.ts /agent path parsing', () => {
 });
 
 describe('serve.ts /api proxy', () => {
+  const apiToken = 'api-secret';
+  const authorization = { Authorization: `Bearer ${apiToken}` };
+
+  it('compares the complete bearer token exactly', () => {
+    expect(
+      apiTokenOk(
+        new Request('http://localhost/api', { headers: { Authorization: 'Bearer api-secret' } }),
+        apiToken
+      )
+    ).toBe(true);
+    expect(
+      apiTokenOk(
+        new Request('http://localhost/api', { headers: { Authorization: 'Bearer API-SECRET' } }),
+        apiToken
+      )
+    ).toBe(false);
+    expect(apiTokenOk(new Request('http://localhost/api'), apiToken)).toBe(false);
+    expect(
+      apiTokenOk(
+        new Request('http://localhost/api', { headers: { Authorization: 'Bearer api-secret' } }),
+        undefined
+      )
+    ).toBe(false);
+  });
+
   it('returns a JSON 502 when bunqueue is unreachable', async () => {
     // Port 1 is never a bunqueue server: fetch rejects immediately.
     const res = await handler({ api: 'http://127.0.0.1:1' })(
@@ -135,6 +442,98 @@ describe('serve.ts /api proxy', () => {
     const body = (await res.json()) as { ok: boolean; error: string };
     expect(body.ok).toBe(false);
     expect(body.error).toContain('unreachable');
+  });
+
+  it('passes the incoming abort signal to the upstream API fetch', async () => {
+    const realFetch = globalThis.fetch;
+    const controller = new AbortController();
+    let upstreamSignal: AbortSignal | null | undefined;
+    globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      upstreamSignal = init?.signal;
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(init.signal?.reason ?? new Error('aborted')),
+          { once: true }
+        );
+      });
+    }) as typeof fetch;
+    try {
+      const pending = handler()(
+        new Request('http://localhost:8080/api/queues', { signal: controller.signal })
+      );
+      await Promise.resolve();
+      expect(upstreamSignal?.aborted).toBe(false);
+      controller.abort(new Error('browser disconnected'));
+      const res = await within(pending);
+      expect(upstreamSignal?.aborted).toBe(true);
+      expect(res.status).toBe(502);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it('fails a public API request closed when BUNQUEUE_TOKEN is not configured', async () => {
+    const res = await handler({ api: 'http://127.0.0.1:1' })(
+      new Request('http://dashboard.example.com/api/queues')
+    );
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toContain('BUNQUEUE_TOKEN');
+  });
+
+  it('requires the configured bearer before forwarding a public API request', async () => {
+    const h = handler({ api: 'http://127.0.0.1:1', apiToken });
+    const missing = await h(new Request('http://dashboard.example.com/api/queues'));
+    expect(missing.status).toBe(401);
+    expect(missing.headers.get('www-authenticate')).toBe('Bearer');
+
+    const wrong = await h(
+      new Request('http://dashboard.example.com/api/queues', {
+        headers: { Authorization: 'Bearer wrong' },
+      })
+    );
+    expect(wrong.status).toBe(401);
+
+    const realFetch = globalThis.fetch;
+    let forwarded: { url: string; authorization: string | null } | undefined;
+    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      forwarded = {
+        url: String(input),
+        authorization: new Headers(init?.headers).get('authorization'),
+      };
+      return Promise.resolve(Response.json({ ok: true }));
+    }) as typeof fetch;
+    try {
+      const allowed = await h(
+        new Request('http://dashboard.example.com/api/queues?limit=5', {
+          headers: authorization,
+        })
+      );
+      expect(allowed.status).toBe(200);
+      expect(forwarded).toEqual({
+        url: 'http://127.0.0.1:1/queues?limit=5',
+        authorization: `Bearer ${apiToken}`,
+      });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it('treats forwarding metadata on a loopback URL as remote API access', async () => {
+    const h = handler({ api: 'http://127.0.0.1:1', apiToken });
+    const denied = await h(
+      new Request('http://localhost:8080/api/queues', {
+        headers: { 'X-Forwarded-Host': 'dashboard.example.com' },
+      })
+    );
+    expect(denied.status).toBe(401);
+
+    const allowed = await h(
+      new Request('http://localhost:8080/api/queues', {
+        headers: { ...authorization, 'X-Forwarded-Host': 'dashboard.example.com' },
+      })
+    );
+    expect(allowed.status).toBe(502);
   });
 
   it('403s a cross-site request to the admin API proxy', async () => {
@@ -152,22 +551,23 @@ describe('serve.ts /api proxy', () => {
     // browser's Origin is https:// while req.url is http://. Comparing full
     // origins 403s every pause/retry/add-job on a proxied deployment while
     // read-only GETs (no Origin) keep working — healthy-looking, broken on click.
-    const res = await handler({ api: 'http://127.0.0.1:1' })(
+    const res = await handler({ api: 'http://127.0.0.1:1', apiToken })(
       new Request('http://dash.example.com/api/queues/x/pause', {
         method: 'POST',
-        headers: { origin: 'https://dash.example.com' },
+        headers: { ...authorization, origin: 'https://dash.example.com' },
       })
     );
     expect(res.status).toBe(502); // passed the gate; only the upstream is down
   });
 
   it('honours x-forwarded-host when the proxy rewrites Host and TRUST_PROXY is set', async () => {
-    const res = await handler({ api: 'http://127.0.0.1:1', trustProxy: true })(
+    const res = await handler({ api: 'http://127.0.0.1:1', apiToken, trustProxy: true })(
       new Request('http://internal-backend:8080/api/queues/x/pause', {
         method: 'POST',
         headers: {
           origin: 'https://dash.example.com',
           'x-forwarded-host': 'dash.example.com',
+          ...authorization,
         },
       })
     );
@@ -189,10 +589,14 @@ describe('serve.ts /api proxy', () => {
   });
 
   it('matches a forwarded host case-insensitively', async () => {
-    const res = await handler({ api: 'http://127.0.0.1:1', trustProxy: true })(
+    const res = await handler({ api: 'http://127.0.0.1:1', apiToken, trustProxy: true })(
       new Request('http://internal-backend:8080/api/queues/x/pause', {
         method: 'POST',
-        headers: { origin: 'https://dash.example.com', 'x-forwarded-host': 'Dash.Example.com' },
+        headers: {
+          ...authorization,
+          origin: 'https://dash.example.com',
+          'x-forwarded-host': 'Dash.Example.com',
+        },
       })
     );
     expect(res.status).toBe(502); // passed the gate; only the upstream is down
@@ -235,6 +639,18 @@ describe('serve.ts static routes', () => {
       })
     );
     expect(res.status).toBe(403);
+  });
+
+  it('sets the same anti-embedding and content-sniffing headers as the Docker image', async () => {
+    const res = await handler()(new Request('http://localhost:8080/'));
+    for (const [name, value] of Object.entries(RESPONSE_SECURITY_HEADERS)) {
+      expect(res.headers.get(name)).toBe(value);
+    }
+
+    const caddyfile = readFileSync(new URL('../docker/Caddyfile', import.meta.url), 'utf8');
+    for (const [name, value] of Object.entries(RESPONSE_SECURITY_HEADERS)) {
+      expect(caddyfile).toContain(`${name} "${value}"`);
+    }
   });
 });
 

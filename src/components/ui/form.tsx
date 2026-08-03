@@ -23,10 +23,13 @@ export function Label({ children, htmlFor }: { children: ReactNode; htmlFor?: st
 export function Field({
   label,
   hint,
+  htmlFor: explicitHtmlFor,
   children,
 }: {
   label: string;
   hint?: ReactNode;
+  /** Required when `children` is a compound control rather than one Input/Select. */
+  htmlFor?: string;
   children: ReactNode;
 }) {
   const autoId = useId();
@@ -34,11 +37,20 @@ export function Field({
   // common case. An explicit id is respected; multi-node children (e.g. the
   // env-vars editor) keep the visual label only, as before.
   let control: ReactNode = children;
-  let htmlFor: string | undefined;
-  if (isValidElement(children)) {
+  let htmlFor = explicitHtmlFor;
+  if (!explicitHtmlFor && isValidElement(children)) {
     const el = children as ReactElement<{ id?: string }>;
-    htmlFor = el.props.id ?? autoId;
-    control = el.props.id ? el : cloneElement(el, { id: autoId });
+    // Do not point a <label> at a layout wrapper (`<div>`, `<span>`, …). Compound
+    // fields must provide htmlFor explicitly so the label targets the actual
+    // input instead of a non-labellable element.
+    const labellableControl =
+      (typeof el.type === 'string' && ['input', 'select', 'textarea'].includes(el.type)) ||
+      el.type === Input ||
+      el.type === Select;
+    if (labellableControl) {
+      htmlFor = el.props.id ?? autoId;
+      control = el.props.id ? el : cloneElement(el, { id: autoId });
+    }
   }
   return (
     <div className="flex flex-col gap-1.5">
@@ -51,7 +63,8 @@ export function Field({
 
 const controlClass =
   'h-9 rounded-lg border border-line bg-surface-2 px-3 text-sm text-fg placeholder:text-faint ' +
-  'focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30 transition-colors';
+  'transition-colors focus-visible:border-accent focus-visible:outline-2 ' +
+  'focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(controlClass, 'w-full', className)} {...props} />;
@@ -90,7 +103,7 @@ export function Toggle({
       onClick={() => onChange(!checked)}
       className={cn(
         'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
         checked ? 'bg-accent' : 'bg-surface-2 border border-line',
         disabled && 'opacity-40'
       )}
@@ -111,23 +124,28 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   disabled,
+  label = 'View options',
 }: {
   options: readonly T[];
   value: T;
   onChange: (v: T) => void;
   disabled?: boolean;
+  /** Accessible name for this mutually exclusive group. */
+  label?: string;
 }) {
   return (
-    <div className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface p-1">
+    <fieldset className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface p-1">
+      <legend className="sr-only">{label}</legend>
       {options.map((opt) => (
         <button
           key={opt}
           type="button"
+          aria-pressed={value === opt}
           disabled={disabled}
           onClick={() => onChange(opt)}
           className={cn(
             'rounded-md px-3 py-1 text-xs font-medium capitalize transition-colors',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
             value === opt ? 'bg-surface-2 text-fg' : 'text-muted hover:text-fg',
             disabled && 'opacity-40'
           )}
@@ -135,6 +153,6 @@ export function SegmentedControl<T extends string>({
           {opt}
         </button>
       ))}
-    </div>
+    </fieldset>
   );
 }

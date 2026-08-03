@@ -18,28 +18,45 @@
  *     cover a *same-origin* request: a page whose DNS name is rebound to
  *     127.0.0.1 issues same-origin GETs that carry no `Origin` header, so it
  *     could otherwise read /control/status, /control/logs and the /db/*
- *     inspector (job payloads) even with a token set (the token exempts reads).
+ *     inspector (job payloads). When the agent is reachable beyond loopback,
+ *     every route also requires the configured token; Host validation remains
+ *     necessary because it rejects the rebound request before any data leaves.
  *     When `allowedHosts` is configured, a request whose `Host` header names a
  *     hostname outside the allowlist is rejected (403) — the rebinding page's
  *     `Host` is the attacker's domain, never a loopback/allowlisted host.
- *  4. Optional bearer token (AGENT_TOKEN): when set, state-changing requests
- *     must present it (`Authorization: Bearer <t>` or `x-agent-token: <t>`).
+ *  4. Optional bearer token (AGENT_TOKEN): on loopback, when set, changing
+ *     requests must present it. A network-facing caller must set
+ *     `requireTokenForAll`, which protects reads and writes alike.
  */
-import { type DbFilter, dbCell, dbInfo, dbRows, dbSchema, dbTables, MissingDbError, queryWithTimeout } from './db';
-import type { ProcessManager, ServerConfig } from './manager';
+import {
+  type DbFilter,
+  dbCell,
+  DbExportBusyError,
+  DbExportUnavailableError,
+  dbInfo,
+  dbRows,
+  dbSchema,
+  dbTables,
+  exportWithTimeout,
+  MissingDbError,
+  queryWithTimeout,
+} from './db';
+import { type ProcessManager, validateConfigPatch } from './manager';
 
 export interface AgentOptions {
   allowedOrigins: string[];
   /**
    * DNS-rebinding defense: when set (non-empty), a request whose `Host` header
    * resolves to a hostname outside this list is rejected. Compared by hostname
-   * only (port stripped). Leave undefined to disable the check — e.g. when the
-   * agent is fronted by a proxy that already validates Host, or bound to a
-   * non-loopback interface where the user opted into network exposure.
+   * only (port stripped). Leave undefined only for a loopback-only integration
+   * or when a trusted front proxy has already enforced Host. Network-facing
+   * listeners must configure this allowlist.
    */
   allowedHosts?: string[];
-  /** When set, POST/PUT requests must present this token. */
+  /** On loopback, when set, POST/PUT requests must present this token. */
   token?: string;
+  /** Network exposure: require `token` on every non-OPTIONS request, including reads. */
+  requireTokenForAll?: boolean;
 }
 
 const DEFAULT_ORIGINS = ['http://localhost:5273', 'http://127.0.0.1:5273'];
@@ -94,14 +111,14 @@ export function isOriginAllowed(origin: string | null, allowed: string[]): boole
 }
 
 /**
- * Host-header allowlist. Disabled (always true) when `allowed` is undefined. A
- * missing Host header is a non-browser/loopback caller and is allowed; a
- * present Host must match by hostname. A DNS-rebinding page always sends its
- * own domain as Host, so it fails this check.
+ * Host-header allowlist. Disabled (always true) when `allowed` is undefined.
+ * Once enabled it is fail-closed: a real HTTP request always has Host, and
+ * accepting a missing one would create an avoidable bypass for unusual proxy
+ * paths. A DNS-rebinding page sends its own domain as Host, so it fails too.
  */
 export function isHostAllowed(host: string | null, allowed?: string[]): boolean {
   if (!allowed) return true;
-  if (!host) return true; // non-browser caller — no Host header
+  if (!host) return false;
   return allowed.includes(hostnameOf(host));
 }
 
@@ -119,7 +136,7 @@ export function corsHeaders(origin: string | null, allowed: string[]): Record<st
 }
 
 function tokenOk(req: Request, token?: string): boolean {
-  if (!token) return true;
+  if (!token) return false;
   const auth = req.headers.get('authorization') ?? '';
   const bearer = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   return bearer === token || req.headers.get('x-agent-token') === token;
@@ -130,7 +147,7 @@ function tokenOk(req: Request, token?: string): boolean {
  * ProcessManager and policy, returns an async (req) => Response.
  */
 export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
-  const { allowedOrigins, allowedHosts, token } = opts;
+  const { allowedOrigins, allowedHosts, token, requireTokenForAll = false } = opts;
 
   const json = (data: unknown, status: number, origin: string | null): Response =>
     new Response(JSON.stringify(data), {
@@ -149,9 +166,15 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
           signal: AbortSignal.timeout(1500),
         });
         if (res.ok) {
-          const h = (await res.json()) as { ok?: boolean; version?: string };
-          healthy = h.ok !== false;
-          version = h.version;
+          const body: unknown = await res.json();
+          if (body !== null && typeof body === 'object' && !Array.isArray(body)) {
+            const health = body as Record<string, unknown>;
+            // HTTP 2xx alone is not a Bunqueue health verdict: an unrelated
+            // process, proxy fallback, or malformed payload can also return it.
+            // Fail closed unless the semantic health flag is exactly true.
+            healthy = health.ok === true;
+            if (typeof health.version === 'string') version = health.version;
+          }
         }
       } catch {
         /* not up yet */
@@ -166,10 +189,6 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
     const method = req.method;
     const origin = req.headers.get('origin');
 
-    if (method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: corsHeaders(origin, allowedOrigins) });
-    }
-
     // DNS-rebinding defense: reject a same-origin request whose Host header is
     // an attacker domain rebound to loopback (no Origin header would be sent,
     // so the Origin gate below can't see it). No-op when allowedHosts is unset.
@@ -182,16 +201,20 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
       return json({ ok: false, error: 'Origin not allowed' }, 403, origin);
     }
 
-    // The optional AGENT_TOKEN gates STATE-CHANGING requests only. Read-only
-    // GETs (including the /db/* inspector, which can expose job payloads) are
-    // protected by the Origin allowlist alone — a drive-by cross-origin page
-    // can't read the response (no ACAO for its origin), which is the real
-    // threat. Reads intentionally remain available without a token for local
-    // dashboards that don't configure AGENT_TOKEN; when a token is configured,
-    // the browser client does send it, but only POST/PUT require it.
-    // Non-browser local callers on loopback are trusted for reads.
+    // Preflight never needs a bearer token, but Host and Origin are security
+    // boundaries in their own right and therefore fail closed before this 204.
+    if (method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders(origin, allowedOrigins) });
+    }
+
+    // Preserve zero-config LOOPBACK use: there, reads stay open and a configured
+    // token gates mutations. A network-facing listener sets requireTokenForAll,
+    // because Origin alone cannot authenticate curl/no-Origin callers and the db
+    // inspector contains job payloads. Misconfiguration fails closed: enabling
+    // the all-route gate without a token makes every real route answer 401.
     const mutating = method === 'POST' || method === 'PUT';
-    if (mutating && !tokenOk(req, token)) {
+    const authRequired = requireTokenForAll || (mutating && Boolean(token));
+    if (authRequired && !tokenOk(req, token)) {
       return json({ ok: false, error: 'Unauthorized' }, 401, origin);
     }
 
@@ -214,7 +237,7 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
 
       if (pathname === '/control/config' && method === 'GET') return json(mgr.getConfig(), 200, origin);
       if (pathname === '/control/config' && method === 'PUT') {
-        const patch = (await req.json()) as Partial<ServerConfig>;
+        const patch = validateConfigPatch(await req.json());
         return json(mgr.setConfig(patch), 200, origin);
       }
 
@@ -235,12 +258,71 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
         const segs = pathname.slice('/db/tables/'.length).split('/');
         const table = decodeURIComponent(segs[0] ?? '');
         const sub = segs[1];
+        if (segs.length === 2 && sub === 'export') {
+          const sp = new URL(req.url).searchParams;
+          const allowedParams = new Set(['orderBy', 'dir', 'fcol', 'fop', 'fval']);
+          for (const key of sp.keys()) {
+            if (!allowedParams.has(key)) throw new Error(`Unknown database export option: ${key}`);
+            if (sp.getAll(key).length !== 1) {
+              throw new Error(`Duplicate database export option: ${key}`);
+            }
+          }
+
+          const orderByParam = sp.get('orderBy');
+          if (orderByParam === '') throw new Error('Database export orderBy must not be empty');
+          const dirParam = sp.get('dir');
+          if (dirParam !== null && dirParam !== 'asc' && dirParam !== 'desc') {
+            throw new Error('Database export dir must be "asc" or "desc"');
+          }
+          const fCol = sp.get('fcol');
+          const fOp = sp.get('fop');
+          const fVal = sp.get('fval');
+          const hasAnyFilterPart = fCol !== null || fOp !== null || fVal !== null;
+          let filter: DbFilter | undefined;
+          if (hasAnyFilterPart) {
+            if (!fCol || !fVal || (fOp !== 'contains' && fOp !== 'eq' && fOp !== 'ne')) {
+              throw new Error('Database export filter requires valid fcol, fop and fval values');
+            }
+            filter = { column: fCol, op: fOp, value: fVal };
+          }
+
+          const exported = await exportWithTimeout(
+            mgr.getConfig().dataPath,
+            table,
+            orderByParam ?? undefined,
+            dirParam === 'desc' ? 'desc' : 'asc',
+            filter,
+            req.signal
+          );
+          return new Response(exported.content, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/csv; charset=utf-8',
+              'Content-Length': String(exported.bytes),
+              // Keep Content-Length equal to the authoritative export-byte contract;
+              // intermediaries must not transparently recompress this body.
+              'Cache-Control': 'no-store, no-transform',
+              'X-Content-Type-Options': 'nosniff',
+              'X-Bunqueue-Db-Export-Version': '1',
+              'X-Bunqueue-Db-Export-Table': encodeURIComponent(exported.table),
+              'X-Bunqueue-Db-Export-Rows': String(exported.rowCount),
+              'X-Bunqueue-Db-Export-Bytes': String(exported.bytes),
+              'X-Bunqueue-Db-Export-Cap': exported.cap ?? 'none',
+              'Access-Control-Expose-Headers':
+                'Content-Length, X-Bunqueue-Db-Export-Version, X-Bunqueue-Db-Export-Table, X-Bunqueue-Db-Export-Rows, X-Bunqueue-Db-Export-Bytes, X-Bunqueue-Db-Export-Cap',
+              ...corsHeaders(origin, allowedOrigins),
+            },
+          });
+        }
         if (segs.length === 2 && sub === 'schema') {
           return json({ ok: true, ...dbSchema(mgr.getConfig().dataPath, table) }, 200, origin);
         }
         if (segs.length === 2 && sub === 'cell') {
           const sp = new URL(req.url).searchParams;
-          const rowid = Number(sp.get('rowid'));
+          // Keep rowid textual through the HTTP boundary. Number() rounded
+          // values above 2^53 before SQLite ever saw the bound parameter.
+          const rowid = sp.get('rowid');
+          if (rowid === null) throw new Error('rowid is required');
           const column = sp.get('column') ?? '';
           return json(
             { ok: true, ...dbCell(mgr.getConfig().dataPath, table, rowid, column) },
@@ -276,7 +358,14 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
     } catch (e) {
       // A missing database file is an expected pre-first-start condition — 404
       // so the UI can show "no database yet" distinctly from a real read error.
-      const status = e instanceof MissingDbError ? 404 : 400;
+      const status =
+        e instanceof MissingDbError
+          ? 404
+          : e instanceof DbExportBusyError
+            ? 429
+            : e instanceof DbExportUnavailableError
+              ? 503
+              : 400;
       return json({ ok: false, error: (e as Error).message ?? String(e) }, status, origin);
     }
   };

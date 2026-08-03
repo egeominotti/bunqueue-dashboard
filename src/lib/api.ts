@@ -14,6 +14,12 @@ import type {
   StatsResponse,
   StorageStatus,
 } from './types';
+import {
+  decodedHttpPathSegment,
+  eventQueuePathSegment,
+  opaqueHttpPathSegment,
+  queueHttpPathSegment,
+} from './upstreamPaths';
 
 export class ApiError extends Error {
   constructor(
@@ -28,34 +34,52 @@ export class ApiError extends Error {
 /**
  * Per-request deadline — fetch has no default timeout, so a reachable-but-hung
  * server would leave the promise pending forever and stall every poll loop that
- * awaits it. Overridable (tests set it low); a caller `init.signal` still wins.
+ * awaits it. Overridable in tests. A caller signal is composed with, rather
+ * than substituted for, this deadline.
  */
 let requestTimeoutMs = 30_000;
 export function setRequestTimeoutMs(ms: number): void {
   requestTimeoutMs = ms;
 }
 
-async function request<T>(path: string, init?: RequestInit, strict = true): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  strict = true,
+  acceptedStatuses: readonly number[] = []
+): Promise<T> {
+  const deadline = AbortSignal.timeout(requestTimeoutMs);
+  const signal = init?.signal ? AbortSignal.any([init.signal, deadline]) : deadline;
+  const requestHeaders = new Headers(getAuthHeaders());
+  if (init?.headers) {
+    new Headers(init.headers).forEach((value, name) => {
+      requestHeaders.set(name, value);
+    });
+  }
+  // Avoid forcing a CORS preflight on read-only requests. JSON is only the
+  // default when a body is actually present, and an explicit caller value wins.
+  if (init?.body != null && !requestHeaders.has('Content-Type')) {
+    requestHeaders.set('Content-Type', 'application/json');
+  }
   let res: Response;
   try {
     res = await fetch(getBaseUrl() + path, {
       ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
-        ...init?.headers,
-      },
-      signal: init?.signal ?? AbortSignal.timeout(requestTimeoutMs),
+      headers: requestHeaders,
+      signal,
     });
   } catch (e) {
     // A blown deadline surfaces as the normal error type (status 0 — no response).
-    if ((e as { name?: string } | null)?.name === 'TimeoutError') {
+    if (
+      (deadline.aborted && !init?.signal?.aborted) ||
+      (e as { name?: string } | null)?.name === 'TimeoutError'
+    ) {
       throw new ApiError('Request timed out', 0);
     }
     throw e;
   }
 
-  if (!res.ok) {
+  if (!res.ok && !acceptedStatuses.includes(res.status)) {
     let message = `HTTP ${res.status}`;
     try {
       const body = (await res.json()) as { error?: string };
@@ -70,7 +94,15 @@ async function request<T>(path: string, init?: RequestInit, strict = true): Prom
   // Defensive parse (mirrors bq.call()): a 2xx with an empty or non-JSON body —
   // an SPA-fallback proxy answering `/api/health` with index.html, a 200 with no
   // body — must surface as an ApiError carrying the status, not a raw SyntaxError.
-  const text = await res.text();
+  let text: string;
+  try {
+    text = await res.text();
+  } catch (e) {
+    if (deadline.aborted && !init?.signal?.aborted) {
+      throw new ApiError('Request timed out', 0);
+    }
+    throw e;
+  }
   if (!text) return undefined as T;
   let data: T;
   try {
@@ -89,7 +121,7 @@ async function request<T>(path: string, init?: RequestInit, strict = true): Prom
   return data;
 }
 
-const q = (s: string) => encodeURIComponent(s);
+const q = queueHttpPathSegment;
 const post = (path: string, body?: unknown): Promise<unknown> =>
   request(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined });
 const put = (path: string, body?: unknown): Promise<unknown> =>
@@ -115,7 +147,9 @@ export const api = {
   // strict:false — `ok` here is a semantic status flag (disk-full → ok:false at
   // HTTP 200 is data, not a request failure), so it must not throw.
   storage: () => request<{ ok: boolean; data: StorageStatus }>('/storage', undefined, false),
-  health: () => request<Record<string, unknown>>('/health', undefined, false),
+  // Disk-full is a diagnostic state, not a transport failure: bunqueue v2.8.55
+  // returns its structured health payload with HTTP 503 in that state.
+  health: () => request<Record<string, unknown>>('/health', undefined, false, [503]),
 
   // ---- Jobs ----
   jobsList: (queue: string, params: JobsListParams = {}) => {
@@ -125,10 +159,10 @@ export const api = {
     sp.set('offset', String(params.offset ?? 0));
     return request<{ ok: boolean; jobs: Job[] }>(`/queues/${q(queue)}/jobs/list?${sp.toString()}`);
   },
-  job: (id: string) => request<{ ok: boolean; job: Job }>(`/jobs/${q(id)}`),
-  cancelJob: (id: string) => del(`/jobs/${q(id)}`),
-  promoteJob: (id: string) => post(`/jobs/${q(id)}/promote`),
-  retryJob: (id: string) => post(`/jobs/${q(id)}/move-to-wait`),
+  job: (id: string) => request<{ ok: boolean; job: Job }>(`/jobs/${opaqueHttpPathSegment(id)}`),
+  cancelJob: (id: string) => del(`/jobs/${opaqueHttpPathSegment(id)}`),
+  promoteJob: (id: string) => post(`/jobs/${opaqueHttpPathSegment(id)}/promote`),
+  retryJob: (id: string) => post(`/jobs/${opaqueHttpPathSegment(id)}/move-to-wait`),
 
   // ---- Queue control ----
   pause: (queue: string) => post(`/queues/${q(queue)}/pause`),
@@ -137,7 +171,11 @@ export const api = {
   obliterate: (queue: string) => post(`/queues/${q(queue)}/obliterate`),
   clean: (queue: string, grace = 0, limit = 1000) =>
     post(`/queues/${q(queue)}/clean`, { grace, limit }),
-  retryCompleted: (queue: string) => post(`/queues/${q(queue)}/retry-completed`),
+  retryCompleted: (_queue: string): never => {
+    throw new TypeError(
+      'Completed-job requeue is unavailable in Bunqueue v2.8.55 because flow dependency registration is not rebuilt.'
+    );
+  },
 
   // ---- Rate limit / concurrency ----
   setRateLimit: (queue: string, max: number) =>
@@ -152,15 +190,21 @@ export const api = {
     request<{ ok: boolean; entries: DlqEntry[]; total?: number }>(
       `/queues/${q(queue)}/dlq?limit=${limit}&offset=${offset}`
     ),
-  dlqStats: (queue: string) => request<DlqStats>(`/queues/${q(queue)}/dlq/stats`),
-  retryDlq: (queue: string) => post(`/queues/${q(queue)}/dlq/retry`),
+  dlqStats: (queue: string) =>
+    request<{ ok: boolean; stats: DlqStats }>(`/queues/${q(queue)}/dlq/stats`),
+  retryDlq: (_queue: string): never => {
+    throw new TypeError(
+      'DLQ retry is unavailable in Bunqueue v2.8.55 because the endpoint has no atomic flow-safety precondition.'
+    );
+  },
   purgeDlq: (queue: string) => post(`/queues/${q(queue)}/dlq/purge`),
 
   // ---- Resources ----
   crons: () => request<{ ok: boolean; crons: unknown[] }>('/crons'),
-  deleteCron: (name: string) => del(`/crons/${q(name)}`),
+  deleteCron: (name: string) => del(`/crons/${decodedHttpPathSegment(name, 'Cron name', 256)}`),
   workers: () => request<{ ok: boolean; workers: unknown[] }>('/workers'),
 
   /** Absolute URL of the SSE activity stream. */
-  eventsUrl: (queue?: string) => getBaseUrl() + (queue ? `/events/queues/${q(queue)}` : '/events'),
+  eventsUrl: (queue?: string) =>
+    getBaseUrl() + (queue ? `/events/queues/${eventQueuePathSegment(queue)}` : '/events'),
 };

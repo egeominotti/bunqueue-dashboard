@@ -40,8 +40,8 @@ At the bottom, a **Query** panel lets you run your own read-only SQL and see the
 - **Switch between Data and Schema** with the tabs above the grid.
 - **Sort a column** by clicking its header, it cycles ascending, descending, then off.
 - **Filter rows** using the filter bar: choose a column, an operator (`contains`, `=`, `≠`), type a value, and press Enter or **Filter**. Use **Clear** to remove it. (The **Filter** button stays disabled until you type a value.)
-- **Open a row** by clicking it. A drawer slides in with every column's full, untruncated value and a copy button on each. Close it with the X, the backdrop, or `Escape`.
-- **Export the current page** as a CSV file, or **Export table** to download the whole (filtered and sorted) table as one CSV.
+- **Open a row** with its **View** button. A drawer slides in with every column's full, untruncated value and a copy button on each. Close it with the X, the backdrop, or `Escape`.
+- **Export the current page** as a CSV file, or **Export table** to download one bounded, point-in-time CSV of the filtered and sorted table view.
 
 Running your own query:
 
@@ -56,9 +56,11 @@ Every action is a read or a download, so nothing asks for confirmation. Even han
 ## Good to know
 
 - **It's a viewer, not a console.** Only read queries run, anything that would change data is refused. Your SQL must start with `SELECT`, `WITH`, `EXPLAIN`, `VALUES`, or `PRAGMA`.
-- **Query results are capped at 500 rows.** Larger results show a `≥ 500 rows` note and only the first 500, narrow the query or use **Export table** for everything.
-- **Table export is capped at 200,000 rows** and is gathered in your browser before download, so a very large table stops at that cap with a message.
-- **Long values and BLOBs are shortened** in the grid and in CSV exports (the `…` chip marks them). Open the row drawer to read or copy the full value.
+- **Query results are capped at 500 rows.** Larger results show a `≥ 500 rows` note and only the first 500; narrow the query, or use **Export table** for a larger bounded snapshot.
+- **A full-table export is one agent-side SQLite snapshot.** The current table, sort, and filter are captured when you click; the agent reads them in one read-only transaction, so concurrent WAL writes cannot mix database snapshots into the file. The CSV is not rebuilt from browser pages.
+- **Table CSVs stop at the first active cap:** 200,000 data rows or a 16 MiB response body (including the header and row separators). A byte-limited export keeps only complete CSV records. The completion message says whether the row or byte cap truncated the result.
+- **Grid and export truncation differ from the row drawer.** Grid cells are shortened at 2,000 characters and BLOBs are represented by their byte size; **Export current page** writes those displayed values. For the agent's full-table CSV, a TEXT value over 2,000 UTF-8 bytes is represented by its first 2,000 SQLite characters plus `…`, and a BLOB becomes `<blob N B>`. Open the row drawer for the separate full-cell read (itself bounded at 1,000,000 characters).
+- **CSV text is spreadsheet-safe.** Text beginning with `=`, `+`, `-`, `@`, tab, or carriage return is prefixed with an apostrophe before RFC 4180 quoting, preventing Excel or Sheets from treating stored database text as a formula. Numeric SQLite values remain numeric.
 - **No database yet?** Before you start the server for the first time, there's no database file. You'll see a *No database yet* message, start bunqueue once from **Control ▸ Server** to create it.
 - **Query history is per-browser.** Your last 10 successful queries are saved locally in this browser only; they aren't shared across devices.
 - **Counts can lag a few seconds.** The stats, table list, and rows refresh on their own timers, so on a busy server they may trail live writes slightly.
@@ -71,8 +73,17 @@ This screen talks to the local control agent (`:6800`, `/db/*` endpoints) via th
 - `GET /db/tables`, table list + row counts (polls ~10 s)
 - `GET /db/tables/<t>/schema`, columns, indexes, DDL (polls ~30 s)
 - `GET /db/tables/<t>`, a row page (polls ~6 s)
+- `GET /db/tables/<t>/export`, one filtered/sorted CSV from a single read transaction (on **Export table**)
 - `GET /db/tables/<t>/cell`, full value for a truncated cell (on drawer open)
 - `POST /db/query`, a custom read-only query (on Run)
 
-Server-side limits: 500-row cap per query, 2000-char cell truncation with lazy full-value refetch by rowid, and a 5-second query timeout (active under `bun start`; see the compiled-binary caveat above).
+The export response is raw `text/csv; charset=utf-8`, not JSON. `Content-Length`
+and `X-Bunqueue-Db-Export-{Version,Table,Rows,Bytes,Cap}` let the client validate
+the table identity, exact byte count, and whether `rows` or `bytes` stopped the
+export before starting the download; the response is `no-store` and `nosniff`.
+
+Server-side limits: 500-row cap per query, 2,000-character grid-cell truncation,
+the full-table TEXT rule described above, 1,000,000-character full-cell cap,
+200,000-row / 16 MiB full-table export caps, and a 5-second query timeout
+(active under `bun start`; see the compiled-binary caveat above).
 :::

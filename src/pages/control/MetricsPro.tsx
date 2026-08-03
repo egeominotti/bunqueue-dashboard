@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AreaChart } from '@/components/ui/AreaChart';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { StatCard } from '@/components/ui/StatCard';
@@ -17,28 +17,6 @@ const OPS = ['push', 'pull', 'ack'] as const;
 // p99 above this (ms) is highlighted amber — a single-digit p99 is healthy, not
 // a warning, so the column stays neutral below it.
 const P99_WARN_MS = 100;
-
-// Safe zeroed overview so the page renders its full layout when the server is
-// unreachable (down, or embedded with no HTTP) instead of a blocking error.
-const EMPTY_OVERVIEW = {
-  stats: {
-    waiting: 0,
-    active: 0,
-    delayed: 0,
-    completed: 0,
-    dlq: 0,
-    totalPushed: 0,
-    totalPulled: 0,
-    totalCompleted: 0,
-    totalFailed: 0,
-    uptime: 0,
-  },
-  throughput: { pushPerSec: 0, pullPerSec: 0, completePerSec: 0, failPerSec: 0 },
-  latency: {
-    averages: {} as Record<string, number>,
-    percentiles: {} as Record<string, { p50: number; p95: number; p99: number }>,
-  },
-};
 
 export function MetricsPro() {
   const series = useThroughputSeries(60);
@@ -62,48 +40,68 @@ export function MetricsPro() {
   // Completed comes from stats.completed below: the server-wide recorded count
   // (a queue can drop out of /queues/summary while its jobs stay counted).
   const failedTotal = useMemo(
-    () => details.reduce((a, q) => a + (q.counts?.failed ?? 0), 0),
-    [details]
+    () => (data ? details.reduce((a, q) => a + (q.counts?.failed ?? 0), 0) : null),
+    [data, details]
   );
 
-  if (loading && !data && !error) return <LoadingState label="Loading metrics…" />;
-
-  const { stats, throughput, latency } = series.latest ?? EMPTY_OVERVIEW;
-  const rate = errorRate(stats.completed, failedTotal);
+  const stats = series.latest?.stats;
+  const throughput = series.latest?.throughput;
+  const latency = series.latest?.latency;
+  const rate = stats && failedTotal != null ? errorRate(stats.completed, failedTotal) : null;
   const trend = depthTrend(series.depth);
-  const depthNow = series.depth.length ? series.depth[series.depth.length - 1] : 0;
+  const depthNow = series.depth.length ? series.depth[series.depth.length - 1] : null;
+  const sampleLoading = !series.latest && !series.error;
+  const summaryLoading = loading && !data && !error;
+  const live = !!series.latest && !series.error && !!data && !error;
 
   return (
     <div>
       <PageHeader
         title="Metrics"
         description="Real-time performance telemetry for your queues."
-        live={!error}
+        live={live}
       />
-      {error && <OfflineBanner onRetry={refetch} />}
+      {error && (
+        <OfflineBanner message={`Queue metrics unavailable — ${error.message}`} onRetry={refetch} />
+      )}
+      {series.error && (
+        <OfflineBanner
+          message={`Live telemetry unavailable — ${series.error.message}. Reconnecting automatically.`}
+        />
+      )}
+      {summaryLoading && (
+        <div role="status" className="mb-4 text-sm text-muted">
+          Loading per-queue metrics…
+        </div>
+      )}
+      {sampleLoading && (
+        <div role="status" className="mb-4 text-sm text-muted">
+          Connecting live telemetry…
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           label="Total Completed"
-          value={formatCompact(stats.completed)}
+          value={stats ? formatCompact(stats.completed) : '—'}
           tone="green"
           hint="recorded jobs"
         />
         <StatCard
           label="Total Failed"
-          value={formatNumber(failedTotal)}
+          value={failedTotal == null ? '—' : formatNumber(failedTotal)}
           tone={failedTotal ? 'red' : 'default'}
           hint="recorded jobs"
         />
         <StatCard
           label="Push/sec"
-          value={throughput.pushPerSec.toFixed(1)}
+          value={throughput ? throughput.pushPerSec.toFixed(1) : '—'}
           tone="accent"
           hint="jobs/sec"
         />
         <StatCard
           label="Pull/sec"
-          value={throughput.pullPerSec.toFixed(1)}
+          value={throughput ? throughput.pullPerSec.toFixed(1) : '—'}
           tone="accent"
           hint="jobs/sec"
         />
@@ -112,36 +110,48 @@ export function MetricsPro() {
       <Card className="mb-6">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-fg">Live Throughput</h3>
+            <h2 className="text-base font-semibold text-fg">Live Throughput</h2>
             <p className="text-xs text-faint">Real-time jobs per second (rolling 60s window)</p>
           </div>
-          <div className="flex flex-wrap items-center gap-4 font-mono text-[11px] text-faint">
-            <Legend color="#ec4899" label="Pushed" value={throughput.pushPerSec} />
-            <Legend color="#34d399" label="Completed" value={throughput.completePerSec} />
-            <Legend color="#f87171" label="Failed" value={throughput.failPerSec} />
-          </div>
+          {throughput && (
+            <div className="flex flex-wrap items-center gap-4 font-mono text-[11px] text-faint">
+              <Legend color="#ec4899" label="Pushed" value={throughput.pushPerSec} />
+              <Legend color="#34d399" label="Completed" value={throughput.completePerSec} />
+              <Legend color="#f87171" label="Failed" value={throughput.failPerSec} />
+            </div>
+          )}
         </div>
-        <AreaChart
-          xLabels={X_LABELS}
-          series={[
-            { label: 'Pushed', color: '#ec4899', points: series.push, area: true },
-            { label: 'Completed', color: '#34d399', points: series.complete },
-            { label: 'Failed', color: '#f87171', points: series.fail },
-          ]}
-        />
+        {!series.latest ? (
+          series.error ? (
+            <EmptyState title="Live throughput unavailable" hint={series.error.message} />
+          ) : (
+            <LoadingState label="Connecting live throughput…" />
+          )
+        ) : (
+          <AreaChart
+            xLabels={X_LABELS}
+            series={[
+              { label: 'Pushed', color: '#ec4899', points: series.push, area: true },
+              { label: 'Completed', color: '#34d399', points: series.complete },
+              { label: 'Failed', color: '#f87171', points: series.fail },
+            ]}
+          />
+        )}
       </Card>
 
       <Card className="mb-6">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-fg">Queue Depth</h3>
+            <h2 className="text-base font-semibold text-fg">Queue Depth</h2>
             <p className="text-xs text-faint">
-              Backlog over time (waiting + active + delayed). The trend says whether you're draining
-              or falling behind — more useful than any single gauge.
+              All non-terminal jobs over time (waiting + prioritized + active + delayed +
+              waiting-children). The trend says whether you're draining or falling behind.
             </p>
           </div>
           <div className="text-right">
-            <div className="tnum text-2xl font-bold text-fg">{formatNumber(depthNow)}</div>
+            <div className="tnum text-2xl font-bold text-fg">
+              {depthNow == null ? '—' : formatNumber(depthNow)}
+            </div>
             <div
               className={cn(
                 'text-xs font-medium',
@@ -152,24 +162,34 @@ export function MetricsPro() {
                     : 'text-faint'
               )}
             >
-              {trend.label === 'steady'
-                ? 'steady'
-                : `${trend.slope > 0 ? '+' : ''}${trend.slope.toFixed(1)}/s · ${trend.label}`}
+              {depthNow == null
+                ? 'unavailable'
+                : trend.label === 'steady'
+                  ? 'steady'
+                  : `${trend.slope > 0 ? '+' : ''}${trend.slope.toFixed(1)}/s · ${trend.label}`}
             </div>
           </div>
         </div>
-        <AreaChart
-          xLabels={X_LABELS}
-          ariaLabel="queue depth chart"
-          series={[
-            {
-              label: 'Depth',
-              color: trend.draining ? '#34d399' : '#f59e0b',
-              points: series.depth,
-              area: true,
-            },
-          ]}
-        />
+        {!series.latest ? (
+          series.error ? (
+            <EmptyState title="Queue depth unavailable" hint={series.error.message} />
+          ) : (
+            <LoadingState label="Connecting queue depth…" />
+          )
+        ) : (
+          <AreaChart
+            xLabels={X_LABELS}
+            ariaLabel="queue depth chart"
+            series={[
+              {
+                label: 'Depth',
+                color: trend.draining ? '#34d399' : '#f59e0b',
+                points: series.depth,
+                area: true,
+              },
+            ]}
+          />
+        )}
       </Card>
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -216,25 +236,41 @@ export function MetricsPro() {
           <CardHeader title="Server Overview" />
           <p className="-mt-3 mb-4 text-xs text-faint">Current server-wide statistics</p>
           <dl className="divide-y divide-line text-sm">
-            <SrvRow color="bg-blue-400" label="Queued" value={formatNumber(stats.waiting)} />
-            <SrvRow color="bg-accent" label="Processing" value={formatNumber(stats.active)} />
-            <SrvRow color="bg-amber-400" label="Delayed" value={formatNumber(stats.delayed)} />
-            <SrvRow color="bg-red-400" label="Dead Letter" value={formatNumber(stats.dlq)} />
+            <SrvRow
+              color="bg-blue-400"
+              label="Standard waiting"
+              value={stats ? formatNumber(stats.waiting) : '—'}
+            />
+            <SrvRow
+              color="bg-accent"
+              label="Processing"
+              value={stats ? formatNumber(stats.active) : '—'}
+            />
+            <SrvRow
+              color="bg-amber-400"
+              label="Delayed"
+              value={stats ? formatNumber(stats.delayed) : '—'}
+            />
+            <SrvRow
+              color="bg-red-400"
+              label="Dead Letter"
+              value={stats ? formatNumber(stats.dlq) : '—'}
+            />
             <SrvRow
               color="bg-zinc-500"
               label="Pushed (since restart)"
-              value={formatCompact(stats.totalPushed)}
+              value={stats ? formatCompact(stats.totalPushed) : '—'}
             />
             <SrvRow
               color="bg-zinc-500"
               label="Pulled (since restart)"
-              value={formatCompact(stats.totalPulled)}
+              value={stats ? formatCompact(stats.totalPulled) : '—'}
             />
             {/* stats.uptime is milliseconds; formatUptime expects seconds. */}
             <SrvRow
               color="bg-emerald-400"
               label="Uptime"
-              value={formatUptime(stats.uptime / 1000)}
+              value={stats ? formatUptime(stats.uptime / 1000) : '—'}
             />
           </dl>
         </Card>
@@ -242,7 +278,7 @@ export function MetricsPro() {
 
       <Card className="mb-6" padded={false}>
         <div className="border-b border-line px-5 py-4">
-          <h3 className="text-base font-semibold text-fg">Operation Latency</h3>
+          <h2 className="text-base font-semibold text-fg">Operation Latency</h2>
           <p className="text-xs text-faint">
             TCP round-trip per operation (p50 / p95 / p99, milliseconds)
           </p>
@@ -286,7 +322,7 @@ export function MetricsPro() {
 
       <Card padded={false}>
         <div className="border-b border-line px-5 py-4">
-          <h3 className="text-base font-semibold text-fg">Per-Queue Metrics</h3>
+          <h2 className="text-base font-semibold text-fg">Per-Queue Metrics</h2>
           <p className="text-xs text-faint">Job counts breakdown by queue</p>
         </div>
         <div className="overflow-x-auto">
@@ -296,6 +332,7 @@ export function MetricsPro() {
                 <th className="px-5 py-3 font-medium">Queue</th>
                 <th className="px-5 py-3 font-medium">Status</th>
                 <th className="px-5 py-3 text-right font-medium">Waiting</th>
+                <th className="px-5 py-3 text-right font-medium">Prioritized</th>
                 <th className="px-5 py-3 text-right font-medium">Active</th>
                 <th className="px-5 py-3 text-right font-medium">Completed</th>
                 <th className="px-5 py-3 text-right font-medium">Failed</th>
@@ -304,8 +341,12 @@ export function MetricsPro() {
             <tbody>
               {pageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-sm text-faint">
-                    No queues yet.
+                  <td colSpan={7} className="px-5 py-12 text-center text-sm text-faint">
+                    {error && !data
+                      ? `Queue metrics unavailable — ${error.message}`
+                      : summaryLoading
+                        ? 'Loading queue metrics…'
+                        : 'No queues yet.'}
                   </td>
                 </tr>
               ) : (
@@ -329,6 +370,9 @@ export function MetricsPro() {
                     </td>
                     <td className="px-5 py-3 text-right tnum text-warning">
                       {formatNumber(d.counts.waiting)}
+                    </td>
+                    <td className="px-5 py-3 text-right tnum text-orange-400">
+                      {formatNumber(d.counts.prioritized)}
                     </td>
                     <td className="px-5 py-3 text-right tnum text-blue-400">
                       {formatNumber(d.counts.active)}

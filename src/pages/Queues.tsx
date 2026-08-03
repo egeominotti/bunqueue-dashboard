@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconArrowRight, IconQueues, IconSearch } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -22,7 +22,6 @@ const EMPTY: QueuesResponse = {
 };
 
 export function Queues() {
-  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const { data, error, loading, refetch } = usePolledData(
@@ -46,7 +45,11 @@ export function Queues() {
   return (
     <div>
       {error && <OfflineBanner onRetry={refetch} />}
-      <PageHeader title="Queues" description={`${d.total} queues`} live />
+      <PageHeader
+        title="Queues"
+        description={data ? `${d.total} queues` : 'Queue inventory unavailable'}
+        live={!!data && !error}
+      />
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
@@ -78,6 +81,9 @@ export function Queues() {
       <div className="relative mb-4 max-w-sm">
         <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
         <input
+          aria-label="Filter queues"
+          name="classic-queue-filter"
+          autoComplete="off"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search queues…"
@@ -85,8 +91,8 @@ export function Queues() {
         />
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-line bg-surface">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+        <table className="w-full min-w-[52rem] text-sm">
           <thead>
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
               <th className="px-5 py-3 font-medium">Queue</th>
@@ -99,7 +105,13 @@ export function Queues() {
             </tr>
           </thead>
           <tbody>
-            {queues.length === 0 ? (
+            {!data && error ? (
+              <tr>
+                <td colSpan={7} className="px-5 py-12 text-center text-sm text-warning">
+                  Could not load queues — {error.message}. Retry above.
+                </td>
+              </tr>
+            ) : queues.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-5 py-12 text-center text-sm text-faint">
                   {search ? 'No queues match on this page.' : 'No queues yet.'}
@@ -109,14 +121,16 @@ export function Queues() {
               queues.map((qd) => (
                 <tr
                   key={qd.name}
-                  onClick={() => navigate(`/queues/${encodeURIComponent(qd.name)}`)}
-                  className="group cursor-pointer border-b border-line last:border-0 transition-colors hover:bg-surface-2/50"
+                  className="group border-b border-line last:border-0 transition-colors hover:bg-surface-2/50"
                 >
                   <td className="px-5 py-3">
-                    <span className="flex items-center gap-2 font-medium text-fg">
+                    <Link
+                      to={`/queues-classic/${encodeURIComponent(qd.name)}`}
+                      className="flex items-center gap-2 rounded font-medium text-fg hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                    >
                       <IconQueues className="size-4 text-faint" />
                       {qd.name}
-                    </span>
+                    </Link>
                   </td>
                   <td className="px-5 py-3 text-right tnum text-muted">
                     {formatNumber(qd.waiting)}
@@ -158,13 +172,15 @@ export function Queues() {
         </table>
       </div>
 
-      <Pagination
-        page={page}
-        pageSize={PAGE_SIZE}
-        total={d.total}
-        onPageChange={setPage}
-        label="queues"
-      />
+      {data && (
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={d.total}
+          onPageChange={setPage}
+          label="queues"
+        />
+      )}
     </div>
   );
 }

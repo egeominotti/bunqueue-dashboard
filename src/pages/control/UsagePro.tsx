@@ -1,5 +1,5 @@
 import { Card, CardHeader } from '@/components/ui/Card';
-import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { bq } from '@/lib/bq';
@@ -14,8 +14,8 @@ import {
 } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 
-// Safe zeroed shape so the page renders its full layout when the server is
-// unreachable (down, or embedded with no HTTP) instead of a blocking error.
+// Defensive fallback for the render after a successful, validated poll. Initial
+// failures return an ErrorState above rather than presenting these zeroes as facts.
 const EMPTY = {
   overview: {
     stats: {
@@ -46,13 +46,24 @@ export function UsagePro() {
       bq.storage(),
       bq.queuesSummary(),
     ]);
+    if (!storage?.data || typeof storage.data.diskFull !== 'boolean') {
+      throw new Error('Storage status response is missing disk health data');
+    }
     // Failed jobs summed across queues — stats.totalFailed is a session counter
     // that zeroes on server restart, useless for a "cumulative usage" page.
     const failedTotal = summary.reduce((a, q) => a + (q.counts?.failed ?? 0), 0);
-    return { overview, storage: storage.data ?? ({} as StorageStatusFlat), failedTotal };
+    return { overview, storage: storage.data, failedTotal };
   }, []);
 
   if (loading && !data && !error) return <LoadingState label="Loading usage…" />;
+  if (error && !data) {
+    return (
+      <div>
+        <PageHeader title="Usage" description="Cumulative resource usage is unavailable." />
+        <ErrorState error={error} onRetry={refetch} />
+      </div>
+    );
+  }
 
   const d = data ?? EMPTY;
   const { stats, memory, crons } = d.overview;
@@ -66,9 +77,14 @@ export function UsagePro() {
       <PageHeader
         title="Usage"
         description="Cumulative resource usage on the connected server."
-        live
+        live={!!data && !error}
       />
-      {error && <OfflineBanner onRetry={refetch} />}
+      {error && (
+        <OfflineBanner
+          message="Usage refresh failed — showing the last successful snapshot."
+          onRetry={refetch}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Completed" value={formatNumber(stats.completed)} tone="green" />

@@ -1,7 +1,18 @@
 // Test preload: provide a localStorage shim so modules that import the zustand
 // persist stores (e.g. connectionStore, pulled in by lib/sse and lib/api) load
 // cleanly under `bun test`.
-if (typeof globalThis.localStorage === 'undefined') {
+let storageUsable = false;
+try {
+  const probe = '__bq_test_storage_probe__';
+  globalThis.localStorage.setItem(probe, '1');
+  globalThis.localStorage.removeItem(probe);
+  storageUsable = true;
+} catch {
+  // Bun may expose a localStorage object whose methods throw unless a backing
+  // file was configured. `typeof localStorage` alone therefore is not enough.
+}
+
+if (!storageUsable) {
   const store = new Map<string, string>();
   Object.defineProperty(globalThis, 'localStorage', {
     configurable: true,

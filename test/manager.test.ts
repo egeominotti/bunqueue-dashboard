@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
-import { ProcessManager } from '../agent/manager';
+import { ProcessManager, type ServerConfig } from '../agent/manager';
 
 describe('ProcessManager', () => {
   test('starts a process and reports running with a pid, then stops', async () => {
@@ -87,6 +87,89 @@ describe('ProcessManager', () => {
     await m.stop();
   });
 
+  test('a replacement process cannot receive late stdout from an older generation', async () => {
+    interface FakeProcess {
+      pid: number;
+      stdout: ReadableStream<Uint8Array>;
+      stderr: ReadableStream<Uint8Array>;
+      exited: Promise<number>;
+      kill: () => void;
+      finish: (closeStdout: boolean) => void;
+      stdoutController: ReadableStreamDefaultController<Uint8Array>;
+      stdoutCancelled: boolean;
+    }
+
+    const mutableBun = Bun as unknown as { spawn: (...args: unknown[]) => unknown };
+    const realSpawn = mutableBun.spawn;
+    const spawned: FakeProcess[] = [];
+    mutableBun.spawn = (_command: unknown, optionsValue: unknown) => {
+      const options = optionsValue as { onExit?: (...args: unknown[]) => void };
+      let stdoutController: ReadableStreamDefaultController<Uint8Array>;
+      let proc: FakeProcess;
+      const stdout = new ReadableStream<Uint8Array>({
+        start(controller) {
+          stdoutController = controller;
+        },
+        cancel() {
+          proc.stdoutCancelled = true;
+        },
+      });
+      const stderr = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      });
+      let resolveExited: (code: number) => void = () => {};
+      const exited = new Promise<number>((resolve) => {
+        resolveExited = resolve;
+      });
+      let finished = false;
+      proc = {
+        pid: 10_000 + spawned.length,
+        stdout,
+        stderr,
+        exited,
+        stdoutController: stdoutController!,
+        stdoutCancelled: false,
+        kill: () => proc.finish(true),
+        finish(closeStdout) {
+          if (finished) return;
+          finished = true;
+          if (closeStdout) proc.stdoutController.close();
+          resolveExited(0);
+          options.onExit?.(proc, 0, null, null);
+        },
+      };
+      spawned.push(proc);
+      return proc;
+    };
+
+    const m = new ProcessManager();
+    m.setConfig({ command: 'fake-server' });
+    try {
+      await m.start();
+      const old = spawned[0] as FakeProcess;
+      // Simulate a child exiting while a descendant keeps the inherited stdout
+      // descriptor open. The manager can now start generation 2.
+      old.finish(false);
+      expect(m.getStatus().status).toBe('stopped');
+      await Bun.sleep(0);
+      expect(old.stdoutCancelled).toBe(true);
+      await m.start();
+      const current = spawned[1] as FakeProcess;
+
+      current.stdoutController.enqueue(new TextEncoder().encode('CURRENT_GENERATION\n'));
+      await Bun.sleep(20);
+
+      expect(m.getLogs().some((line) => line.line === 'OLD_GENERATION_LATE')).toBe(false);
+      expect(m.getLogs().some((line) => line.line === 'CURRENT_GENERATION')).toBe(true);
+      await m.stop();
+    } finally {
+      if (m.getStatus().status !== 'stopped') await m.stop();
+      mutableBun.spawn = realSpawn;
+    }
+  });
+
   // A spawn failure racing an in-flight stop() (whose token is stale, so its
   // finalizer returns early) must still leave a consistent stopped snapshot —
   // not the previous generation's dead pid + non-null runningConfig.
@@ -164,35 +247,72 @@ describe('ProcessManager', () => {
     await m.stop();
   });
 
-  // An invalid command must leave the manager exactly as it was: the old code
-  // bumped procToken and set status BEFORE validating, so the empty-command
-  // throw stranded the previous generation's dead pid + runningConfig (both
-  // finalizers were already token-stale and returned early).
-  test('empty command rejects without stranding a pid or runningConfig', async () => {
+  test('validates every config field atomically and rejects unknown keys', () => {
     const m = new ProcessManager();
-    m.setConfig({ command: 'sleep 30' });
-    await m.start();
+    const before = m.getConfig();
+    const invalid: Array<[unknown, string]> = [
+      [{ command: '   ' }, 'command'],
+      [{ command: null }, 'command'],
+      [{ httpPort: 1.5 }, 'httpPort'],
+      [{ httpPort: 0 }, 'httpPort'],
+      [{ tcpPort: 65_536 }, 'tcpPort'],
+      [{ dataPath: null }, 'dataPath'],
+      [{ extraEnv: [] }, 'extraEnv'],
+      [{ extraEnv: { GOOD: 'yes', BAD: 1 } }, 'extraEnv.BAD'],
+      [{ surprise: true }, 'Unknown config key'],
+    ];
+    for (const [patch, message] of invalid) {
+      expect(() => m.setConfig(patch as Partial<ServerConfig>)).toThrow(message);
+      expect(m.getConfig()).toEqual(before);
+    }
 
-    const stopping = m.stop();
-    m.setConfig({ command: '   ' });
-    await expect(m.start()).rejects.toThrow('Empty command');
-    await stopping;
+    // Validation happens before the merge: the valid first field in this body
+    // must not leak through when a later field is invalid.
+    expect(() => m.setConfig({ httpPort: 7000, tcpPort: 2.5 })).toThrow('tcpPort');
+    expect(m.getConfig()).toEqual(before);
 
-    const s = m.getStatus();
-    expect(s.status).toBe('stopped');
-    expect(s.pid).toBeNull();
-    expect(s.runningConfig).toBeNull();
+    const cfg = m.setConfig({
+      command: 'sleep 30',
+      httpPort: 7000,
+      tcpPort: 7001,
+      dataPath: '',
+      extraEnv: { NODE_ENV: 'test' },
+    });
+    expect(cfg).toMatchObject({
+      command: 'sleep 30',
+      httpPort: 7000,
+      tcpPort: 7001,
+      dataPath: '',
+      extraEnv: { NODE_ENV: 'test' },
+    });
   });
 
-  // PUT /control/config casts the JSON body straight to Partial<ServerConfig>,
-  // so `{"command": null}` reaches the manager. `.trim()` on it used to throw a
-  // TypeError with status already pinned at 'starting' — an unrecoverable wedge
-  // (the guard short-circuits every later start, and the UI disables all three
-  // controls while 'starting').
-  test('a non-string command does not wedge status at starting', async () => {
+  test('start validates invalid port defaults read from the environment before changing status', async () => {
+    const managerWithEnv = (key: 'HTTP_PORT' | 'TCP_PORT', value: string) => {
+      const previous = process.env[key];
+      process.env[key] = value;
+      try {
+        return new ProcessManager();
+      } finally {
+        if (previous === undefined) delete process.env[key];
+        else process.env[key] = previous;
+      }
+    };
+
+    const badHttp = managerWithEnv('HTTP_PORT', '70000');
+    await expect(badHttp.start()).rejects.toThrow('httpPort');
+    expect(badHttp.getStatus()).toMatchObject({ status: 'stopped', pid: null });
+
+    const badTcp = managerWithEnv('TCP_PORT', '12.5');
+    await expect(badTcp.start()).rejects.toThrow('tcpPort');
+    expect(badTcp.getStatus()).toMatchObject({ status: 'stopped', pid: null });
+  });
+
+  test('a rejected config cannot wedge the manager at starting', async () => {
     const m = new ProcessManager();
-    m.setConfig({ command: null as unknown as string });
-    await expect(m.start()).rejects.toThrow('Empty command');
+    expect(() => m.setConfig({ command: null } as unknown as Partial<ServerConfig>)).toThrow(
+      'command'
+    );
     expect(m.getStatus().status).toBe('stopped');
 
     m.setConfig({ command: 'sleep 30' });

@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { IconButton } from '@/components/ui/Button';
-import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconTrash, IconWorkers } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { bq } from '@/lib/bq';
-import type { WorkerFull } from '@/lib/bqTypes';
 import { cn } from '@/lib/cn';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
+import { assertSuccessfulMutationResponse, useServerActionGuard } from '@/lib/useServerActionGuard';
 
 const MAX_ROWS = 100;
 
@@ -25,16 +25,32 @@ export function WorkersPro() {
   // page renders a plain list.
   const { data, error, loading, refetch } = usePolledData(async () => {
     const r = await bq.workers();
-    return r.data?.workers ?? [];
+    return r.data;
   }, []);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // null = server order (registration order); clicking a sortable header sorts.
   const [sort, setSort] = useState<Sort | null>(null);
+  const actionGuard = useServerActionGuard('workers-pro');
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection lifecycle boundary
+  useEffect(() => {
+    setBusyIds(new Set());
+    setMsg(null);
+  }, [actionGuard.scopeKey]);
 
   if (loading && !data && !error) return <LoadingState label="Loading workers…" />;
+  if (error && !data) {
+    return (
+      <div>
+        <PageHeader title="Workers" description="Worker inventory is unavailable." />
+        <ErrorState error={error} onRetry={refetch} />
+      </div>
+    );
+  }
 
-  const workers = data ?? [];
+  const workers = data?.workers ?? [];
+  const quarantinedWorkers = data?.quarantinedWorkers ?? [];
   const sorted = sort
     ? [...workers].sort((a, b) => {
         const va = sort.key === 'failed' ? (a.failedJobs ?? 0) : (a.lastSeen ?? 0);
@@ -51,23 +67,34 @@ export function WorkersPro() {
   const staleWorkers = workers.length - activeWorkers;
   const activeJobs = workers.reduce((sum, w) => sum + (w.activeJobs ?? 0), 0);
 
-  const unregister = async (w: WorkerFull) => {
-    if (!window.confirm(`Unregister worker "${w.id}"? It can re-register on its next heartbeat.`))
+  const removeStaleRegistration = async (id: string) => {
+    if (
+      !window.confirm(
+        `Remove the stale registry record for worker "${id}"? This does not stop the worker process. Continue only after confirming that process is stopped; Bunqueue v2.8.55 workers do not automatically re-register after their heartbeat record is removed.`
+      )
+    )
       return;
-    setBusyIds((s) => new Set(s).add(w.id));
+    const lease = actionGuard.begin(`worker:${id}`);
+    if (!lease) return;
+    setBusyIds((s) => new Set(s).add(id));
     setMsg(null);
     try {
-      await bq.unregisterWorker(w.id);
-      setMsg({ ok: true, text: `Unregistered ${w.id} ✓` });
+      const response = await bq.unregisterWorker(id);
+      assertSuccessfulMutationResponse(response, 'Remove stale worker registry record');
+      if (!lease.isCurrent()) return;
+      setMsg({ ok: true, text: `Removed stale registry record for ${id} ✓` });
+      void refetch();
     } catch (e) {
-      setMsg({ ok: false, text: `Unregister failed: ${(e as Error).message}` });
+      if (!lease.isCurrent()) return;
+      setMsg({ ok: false, text: `Removal failed: ${(e as Error).message}` });
     } finally {
-      setBusyIds((s) => {
-        const n = new Set(s);
-        n.delete(w.id);
-        return n;
-      });
-      refetch();
+      if (lease.finish()) {
+        setBusyIds((s) => {
+          const n = new Set(s);
+          n.delete(id);
+          return n;
+        });
+      }
     }
   };
 
@@ -76,12 +103,21 @@ export function WorkersPro() {
       <PageHeader
         title="Workers"
         description="Registered workers and their throughput."
-        live={!error}
+        live={!!data && !error}
       />
-      {error && <OfflineBanner onRetry={refetch} />}
+      {error && (
+        <OfflineBanner
+          message="Worker refresh failed — showing the last successful inventory."
+          onRetry={refetch}
+        />
+      )}
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Total" value={formatNumber(workers.length)} compact />
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-5">
+        <StatCard
+          label="Total"
+          value={formatNumber(workers.length + quarantinedWorkers.length)}
+          compact
+        />
         <StatCard label="Active" value={formatNumber(activeWorkers)} tone="green" compact />
         <div title={STALE_EXPLAINER}>
           <StatCard
@@ -92,7 +128,33 @@ export function WorkersPro() {
           />
         </div>
         <StatCard label="Active Jobs" value={formatNumber(activeJobs)} tone="blue" compact />
+        <StatCard
+          label="Quarantined"
+          value={formatNumber(quarantinedWorkers.length)}
+          tone={quarantinedWorkers.length ? 'red' : 'default'}
+          compact
+        />
       </div>
+
+      {quarantinedWorkers.length > 0 && (
+        <div role="alert" className="mb-4 rounded-lg border border-danger/30 bg-danger/5 p-4">
+          <p className="text-sm font-medium text-danger">
+            {quarantinedWorkers.length} worker registration(s) contain values accepted by Bunqueue
+            2.8.55 but unsafe to render. Healthy workers remain available below.
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Their status and active-job count are unknown, so this dashboard will not offer the
+            registry-only removal action for them.
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-muted">
+            {quarantinedWorkers.slice(0, 20).map((issue) => (
+              <li key={`${issue.index}:${issue.id ?? 'unknown'}`} className="truncate font-mono">
+                #{issue.index + 1} {issue.id ?? '(unaddressable id)'} — {issue.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {msg && (
         <div className={cn('mb-3 text-sm', msg.ok ? 'text-success' : 'text-danger')}>
@@ -103,8 +165,12 @@ export function WorkersPro() {
       {workers.length === 0 ? (
         <EmptyState
           icon={<IconWorkers />}
-          title="No workers registered"
-          hint="Workers appear here once they connect and register with the server."
+          title={quarantinedWorkers.length ? 'No renderable workers' : 'No workers registered'}
+          hint={
+            quarantinedWorkers.length
+              ? 'Malformed registrations are isolated above instead of taking down the inventory.'
+              : 'Workers appear here once they connect and register with the server.'
+          }
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-line bg-surface">
@@ -170,13 +236,27 @@ export function WorkersPro() {
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex justify-end">
-                      <IconButton
-                        aria-label={`Unregister worker ${w.id}`}
-                        disabled={busyIds.has(w.id)}
-                        onClick={() => unregister(w)}
-                      >
-                        <IconTrash className="size-3.5" />
-                      </IconButton>
+                      {w.status === 'stale' && w.activeJobs === 0 ? (
+                        <IconButton
+                          aria-label={`Remove stale registry record for worker ${w.id}`}
+                          title="Registry cleanup only — does not stop the worker process"
+                          disabled={busyIds.has(w.id)}
+                          onClick={() => removeStaleRegistration(w.id)}
+                        >
+                          <IconTrash className="size-3.5" />
+                        </IconButton>
+                      ) : (
+                        <span
+                          className="text-xs text-faint"
+                          title={
+                            w.status === 'stale'
+                              ? 'Registry cleanup is blocked while active jobs are reported'
+                              : 'Only stale, idle registry records can be removed'
+                          }
+                        >
+                          —
+                        </span>
+                      )}
                     </div>
                   </td>
                 </tr>

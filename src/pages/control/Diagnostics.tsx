@@ -11,20 +11,47 @@ import { formatBytes, formatNumber, formatUptime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 
 type HeapStats = Awaited<ReturnType<typeof bq.heapStats>>;
+type Health = Awaited<ReturnType<typeof bq.health>>;
+type Storage = Awaited<ReturnType<typeof bq.storage>>;
+type Stats = Awaited<ReturnType<typeof bq.stats>>;
 
-// Safe default so the page renders its diagnostic cards (empty/zeroed) when the
-// server is unreachable — including a /health failure — instead of a blocking
-// error screen. storage()/stats() already resolve to null on failure.
-const EMPTY = { health: {}, storage: null, stats: null };
+async function capture<T>(request: Promise<T>): Promise<{ value: T | null; error: string | null }> {
+  try {
+    return { value: await request, error: null };
+  } catch (error) {
+    return { value: null, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+type DiagnosticSnapshot = {
+  health: Health | null;
+  storage: Storage | null;
+  stats: Stats | null;
+  healthError: string | null;
+  storageError: string | null;
+  statsError: string | null;
+};
 
 export function Diagnostics() {
-  const { data, error, loading, refetch } = usePolledData(async () => {
+  const {
+    data,
+    error: pollError,
+    loading,
+    refetch,
+  } = usePolledData(async () => {
     const [health, storage, stats] = await Promise.all([
-      bq.health(),
-      bq.storage().catch(() => null),
-      bq.stats().catch(() => null),
+      capture(bq.health()),
+      capture(bq.storage()),
+      capture(bq.stats()),
     ]);
-    return { health, storage, stats };
+    return {
+      health: health.value,
+      storage: storage.value,
+      stats: stats.value,
+      healthError: health.error,
+      storageError: storage.error,
+      statsError: stats.error,
+    } satisfies DiagnosticSnapshot;
   }, []);
 
   const [ping, setPing] = useState<string | null>(null);
@@ -80,9 +107,16 @@ export function Diagnostics() {
     }
   };
 
-  if (loading && !data && !error) return <LoadingState label="Loading diagnostics…" />;
+  if (loading && !data && !pollError) return <LoadingState label="Loading diagnostics…" />;
 
-  const d = data ?? EMPTY;
+  const d: DiagnosticSnapshot = data ?? {
+    health: null,
+    storage: null,
+    stats: null,
+    healthError: null,
+    storageError: null,
+    statsError: null,
+  };
   const h = d.health as {
     ok?: boolean;
     status?: string;
@@ -90,32 +124,53 @@ export function Diagnostics() {
     uptime?: number;
     memory?: { heapUsed: number; heapTotal: number; rss: number };
     connections?: { tcp: number; ws: number; sse: number };
-  };
+  } | null;
   const disk = d.storage?.data;
   const st = d.stats?.stats;
+  const healthKnown = h != null;
+  const diskKnown = disk != null;
+  const healthy = healthKnown && h.ok === true;
+  const hasPartialError = !!pollError || !!d.healthError || !!d.storageError || !!d.statsError;
 
   return (
     <div>
       <PageHeader
         title="Diagnostics"
         description="Server health, storage, memory and connections."
-        live={!error}
+        live={!!data && !hasPartialError}
       />
-      {error && <OfflineBanner onRetry={refetch} />}
+      {pollError && (
+        <OfflineBanner
+          message={`Diagnostics refresh failed — ${pollError.message}`}
+          onRetry={refetch}
+        />
+      )}
+      {d.healthError && (
+        <OfflineBanner message={`Health unavailable — ${d.healthError}`} onRetry={refetch} />
+      )}
+      {d.storageError && (
+        <OfflineBanner
+          message={`Storage diagnostics unavailable — ${d.storageError}`}
+          onRetry={refetch}
+        />
+      )}
+      {d.statsError && (
+        <OfflineBanner message={`Server totals unavailable — ${d.statsError}`} onRetry={refetch} />
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           label="Status"
-          value={h.status ?? (h.ok ? 'healthy' : 'degraded')}
-          tone={h.ok ? 'green' : 'red'}
+          value={healthKnown ? (h.status ?? (h.ok ? 'healthy' : 'degraded')) : 'Unavailable'}
+          tone={healthy ? 'green' : 'red'}
           compact
         />
-        <StatCard label="Version" value={h.version ? `v${h.version}` : '—'} compact />
-        <StatCard label="Uptime" value={formatUptime(h.uptime)} compact />
+        <StatCard label="Version" value={h?.version ? `v${h.version}` : '—'} compact />
+        <StatCard label="Uptime" value={formatUptime(h?.uptime)} compact />
         <StatCard
           label="Disk"
-          value={disk?.diskFull ? 'Full' : 'Healthy'}
-          tone={disk?.diskFull ? 'red' : 'green'}
+          value={!diskKnown ? 'Unavailable' : disk.diskFull ? 'Full' : 'Healthy'}
+          tone={!diskKnown || disk.diskFull ? 'red' : 'green'}
           compact
         />
       </div>
@@ -131,9 +186,26 @@ export function Diagnostics() {
             }
           />
           <dl className="divide-y divide-line text-sm">
-            <Row k="WebSocket clients" v={String(h.connections?.ws ?? 0)} />
-            <Row k="SSE clients" v={String(h.connections?.sse ?? 0)} />
-            <Row k="Storage error" v={disk?.error ? String(disk.error) : 'none'} />
+            <Row
+              k="WebSocket clients"
+              v={h?.connections?.ws == null ? '—' : String(h.connections.ws)}
+            />
+            <Row
+              k="SSE clients"
+              v={h?.connections?.sse == null ? '—' : String(h.connections.sse)}
+            />
+            <Row
+              k="Storage error"
+              v={
+                d.storageError
+                  ? `unavailable — ${d.storageError}`
+                  : disk?.error
+                    ? String(disk.error)
+                    : diskKnown
+                      ? 'none'
+                      : '—'
+              }
+            />
           </dl>
         </Card>
 
@@ -147,9 +219,15 @@ export function Diagnostics() {
             }
           />
           <div className="grid grid-cols-3 gap-4">
-            <Mini k="Heap used" v={formatBytes((h.memory?.heapUsed ?? 0) * 1024 * 1024)} />
-            <Mini k="Heap total" v={formatBytes((h.memory?.heapTotal ?? 0) * 1024 * 1024)} />
-            <Mini k="RSS" v={formatBytes((h.memory?.rss ?? 0) * 1024 * 1024)} />
+            <Mini
+              k="Heap used"
+              v={h?.memory ? formatBytes(h.memory.heapUsed * 1024 * 1024) : '—'}
+            />
+            <Mini
+              k="Heap total"
+              v={h?.memory ? formatBytes(h.memory.heapTotal * 1024 * 1024) : '—'}
+            />
+            <Mini k="RSS" v={h?.memory ? formatBytes(h.memory.rss * 1024 * 1024) : '—'} />
           </div>
           {gcMsg && <p className="mt-3 text-xs text-muted">{gcMsg}</p>}
         </Card>

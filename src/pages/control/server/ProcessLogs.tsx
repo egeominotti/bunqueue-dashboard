@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { CopyButton } from '@/components/ui/CopyButton';
+import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { SegmentedControl } from '@/components/ui/form';
 import { IconSearch } from '@/components/ui/icons';
 import { bq } from '@/lib/bq';
@@ -18,13 +19,30 @@ const clock = (ts: number): string =>
 const toneFor = (stream: ServerLogLine['stream']): string =>
   stream === 'stderr' ? 'text-danger/90' : stream === 'sys' ? 'text-accent/80' : 'text-muted';
 
+export function downloadProcessLogs(content: string, timestamp = Date.now()): void {
+  const blob = new Blob([content], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `bunqueue-logs-${timestamp}.log`;
+  try {
+    // Firefox ignores programmatic clicks on detached download anchors.
+    document.body.appendChild(anchor);
+    anchor.click();
+  } finally {
+    anchor.remove();
+    // Keep the blob alive through the browser's download dispatch task.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+}
+
 /**
  * Live tail of the managed bunqueue process's stdout/stderr + agent system
  * messages, with stream filtering, text search, timestamps, a follow toggle,
  * and copy / download of exactly what's shown.
  */
 export function ProcessLogs() {
-  const { data } = usePolledLogs();
+  const { data, error, loading, refetch } = usePolledLogs();
   const lines = useMemo(() => data?.lines ?? [], [data]);
 
   const [stream, setStream] = useState<StreamFilter>('all');
@@ -61,13 +79,7 @@ export function ProcessLogs() {
   );
 
   const download = () => {
-    const blob = new Blob([asText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `bunqueue-logs-${Date.now()}.log`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadProcessLogs(asText);
   };
 
   return (
@@ -81,6 +93,8 @@ export function ProcessLogs() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Filter log lines"
+            name="process-log-filter"
+            autoComplete="off"
             placeholder="Filter…"
             className="h-8 w-full rounded-lg border border-line bg-surface-2 pl-8 pr-2 text-xs text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
           />
@@ -98,11 +112,28 @@ export function ProcessLogs() {
         </button>
       </div>
 
+      {error && data && (
+        <div className="border-b border-line px-4 pt-3 font-sans">
+          <OfflineBanner
+            message={`Process-log refresh failed — showing the last received lines. ${error.message}`}
+            onRetry={refetch}
+          />
+        </div>
+      )}
+
       <div
         ref={scrollRef}
         className="max-h-80 min-h-40 overflow-y-auto p-4 font-mono text-xs leading-relaxed"
       >
-        {shown.length === 0 ? (
+        {loading && !data && !error ? (
+          <div className="font-sans">
+            <LoadingState label="Loading process logs…" />
+          </div>
+        ) : error && !data ? (
+          <div className="font-sans">
+            <ErrorState error={error} onRetry={refetch} />
+          </div>
+        ) : shown.length === 0 ? (
           <p className="text-faint">
             {lines.length === 0 ? 'No output yet.' : 'No lines match the current filter.'}
           </p>
@@ -118,11 +149,13 @@ export function ProcessLogs() {
 
       <div className="flex items-center justify-between border-t border-line px-4 py-2 text-[11px] text-faint">
         <span>
-          {shown.length === lines.length
-            ? `${lines.length} lines`
-            : `${shown.length} of ${lines.length} lines`}
+          {error && !data
+            ? 'logs unavailable'
+            : shown.length === lines.length
+              ? `${lines.length} lines`
+              : `${shown.length} of ${lines.length} lines`}
         </span>
-        <span>{follow ? 'following tail' : 'paused'}</span>
+        <span>{error ? 'refresh failed' : follow ? 'following tail' : 'paused'}</span>
       </div>
     </Card>
   );

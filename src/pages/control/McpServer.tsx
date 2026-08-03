@@ -10,7 +10,8 @@ import { StatCard } from '@/components/ui/StatCard';
  * the queue to AI agents (Claude Desktop, Claude Code); it is NOT part of the
  * HTTP API this dashboard drives, and it is launched by the MCP client rather
  * than managed here, so this page is a guide (what it exposes + how to connect
- * it), not a live monitor. All facts are taken from bunqueue 2.8.26.
+ * it), not a live monitor. The totals below are derived from the reference
+ * arrays in this module so edits cannot leave the summary cards stale.
  */
 
 const EMBEDDED_CONFIG = `{
@@ -42,8 +43,7 @@ const CLI_ADD = 'claude mcp add bunqueue -- bunx --package=bunqueue bunqueue-mcp
 
 type Category = { name: string; count: number; examples: string[] };
 
-// 73 tools across 12 categories (bunqueue 2.8.26). Every tool is prefixed
-// `bunqueue_`; examples below drop the prefix for readability.
+// Every tool is prefixed `bunqueue_`; examples below drop the prefix for readability.
 const CATEGORIES: Category[] = [
   {
     name: 'Jobs',
@@ -104,14 +104,15 @@ const RESOURCES = [
 ];
 
 const PROMPTS = ['bunqueue_debug_queue', 'bunqueue_health_report', 'bunqueue_incident_response'];
+const TOOL_COUNT = CATEGORIES.reduce((sum, category) => sum + category.count, 0);
 
 function CodeBlock({ code }: { code: string }) {
   return (
-    <div className="relative">
+    <div className="relative min-w-0 max-w-full">
       <div className="absolute right-2 top-2">
         <CopyButton value={code} />
       </div>
-      <pre className="overflow-x-auto rounded-lg border border-line bg-surface-2 p-4 pr-12 font-mono text-xs leading-relaxed text-fg">
+      <pre className="max-w-full overflow-x-auto overscroll-x-contain rounded-lg border border-line bg-surface-2 p-4 pr-12 font-mono text-xs leading-relaxed text-fg">
         {code}
       </pre>
     </div>
@@ -120,7 +121,7 @@ function CodeBlock({ code }: { code: string }) {
 
 function Chip({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-muted">
+    <span className="max-w-full break-all rounded-md border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-muted">
       {children}
     </span>
   );
@@ -128,7 +129,7 @@ function Chip({ children }: { children: ReactNode }) {
 
 export function McpServer() {
   return (
-    <div>
+    <div className="min-w-0 overflow-x-hidden">
       <PageHeader
         title="MCP Server"
         description="Connect bunqueue to AI agents (Claude Desktop, Claude Code) over the Model Context Protocol."
@@ -137,7 +138,7 @@ export function McpServer() {
             href="https://egeominotti.github.io/bunqueue-dashboard/docs/guide/mcp"
             target="_blank"
             rel="noopener noreferrer"
-            className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+            className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
           >
             Docs
           </a>
@@ -154,17 +155,23 @@ export function McpServer() {
           rather than a live monitor. It needs the optional peer dependency{' '}
           <span className="font-mono text-fg">@modelcontextprotocol/sdk</span>.
         </p>
+        <p className="mt-3 text-sm leading-relaxed text-warning">
+          The upstream MCP includes destructive Cancel, Discard, Drain, Obliterate, DLQ Retry and
+          DLQ Purge tools. They bypass this dashboard's v2.8.55 flow-safety gates and have no atomic
+          reverse-dependency or job-generation precondition. Grant MCP write access only after
+          independently proving the workload is not flow-linked.
+        </p>
       </Card>
 
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Tools" value="73" />
-        <StatCard label="Categories" value="12" />
-        <StatCard label="Resources" value="5" />
-        <StatCard label="Prompts" value="3" />
+        <StatCard label="Tools" value={String(TOOL_COUNT)} />
+        <StatCard label="Categories" value={String(CATEGORIES.length)} />
+        <StatCard label="Resources" value={String(RESOURCES.length)} />
+        <StatCard label="Prompts" value={String(PROMPTS.length)} />
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Card>
+        <Card className="min-w-0">
           <CardHeader title="Embedded mode (default)" />
           <p className="mb-3 text-sm text-muted">
             Direct SQLite access, no running server. Point <Chip>DATA_PATH</Chip> at the bunqueue
@@ -173,7 +180,7 @@ export function McpServer() {
           <CodeBlock code={EMBEDDED_CONFIG} />
         </Card>
 
-        <Card>
+        <Card className="min-w-0">
           <CardHeader title="TCP mode (remote server)" />
           <p className="mb-3 text-sm text-muted">
             Connect to a running bunqueue server over its TCP protocol port (<Chip>6789</Chip>,
@@ -195,7 +202,10 @@ export function McpServer() {
       </Card>
 
       <Card className="mb-6">
-        <CardHeader title="Tools" action={<span className="text-xs text-faint">73 total</span>} />
+        <CardHeader
+          title="Tools"
+          action={<span className="text-xs text-faint">{TOOL_COUNT} total</span>}
+        />
         <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           {CATEGORIES.map((c) => (
             <div key={c.name}>
@@ -213,13 +223,16 @@ export function McpServer() {
         </div>
         <p className="mt-4 text-xs text-faint">
           Every tool name is prefixed <span className="font-mono">bunqueue_</span> (examples above
-          drop it). Counts total 73.
+          drop it). Counts total {TOOL_COUNT}.
         </p>
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title="Resources" action={<span className="text-xs text-faint">5</span>} />
+          <CardHeader
+            title="Resources"
+            action={<span className="text-xs text-faint">{RESOURCES.length}</span>}
+          />
           <div className="flex flex-wrap gap-2">
             {RESOURCES.map((r) => (
               <Chip key={r}>{r}</Chip>
@@ -227,7 +240,10 @@ export function McpServer() {
           </div>
         </Card>
         <Card>
-          <CardHeader title="Prompts" action={<span className="text-xs text-faint">3</span>} />
+          <CardHeader
+            title="Prompts"
+            action={<span className="text-xs text-faint">{PROMPTS.length}</span>}
+          />
           <div className="flex flex-wrap gap-2">
             {PROMPTS.map((p) => (
               <Chip key={p}>{p}</Chip>

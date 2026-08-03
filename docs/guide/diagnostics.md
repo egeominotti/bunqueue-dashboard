@@ -20,7 +20,7 @@ The page opens with a row of status cards across the top, two cards below it (**
 | Element | What it tells you |
 | --- | --- |
 | **Status** | The server's overall health. Green when healthy, red when `degraded`. |
-| **Version** | The bunqueue server version (for example `v2.8.26`), or `, ` if the server doesn't report one. |
+| **Version** | The bunqueue server version (for example `v2.8.55`), or `—` if the server doesn't report one. |
 | **Uptime** | How long the server has been running (for example `52m`). |
 | **Disk** | `Healthy` (green) normally, or `Full` (red) when the server is out of disk space. |
 

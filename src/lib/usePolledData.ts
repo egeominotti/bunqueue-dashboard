@@ -5,9 +5,8 @@ export interface PolledData<T> {
   data: T | null;
   error: Error | null;
   loading: boolean;
-  /** True while a refresh is in flight but stale data is still shown. */
-  refreshing: boolean;
-  refetch: () => void;
+  /** Resolves after the requested (or coalesced follow-up) refresh settles. */
+  refetch: () => Promise<void>;
 }
 
 /**
@@ -59,12 +58,35 @@ export interface PollOptions {
  * setState after unmount.
  */
 export function usePolledData<T>(
-  fetcher: () => Promise<T>,
+  fetcher: (signal: AbortSignal) => Promise<T>,
   deps: unknown[] = [],
   options: PollOptions = {}
 ): PolledData<T> {
   const globalRefresh = useConnectionStore((s) => s.refreshMs);
+  // Pollers must retarget immediately when Settings/AuthGate changes either
+  // backend credential. Without this dependency, rows from server A remained
+  // actionable while bq/api mutations already pointed at server B.
+  const connectionIdentity = useConnectionStore((s) =>
+    JSON.stringify([s.baseUrl, s.token, s.agentToken])
+  );
   const refreshMs = options.intervalMs ?? globalRefresh;
+
+  // Compute a render-time view generation from the connection plus caller
+  // deps. This gates old state during the render that changes queue/server,
+  // before the passive effect gets a chance to clear it. All comparisons use
+  // Object.is, matching React's dependency semantics without serializing data.
+  const renderedInputs = useRef<unknown[] | null>(null);
+  const viewVersionRef = useRef(0);
+  const nextInputs = [connectionIdentity, ...deps];
+  const inputsChanged =
+    renderedInputs.current === null ||
+    renderedInputs.current.length !== nextInputs.length ||
+    renderedInputs.current.some((value, index) => !Object.is(value, nextInputs[index]));
+  if (inputsChanged) {
+    renderedInputs.current = nextInputs;
+    viewVersionRef.current += 1;
+  }
+  const viewVersion = viewVersionRef.current;
 
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -78,11 +100,15 @@ export function usePolledData<T>(
   const lastKey = useRef<string | undefined>(undefined);
   const loadingRef = useRef(true);
   const hadError = useRef(false);
+  const publishedView = useRef(0);
+  const errorView = useRef(0);
+  // The public refetch callback stays stable while each effect generation
+  // installs its own scheduler behind it.
+  const schedulerRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
-  const load = useCallback(async () => {
-    const myGen = ++gen.current;
+  const load = useCallback(async (myGen: number, myView: number, signal: AbortSignal) => {
     try {
-      const result = await fetcherRef.current();
+      const result = await fetcherRef.current(signal);
       if (!mounted.current || myGen !== gen.current) return;
       // Only re-render when the payload actually changed. Serializing the result
       // each poll is far cheaper than reconciling the whole page for no reason.
@@ -94,15 +120,20 @@ export function usePolledData<T>(
       }
       if (key !== lastKey.current) {
         lastKey.current = key;
+        publishedView.current = myView;
         setData(result);
+      } else {
+        publishedView.current = myView;
       }
       if (hadError.current) {
         hadError.current = false;
+        errorView.current = 0;
         setError(null);
       }
     } catch (e) {
       if (!mounted.current || myGen !== gen.current) return;
       hadError.current = true;
+      errorView.current = myView;
       setError(e as Error);
     } finally {
       if (mounted.current && myGen === gen.current && loadingRef.current) {
@@ -112,12 +143,22 @@ export function usePolledData<T>(
     }
   }, []);
 
+  const refetch = useCallback(() => schedulerRef.current(), []);
+
   useEffect(() => {
     mounted.current = true;
-    // A deps change means a new view — reset change-detection, show loading and
-    // drop a stale error so the previous view's OfflineBanner doesn't linger.
+    const myGen = ++gen.current;
+    // Every dependency/connection generation owns one cancellation signal.
+    // Sequence guards keep stale results out of React state, while aborting the
+    // underlying work also stops expensive multi-request fetchers after a
+    // retarget or unmount instead of letting them consume the old server.
+    const lifecycle = new AbortController();
+    // A deps/connection change means a new view. Invalidate the published
+    // payload synchronously with this effect: keeping it would render queue A's
+    // rows under queue B (and could make actions target the wrong backend).
     lastKey.current = undefined;
     loadingRef.current = true;
+    setData(null);
     setLoading(true);
     if (hadError.current) {
       hadError.current = false;
@@ -127,27 +168,69 @@ export function usePolledData<T>(
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
     let running = false;
+    let refreshPending = false;
+    let pendingRefreshResolvers: Array<() => void> = [];
     const hidden = () => typeof document !== 'undefined' && document.hidden;
     const gate = createPollGate(hidden);
 
-    // Recursive self-scheduling loop: the next tick is armed only once the
-    // current fetch has settled, so overlapping polls can't accumulate. The
-    // gate lets the FIRST fetch run even while the tab is hidden; only the
-    // recurring refreshes pause with the Page Visibility API.
-    const tick = async () => {
+    const clearTimer = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+    };
+
+    const armNextTick = () => {
       if (stopped) return;
-      if (gate() && !running) {
-        running = true;
-        try {
-          await load();
-        } finally {
-          running = false;
+      clearTimer();
+      timer = setTimeout(() => {
+        timer = null;
+        void request(false);
+      }, refreshMs);
+    };
+
+    // One scheduler owns interval ticks AND public refetches. A refetch that
+    // arrives mid-flight sets one coalesced pending bit; it runs immediately
+    // after the current request instead of overlapping it or being discarded.
+    const run = async (): Promise<void> => {
+      running = true;
+      try {
+        await load(myGen, viewVersion, lifecycle.signal);
+      } finally {
+        running = false;
+        if (!stopped) {
+          if (refreshPending) {
+            refreshPending = false;
+            const resolvers = pendingRefreshResolvers;
+            pendingRefreshResolvers = [];
+            void request(true).finally(() => {
+              for (const resolve of resolvers) resolve();
+            });
+          } else {
+            armNextTick();
+          }
         }
       }
-      if (stopped) return;
-      timer = setTimeout(tick, refreshMs);
     };
-    tick();
+
+    function request(force: boolean): Promise<void> {
+      if (stopped) return Promise.resolve();
+      if (running) {
+        if (!force) return Promise.resolve();
+        refreshPending = true;
+        return new Promise((resolve) => pendingRefreshResolvers.push(resolve));
+      }
+      clearTimer();
+      // The gate lets the FIRST interval fetch run even while hidden; explicit
+      // refetches are always honored because callers requested fresh data now.
+      if (!force && !gate()) {
+        armNextTick();
+        return Promise.resolve();
+      }
+      return run();
+    }
+
+    const scheduleRefresh = () => request(true);
+    schedulerRef.current = scheduleRefresh;
+    void request(false);
 
     // Fetch immediately when the tab regains focus (it was skipped while
     // hidden) — by re-driving the loop, not by calling load() beside it. A
@@ -156,11 +239,7 @@ export function usePolledData<T>(
     // loop will re-arm on its own, so there is nothing to do.
     const onVisible = () => {
       if (hidden() || stopped || running) return;
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      tick();
+      void request(true);
     };
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', onVisible);
@@ -169,15 +248,27 @@ export function usePolledData<T>(
     return () => {
       stopped = true;
       mounted.current = false;
-      if (timer) clearTimeout(timer);
+      lifecycle.abort();
+      clearTimer();
+      for (const resolve of pendingRefreshResolvers) resolve();
+      pendingRefreshResolvers = [];
+      if (schedulerRef.current === scheduleRefresh) {
+        schedulerRef.current = () => Promise.resolve();
+      }
+      if (gen.current === myGen) gen.current += 1;
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', onVisible);
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshMs, load, ...deps]);
+  }, [refreshMs, viewVersion, load]);
 
-  // `refreshing` is derived, not state: a background refresh no longer forces a
-  // render on every tick (nothing consumes a per-tick refreshing flag today).
-  return { data, error, loading, refreshing: loading, refetch: load };
+  const dataBelongsToView = publishedView.current === viewVersion;
+  const errorBelongsToView = errorView.current === viewVersion;
+  return {
+    data: dataBelongsToView ? data : null,
+    error: errorBelongsToView ? error : null,
+    loading: dataBelongsToView || errorBelongsToView ? loading : true,
+    refetch,
+  };
 }

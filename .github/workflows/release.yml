@@ -5,8 +5,8 @@ name: Release
 # (the single source of truth, bumped on every push, starting at 0.0.1) and the
 # matching v<version> tag is created by the release step itself. If package.json
 # was not bumped, its tag already exists and the publish is skipped (never a
-# clobber). The full gate (lint, build, test) re-runs before publishing, and the
-# built dist/ is zipped and attached with generated notes.
+# clobber). The canonical quality gate re-runs before publishing, and the built
+# dist/ is zipped and attached with generated notes.
 #
 # Note: tags created here use GITHUB_TOKEN, which by design does NOT trigger
 # other workflows — so docker.yml's semver/latest images still come from
@@ -52,11 +52,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Verify gate (lint · build · test)
-        run: |
-          bun run check
-          bun run build
-          bun test
+      - name: Run quality gate
+        run: bun run quality
 
       - name: Resolve release tag
         id: ver

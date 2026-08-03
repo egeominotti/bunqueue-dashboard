@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { IconButton } from '@/components/ui/Button';
-import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconCron, IconTrash } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { api } from '@/lib/api';
 import { formatDateTime, formatNumber } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
+import { assertSuccessfulMutationResponse, useServerActionGuard } from '@/lib/useServerActionGuard';
 
 interface Cron {
   name: string;
@@ -26,23 +27,57 @@ export function Cron() {
   const PAGE_SIZE = 15;
   const pageCount = Math.max(1, Math.ceil(crons.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
+  const actionGuard = useServerActionGuard('classic-cron');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection lifecycle boundary
+  useEffect(() => {
+    setActionError(null);
+    setRemoving(null);
+  }, [actionGuard.scopeKey]);
 
   const remove = async (name: string) => {
     if (!window.confirm(`Delete cron "${name}"?`)) return;
+    const lease = actionGuard.begin(`delete:${name}`);
+    if (!lease) return;
+    setActionError(null);
+    setRemoving(name);
     try {
-      await api.deleteCron(name);
-      refetch();
-    } catch {
-      /* next poll reflects state */
+      const response = await api.deleteCron(name);
+      assertSuccessfulMutationResponse(response, 'Delete cron');
+      if (!lease.isCurrent()) return;
+      await refetch();
+    } catch (actionFailure) {
+      if (lease.isCurrent()) {
+        setActionError(`Delete failed: ${(actionFailure as Error).message}`);
+      }
+    } finally {
+      if (lease.finish()) setRemoving(null);
     }
   };
 
   return (
     <div>
-      {error && <OfflineBanner onRetry={refetch} />}
-      <PageHeader title="Cron Jobs" description={`${crons.length} scheduled`} live />
+      {error && data && (
+        <OfflineBanner
+          message="Cron refresh failed — showing the last successful schedule list."
+          onRetry={refetch}
+        />
+      )}
+      <PageHeader
+        title="Cron Jobs"
+        description={data ? `${crons.length} scheduled` : 'Schedule inventory unavailable'}
+        live={!!data && !error}
+      />
+      {actionError && (
+        <p role="alert" className="mb-4 text-sm text-danger">
+          {actionError}
+        </p>
+      )}
 
-      {loading && !data && !error ? (
+      {error && !data ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : loading && !data ? (
         <LoadingState label="Loading cron jobs…" />
       ) : crons.length === 0 ? (
         <EmptyState
@@ -80,7 +115,11 @@ export function Cron() {
                       {formatNumber(c.executions ?? 0)}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <IconButton aria-label="Delete cron" onClick={() => remove(c.name)}>
+                      <IconButton
+                        aria-label="Delete cron"
+                        disabled={removing !== null}
+                        onClick={() => remove(c.name)}
+                      >
                         <IconTrash className="size-3.5" />
                       </IconButton>
                     </td>

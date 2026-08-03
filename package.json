@@ -1,6 +1,6 @@
 {
   "name": "bunqueue-dashboard",
-  "version": "0.0.32",
+  "version": "0.0.33",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun).",
   "bin": {
@@ -50,7 +50,8 @@
     "start": "bun run scripts/dev.ts",
     "dev": "vite",
     "agent": "bun run agent/index.ts",
-    "build": "tsc --noEmit && tsc -p tsconfig.agent.json && vite build",
+    "build": "bun run typecheck && vite build",
+    "typecheck": "tsc --noEmit && bun run typecheck:agent",
     "typecheck:agent": "tsc -p tsconfig.agent.json",
     "size": "bun run scripts/check-bundle.ts",
     "docs:dev": "vitepress dev docs",
@@ -62,7 +63,9 @@
     "test:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir=coverage && bun scripts/check-coverage.ts",
     "check": "biome check .",
     "check:fix": "biome check --write .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "audit:high": "bun audit --audit-level=high --ignore=GHSA-qwww-vcr4-c8h2",
+    "quality": "bun run check && bun run build && bun run size && bun run docs:build && bun run test:coverage && bun run audit:high"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^4.0.7",
@@ -93,5 +96,10 @@
     "vitepress-plugin-mermaid": "^2.0.17",
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.9",
+    "dompurify": "^3.4.12",
+    "postcss": "^8.5.25"
   }
 }

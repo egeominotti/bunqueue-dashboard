@@ -7,7 +7,7 @@ import {
 } from '@/components/dashboard/stores/copilotStore';
 import { Field, Input, Select } from '@/components/ui/form';
 import { cn } from '@/lib/cn';
-import { PROVIDERS, providerById } from '@/lib/copilot/providers';
+import { normalizeCustomProviderBaseURL, PROVIDERS, providerById } from '@/lib/copilot/providers';
 import { abortActive, clearChat, sendMessage } from '@/lib/copilot/runtime';
 
 const SUGGESTIONS = [
@@ -27,11 +27,15 @@ const STATUS_STYLE: Record<ToolEvent['status'], string> = {
 export function CopilotPanel() {
   const { config, setConfig, messages, pending, busy, setOpen, resolveConfirm } = useCopilotStore();
   const def = providerById(config.provider);
-  const configured = config.apiKey.trim().length > 0 && config.model.trim().length > 0;
+  const customBaseValid =
+    config.provider !== 'custom' || normalizeCustomProviderBaseURL(config.baseURL) !== null;
+  const configured =
+    config.apiKey.trim().length > 0 && config.model.trim().length > 0 && customBaseValid;
 
   const [input, setInput] = useState('');
   const [showConfig, setShowConfig] = useState(!configured);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new content
   useEffect(() => {
@@ -44,6 +48,12 @@ export function CopilotPanel() {
     return () => window.removeEventListener('keydown', onKey);
   }, [setOpen]);
 
+  useEffect(() => {
+    dialogRef.current
+      ?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled])')
+      ?.focus();
+  }, []);
+
   const submit = (text: string) => {
     const t = text.trim();
     if (!t || busy || !configured) return;
@@ -55,7 +65,9 @@ export function CopilotPanel() {
     const p = providerById(id);
     setConfig({
       provider: id,
-      baseURL: p?.baseURL ?? '',
+      // Named providers use their code-defined endpoint. Never copy it into the
+      // editable/persisted field where a stale value could later look trusted.
+      baseURL: '',
       model: p?.models[0] ?? '',
     });
   };
@@ -64,11 +76,14 @@ export function CopilotPanel() {
     <>
       <button
         type="button"
+        tabIndex={-1}
         aria-label="Close Copilot"
         onClick={() => setOpen(false)}
         className="fixed inset-0 z-[55] cursor-default bg-black/30"
       />
       <aside
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Copilot"
@@ -89,7 +104,17 @@ export function CopilotPanel() {
               <path d="M10 4a2 2 0 014 0 6 6 0 012.6 1.5 2 2 0 002.7 2.7 6 6 0 010 3.6 2 2 0 00-2.7 2.7A6 6 0 0114 18a2 2 0 01-4 0 6 6 0 01-2.6-1.5 2 2 0 00-2.7-2.7 6 6 0 010-3.6 2 2 0 002.7-2.7A6 6 0 0110 4z" />
               <circle cx="12" cy="12" r="2.5" />
             </IconButton>
-            <IconButton label="Clear chat" onClick={clearChat}>
+            <IconButton
+              label="Clear chat"
+              onClick={() => {
+                if (
+                  messages.length === 0 ||
+                  window.confirm('Clear the entire Copilot conversation from this browser?')
+                ) {
+                  clearChat();
+                }
+              }}
+            >
               <path d="M6 7h12M9 7V5h6v2m-7 0v11a1 1 0 001 1h6a1 1 0 001-1V7" />
             </IconButton>
             <IconButton label="Close" onClick={() => setOpen(false)}>
@@ -101,7 +126,12 @@ export function CopilotPanel() {
         {showConfig && (
           <div className="space-y-3 border-b border-line bg-surface-2/50 px-4 py-3">
             <Field label="Provider">
-              <Select value={config.provider} onChange={(e) => changeProvider(e.target.value)}>
+              <Select
+                name="copilot-provider"
+                autoComplete="off"
+                value={config.provider}
+                onChange={(e) => changeProvider(e.target.value)}
+              >
                 {PROVIDERS.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.label}
@@ -109,22 +139,33 @@ export function CopilotPanel() {
                 ))}
               </Select>
             </Field>
-            {def?.kind === 'compatible' && (
+            {def?.id === 'custom' && (
               <Field label="Base URL">
                 <Input
+                  name="copilot-base-url"
                   value={config.baseURL}
                   onChange={(e) => setConfig({ baseURL: e.target.value })}
                   placeholder="https://api.example.com/v1"
+                  autoComplete="off"
+                  inputMode="url"
                   spellCheck={false}
                 />
+                {!customBaseValid && (
+                  <span className="text-xs text-warning">
+                    Enter a full http(s) endpoint without credentials, query, or fragment.
+                  </span>
+                )}
               </Field>
             )}
-            <Field label="Model">
+            <Field label="Model" htmlFor="copilot-model">
               <Input
+                id="copilot-model"
+                name="copilot-model"
                 list="copilot-models"
                 value={config.model}
                 onChange={(e) => setConfig({ model: e.target.value })}
                 placeholder="model id"
+                autoComplete="off"
                 spellCheck={false}
               />
               <datalist id="copilot-models">
@@ -135,6 +176,7 @@ export function CopilotPanel() {
             </Field>
             <Field label="API key">
               <Input
+                name="copilot-api-key"
                 type="password"
                 value={config.apiKey}
                 onChange={(e) => setConfig({ apiKey: e.target.value })}
@@ -172,13 +214,14 @@ export function CopilotPanel() {
         <div
           ref={scrollRef}
           aria-live="polite"
-          className="flex-1 space-y-4 overflow-y-auto px-4 py-4"
+          className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4"
         >
           {messages.length === 0 && (
             <div className="space-y-3 pt-6">
               <p className="text-sm text-muted">
                 Ask about your queues, jobs, DLQ, workers, or crons. I read live data and can
-                propose actions (retry, pause, purge) that you confirm before they run.
+                propose only promote and pause/resume. Every action names its target server and
+                waits for your confirmation.
               </p>
               <div className="space-y-2">
                 {SUGGESTIONS.map((s) => (
@@ -223,6 +266,9 @@ export function CopilotPanel() {
         <div className="border-t border-line px-4 py-3">
           <div className="flex items-end gap-2">
             <textarea
+              name="copilot-message"
+              aria-label="Message to Copilot"
+              autoComplete="off"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
@@ -276,9 +322,10 @@ function IconButton({
     <button
       type="button"
       aria-label={label}
+      aria-pressed={active ?? undefined}
       onClick={onClick}
       className={cn(
-        'rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-fg',
+        'rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
         active && 'bg-surface-2 text-fg'
       )}
     >

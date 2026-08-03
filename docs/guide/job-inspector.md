@@ -1,11 +1,13 @@
 ---
 title: Job Inspector
-description: "Look up any single job and drive its whole lifecycle from one screen: inspect its data, result, error, logs and history, edit its payload, and run every…"
+description: "Look up a job, inspect its data, result, errors, logs and history, and run only the mutations authorized by state and the v2.8.55 atomicity policy."
 ---
 
 # Job Inspector
 
-Look up any single job and drive its whole lifecycle from one screen: inspect its data, result, error, logs and history, edit its payload, and run every action the job's state allows.
+Look up any single job from one screen: inspect its data, result, error, logs and
+history, edit eligible fields, and run only the actions authorized by both its
+state and the v2.8.55 atomicity policy.
 
 **Where:** open `/job` from the sidebar.
 
@@ -35,8 +37,7 @@ The other cards appear depending on the job:
 
 | Card | What it shows |
 | --- | --- |
-| Data | The job's payload as read-only formatted JSON. |
-| Edit data | An editable copy of the payload with a **Save data** button. |
+| Data | The job's payload as formatted JSON; editable only while a non-Flow job is waiting, prioritized, or delayed. |
 | Result | The stored return value, only for **completed** jobs. |
 | Error | The last error message and full stack trace, only for **failed** jobs. |
 | Logs | The job's log lines, with controls to refresh, clear, and add lines. |
@@ -56,38 +57,54 @@ Every job ID elsewhere in the dashboard (Jobs, DLQ, Activity) links straight to 
 
 **Edit the payload**
 
-1. Change the JSON in the **Edit data** card.
+1. Change the JSON in the **Data** card when **Save data** is available.
 2. Click **Save data**. Valid JSON is saved and the job reloads; invalid JSON shows an inline message and nothing is sent.
+
+Flow members are always read-only. Bunqueue v2.8.55 replaces the entire payload
+on update, while FlowProducer stores parent/child topology in reserved payload
+keys; allowing an ordinary edit would make the flow unreadable. Jobs that have
+started processing or left the runnable queue are read-only as well.
 
 **Run an action**, the Actions rail only shows the actions that are valid for the job's current state. Depending on state, you may see:
 
 | Action | What it does |
 | --- | --- |
 | **Promote (run now)** | Pulls a delayed job forward to run immediately. |
-| **Retry (move to waiting)** | Sends an active job back to waiting. |
-| **Retry from DLQ** | Retries a job that's in the dead-letter queue. |
-| **Requeue** | Re-runs a completed job as a fresh run (see Good to know). |
-| **Move to delayed** | Parks an active job as delayed for a number of milliseconds you enter. |
-| **Discard (to DLQ)** | Pushes the job into the dead-letter queue. |
 | **Set priority** | Sets a new priority number. |
 | **Set delay** | Sets a new delay in milliseconds. |
-| **Fail** | Force-fails an active job (optional reason). |
-| **Cancel (delete)** | Removes the job entirely. |
+| **Set progress** | Updates progress for an active job without moving its state. |
+
+A failed job instead shows an unavailable-DLQ-retry notice. A completed job
+shows an unavailable-requeue notice; neither state exposes a mutation button.
 
 **Work with logs**, use **Refresh** to reload the lines, type a message and pick a level (`info` / `warn` / `error`) then **Add** to append one, or **Clear logs** to wipe them all.
 
 **See child values**, on a flow parent, click **Show** to load and view the resolved return values of its children.
 
-::: warning Some actions ask you to confirm, and a few are destructive
-**Fail**, **Cancel (delete)**, and **Clear logs** each pop up a confirmation first. **Cancel** permanently removes the job, and **Clear logs** permanently deletes its log lines, there's no undo.
+::: warning Unsafe state changes fail closed
+Bunqueue cannot stop worker code already processing an active job, so the
+inspector offers only progress there. Cancel/delete/discard is unavailable in
+every state because v2.8.55 has no reverse-dependency check or
+expected-state/flow-atomic Discard operation. DLQ retry is unavailable because
+the separate GET + POST has no atomic generation/state/topology precondition;
+completed requeue is unavailable because `retryCompleted` does not restore
+dependency registration/flow order. **Clear logs** remains destructive and
+asks for confirmation.
 :::
 
 ## Good to know
 
-- **Actions are state-aware.** The rail only offers what the server will accept right now. If nothing applies, you'll see "No actions available for a job in state …". Which actions show up follows the job's location, for example, only delayed jobs can be promoted, and only active jobs can be failed or moved to delayed.
+- **Actions are state-aware and contract-aware.** Only delayed jobs can be
+  promoted, only active jobs expose progress, and only runnable queued states
+  expose priority/delay. Failed and completed jobs expose policy notices, not
+  retry/requeue controls.
+- **Flow data is protected.** The inspector detects public parent/children links
+  and Bunqueue's reserved flow keys and never offers the full-payload data write
+  for those jobs.
 - **Backoff times are approximate.** The retry schedule is a preview and doesn't include the random jitter the server adds at retry time (up to ±50%, or ±20% for fixed backoff), so read the numbers as "about". "exponential (default)" just means the job uses standard backoff, not that it has none.
 - **Timeline keeps the last 20 entries.** Very retry-heavy jobs only show their most recent transitions; older attempts (and the errors attached to them) drop off.
-- **Requeue is a fresh run, not a replay.** Requeuing a completed job resets its attempts and timestamps and re-runs it, it does not replay the stored result.
+- **Completed-job requeue is not available.** The upstream operation resets a
+  run without reconstructing dependency registration and original flow order.
 - **The result is fetched on demand.** A completed job with nothing stored shows "No result stored for this job." rather than an error.
 - **Rapid lookups are safe.** If you hammer Enter, the newest lookup always wins, a slow earlier response can't overwrite it.
 - **This is the modern inspector.** The classic Jobs and DLQ views have separate, documented quirks. If something looks off, check [Known issues](/known-issues).
@@ -95,6 +112,10 @@ Every job ID elsewhere in the dashboard (Jobs, DLQ, Activity) links straight to 
 ::: details Under the hood (for developers)
 - Uses the shape-verified **`bq`** client throughout (never the legacy `api`).
 - Lookup calls `GET /jobs/:id` or `GET /jobs/custom/:customId`; a completed job also fetches `GET /jobs/:id/result`. Logs use `GET/POST/DELETE /jobs/:id/logs`; children use `GET /jobs/:id/children` (lazily, on expand).
-- Actions map to `POST /jobs/:id/promote | move-to-wait | discard | fail | move-to-delayed`, `PUT /jobs/:id/data | priority | delay`, `DELETE /jobs/:id`, plus the queue-scoped `POST /queues/:q/dlq/retry` and `POST /queues/:q/retry-completed`.
+- Enabled state changes map to `POST /jobs/:id/promote`,
+  `PUT /jobs/:id/data | priority | delay` and `POST /jobs/:id/progress`;
+  `/data` is exposed only for runnable non-Flow jobs.
+  Delete, Discard, active move/fail/retry, every DLQ retry and completed-job
+  requeue are intentionally absent.
 - **No polling or SSE.** It fetches once per lookup, then re-fetches only after an action, a Logs refresh, or expanding child values. Deep links (`/job?id=<id>`) auto-load on open.
 :::

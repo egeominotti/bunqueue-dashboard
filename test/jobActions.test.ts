@@ -3,23 +3,23 @@ import { actionGates } from '../src/lib/jobActions';
 
 /**
  * actionGates is the single source of truth for which job actions the server
- * will accept in a given state, shared by JobInspector and JobsPro. This locks
- * the full truth table so the two surfaces can never drift and a regression in
- * the gating (offering an action the server would reject, or hiding a legal
- * one) fails the build.
+ * can safely expose in a given state, shared by JobInspector and JobsPro. This
+ * locks the full truth table so the two surfaces can never drift. DLQ retry and
+ * completed requeue stay closed in every state because v2.8.55 cannot prove
+ * reverse-flow safety atomically with either transition.
  */
 
 type Gates = ReturnType<typeof actionGates>;
 
 // The complete expected matrix. Every state → exactly which gates are open.
 const MATRIX: Record<string, Gates> = {
-  waiting: g({ cancel: true, discard: true, setPriority: true, setDelay: true }),
-  prioritized: g({ cancel: true, discard: true, setPriority: true, setDelay: true }),
-  'waiting-children': g({ cancel: true, discard: true, setPriority: true, setDelay: true }),
-  delayed: g({ cancel: true, discard: true, promote: true, setPriority: true, setDelay: true }),
-  active: g({ discard: true, retryActive: true, setDelay: true, fail: true, moveToDelayed: true }),
-  completed: g({ requeueCompleted: true }),
-  failed: g({ retryDlq: true }),
+  waiting: g({ setPriority: true, setDelay: true }),
+  prioritized: g({ setPriority: true, setDelay: true }),
+  'waiting-children': g({}),
+  delayed: g({ promote: true, setPriority: true, setDelay: true }),
+  active: g({}),
+  completed: g({}),
+  failed: g({}),
   stalled: g({}), // an unknown / terminal-ish state opens nothing
 };
 
@@ -29,13 +29,10 @@ function g(open: Partial<Gates>): Gates {
     cancel: false,
     discard: false,
     promote: false,
-    retryActive: false,
     retryDlq: false,
     requeueCompleted: false,
     setPriority: false,
     setDelay: false,
-    fail: false,
-    moveToDelayed: false,
     ...open,
   };
 }
@@ -60,17 +57,28 @@ describe('actionGates', () => {
     expect(promotable).toEqual(['delayed']);
   });
 
-  it('only an active job can be force-failed or moved-to-delayed', () => {
-    const failable = Object.keys(MATRIX).filter((s) => actionGates(s).fail);
-    const delayable = Object.keys(MATRIX).filter((s) => actionGates(s).moveToDelayed);
-    expect(failable).toEqual(['active']);
-    expect(delayable).toEqual(['active']);
+  it('opens no broker state transition for an active job', () => {
+    expect(actionGates('active')).toEqual(g({}));
   });
 
-  it('a completed job is only requeueable; a failed/DLQ job is only DLQ-retryable', () => {
-    expect(actionGates('completed').requeueCompleted).toBe(true);
-    expect(actionGates('completed').retryDlq).toBe(false);
-    expect(actionGates('failed').retryDlq).toBe(true);
-    expect(actionGates('failed').requeueCompleted).toBe(false);
+  it('cannot discard either a stale runnable snapshot or a job that became active', () => {
+    expect(actionGates('waiting').discard).toBe(false);
+    expect(actionGates('delayed').discard).toBe(false);
+    expect(actionGates('prioritized').discard).toBe(false);
+    expect(actionGates('active').discard).toBe(false);
+  });
+
+  it('never exposes cancel or discard because state and reverse flow safety cannot be proven', () => {
+    for (const state of [...Object.keys(MATRIX), undefined]) {
+      expect(actionGates(state).cancel).toBe(false);
+      expect(actionGates(state).discard).toBe(false);
+    }
+  });
+
+  it('never exposes DLQ retry or completed requeue for any state', () => {
+    for (const state of [...Object.keys(MATRIX), undefined]) {
+      expect(actionGates(state).retryDlq).toBe(false);
+      expect(actionGates(state).requeueCompleted).toBe(false);
+    }
   });
 });

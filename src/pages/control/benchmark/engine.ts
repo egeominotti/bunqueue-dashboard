@@ -1,4 +1,4 @@
-import type { AddJobBody } from '@/lib/bq';
+import type { BulkJobBody } from '@/lib/bq';
 
 // Pure types + helpers for the Benchmark page. No React, so it stays trivially
 // testable and keeps the engine/UI focused.
@@ -81,6 +81,22 @@ export const DEFAULT_CONFIG: RunConfig = {
   removeOnComplete: true,
 };
 
+export const BENCHMARK_QUEUE_PREFIX = 'bq-dashboard-benchmark-';
+
+export function createBenchmarkQueueName(): string {
+  if (typeof globalThis.crypto?.randomUUID !== 'function') {
+    throw new Error('A cryptographically secure browser is required to create a benchmark queue.');
+  }
+  return `${BENCHMARK_QUEUE_PREFIX}${globalThis.crypto.randomUUID()}`;
+}
+
+export function isDashboardBenchmarkQueue(queue: string): boolean {
+  return new RegExp(
+    `^${BENCHMARK_QUEUE_PREFIX}[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`,
+    'i'
+  ).test(queue);
+}
+
 export const PRESETS: Record<string, Partial<RunConfig>> = {
   Smoke: {
     mode: 'count',
@@ -123,6 +139,13 @@ export const PRESETS: Record<string, Partial<RunConfig>> = {
 export const clampInt = (v: number, lo: number, hi: number): number =>
   Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.floor(v))) : lo;
 
+export function benchmarkQueueError(queue: string): string | null {
+  if (!queue) return 'Queue name is required.';
+  if (queue.length > 256) return 'Queue name is too long (maximum 256 characters).';
+  if (!/^[a-zA-Z0-9_\-.:]+$/.test(queue)) return 'Queue name contains unsupported characters.';
+  return null;
+}
+
 /** Nearest-rank percentile over an already-sorted ascending array. */
 export const percentile = (sorted: number[], p: number): number =>
   sorted.length
@@ -134,12 +157,21 @@ export const makeJobs = (
   size: number,
   blob: string,
   durable: boolean,
-  removeOnComplete: boolean
-): AddJobBody[] =>
+  removeOnComplete: boolean,
+  runId?: string,
+  stallTimeout?: number
+): BulkJobBody[] =>
   Array.from({ length: size }, (_, i) => ({
     data: { i: base + i, blob },
     durable,
     removeOnComplete,
+    ...(stallTimeout === undefined ? {} : { stallTimeout }),
+    ...(runId
+      ? {
+          jobId: `${runId}-${base + i}`,
+          tags: ['bunqueue-dashboard-benchmark', runId],
+        }
+      : {}),
   }));
 
 export const sleep = (ms: number): Promise<void> =>

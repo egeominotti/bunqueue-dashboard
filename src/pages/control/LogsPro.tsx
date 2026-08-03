@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
 import { Button } from '@/components/ui/Button';
 import { CopyButton } from '@/components/ui/CopyButton';
 import { OfflineBanner } from '@/components/ui/feedback';
@@ -9,11 +10,11 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { StatCard } from '@/components/ui/StatCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { bq } from '@/lib/bq';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import type { ActivityEvent } from '@/lib/types';
 import { useActivityStream } from '@/lib/useActivityStream';
 import { usePolledData } from '@/lib/usePolledData';
+import { loadAllQueuePages } from './QueueControl';
 
 const ALL = '__all__';
 const STATUS = ['all', 'waiting', 'active', 'completed', 'failed'] as const;
@@ -31,18 +32,25 @@ export function LogsPro() {
   // paused — the visible list freezes while the stream keeps buffering behind it.
   const [frozen, setFrozen] = useState<ActivityEvent[] | null>(null);
   const paused = frozen !== null;
+  const streamTarget = useConnectionStore((state) =>
+    JSON.stringify([state.baseUrl, state.token, queue])
+  );
 
   // Dropdown options only — slow-poll so it doesn't ride the live SSE cadence.
   const {
     data: qs,
-    error,
-    refetch,
-  } = usePolledData(() => bq.queues(), [], {
+    error: discoveryError,
+    refetch: refetchQueues,
+  } = usePolledData(loadAllQueuePages, [], {
     intervalMs: 30000,
   });
-  const { events, counters, throughput, connected } = useActivityStream(
-    queue === ALL ? undefined : queue
-  );
+  const {
+    events,
+    counters,
+    throughput,
+    connected,
+    error: streamError,
+  } = useActivityStream(queue === ALL ? undefined : queue);
 
   const filtered = useMemo(() => {
     const source = frozen ?? events;
@@ -64,10 +72,10 @@ export function LogsPro() {
   // Reset to first page when filters change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset on filter change
   useEffect(() => setPage(0), [queue, status, search]);
-  // A queue switch tears the stream down and restarts seq — a snapshot from the
-  // old stream would be misleading, so drop the pause.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: resume on queue change
-  useEffect(() => setFrozen(null), [queue]);
+  // Any queue/server/credential switch tears the stream down. A paused snapshot
+  // from the old target must not survive and render under the new connection.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: streamTarget is the explicit lifecycle identity
+  useEffect(() => setFrozen(null), [streamTarget]);
 
   const start = page * PAGE;
   const rows = filtered.slice(start, start + PAGE);
@@ -79,7 +87,15 @@ export function LogsPro() {
         description="Real-time job activity across all queues."
         live={connected && !paused}
       />
-      {error && <OfflineBanner onRetry={refetch} />}
+      {discoveryError && (
+        <OfflineBanner
+          onRetry={refetchQueues}
+          message={`Could not discover queues — ${discoveryError.message}. The current stream can still be used.`}
+        />
+      )}
+      {streamError && (
+        <OfflineBanner message={`Event stream unavailable — ${streamError.message}. Retrying…`} />
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Total Events" value={formatNumber(counters.total)} compact />
@@ -99,6 +115,8 @@ export function LogsPro() {
         <div className="w-48">
           <Select
             aria-label="Filter by queue"
+            name="activity-queue-filter"
+            autoComplete="off"
             value={queue}
             onChange={(e) => setQueue(e.target.value)}
           >
@@ -129,6 +147,8 @@ export function LogsPro() {
           <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
           <input
             aria-label="Search by job ID or queue"
+            name="activity-search"
+            autoComplete="off"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by job ID or queue…"
@@ -155,11 +175,13 @@ export function LogsPro() {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-5 py-12 text-center text-sm text-faint">
-                  {!connected
-                    ? 'Connecting to the event stream…'
-                    : events.length > 0
-                      ? 'No events match the current filters.'
-                      : 'Waiting for activity…'}
+                  {streamError
+                    ? `Event stream unavailable — ${streamError.message}. Retrying…`
+                    : !connected
+                      ? 'Connecting to the event stream…'
+                      : events.length > 0
+                        ? 'No events match the current filters.'
+                        : 'Waiting for activity…'}
                 </td>
               </tr>
             ) : (

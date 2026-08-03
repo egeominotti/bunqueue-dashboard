@@ -23,7 +23,16 @@ const rule = (over: Partial<AlertRule>): AlertRule => ({
 
 const summaryRow = (name: string, counts: Partial<Record<string, number>>) => ({
   name,
-  counts: { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0, ...counts },
+  paused: false,
+  counts: {
+    waiting: 0,
+    prioritized: 0,
+    active: 0,
+    completed: 0,
+    failed: 0,
+    delayed: 0,
+    ...counts,
+  },
 });
 
 let failSummary = false;
@@ -37,7 +46,16 @@ function route(url: string): Response {
     return Response.json([summaryRow('q1', { waiting: 10, completed: 90, failed: 10 })]);
   }
   if (url.includes('/dashboard/queues')) {
-    return Response.json({ ok: true, queues: [{ name: 'q1', dlq: 7 }] });
+    const params = new URL(url, 'http://x').searchParams;
+    const limit = Number(params.get('limit') ?? 500);
+    const offset = Number(params.get('offset') ?? 0);
+    return Response.json({
+      ok: true,
+      queues: offset === 0 ? [{ name: 'q1', dlq: 7 }] : [],
+      total: 1,
+      limit,
+      offset,
+    });
   }
   if (url.endsWith('/dashboard')) {
     if (failOverview) return Response.json({ ok: false, error: 'down' }, { status: 500 });

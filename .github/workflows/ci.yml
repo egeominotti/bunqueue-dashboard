@@ -1,9 +1,7 @@
 name: CI
 
-# Runs the full quality gate on every push to main and every pull request:
-# lint + format (Biome), typecheck + production build (tsc + Vite), and the
-# unit / agent-lifecycle test suite (bun test). Mirrors `bun run build`,
-# `bun run check`, and `bun test` from the project's local gate.
+# Runs the canonical `bun run quality` gate on every push to main and every
+# pull request. Publishing workflows invoke this same script before releasing.
 
 on:
   push:
@@ -25,7 +23,7 @@ env:
 
 jobs:
   gate:
-    name: Lint · Typecheck · Build · Test
+    name: Quality gate
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -40,25 +38,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Lint & format (Biome)
-        run: bun run check
-
-      - name: Typecheck & build
-        run: bun run build
-
-      - name: Bundle size budget
-        run: bun run size
-
-      # Runs the suite with coverage, then enforces the aggregate floor
-      # (scripts/check-coverage.ts) so overall coverage can only go up.
-      - name: Test (with coverage floor)
-        run: bun run test:coverage
-
-      # Report known-vulnerable dependencies. Non-blocking: a newly-published
-      # advisory shouldn't wedge every merge, but it surfaces in the log/summary.
-      - name: Dependency audit
-        run: bun audit
-        continue-on-error: true
+      # Single source of truth: lint/format, both TypeScript projects, app and
+      # docs builds, bundle budget, coverage floor, and the blocking HIGH audit.
+      - name: Run quality gate
+        run: bun run quality
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

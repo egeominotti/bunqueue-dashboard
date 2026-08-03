@@ -28,14 +28,17 @@ The dashboard is a Vite + React 19 single-page app. It **reads** from a
 bunqueue server's HTTP API by polling (`usePolledData`, interval from the
 connection store) and by subscribing to the Server-Sent Events stream
 (`useActivityStream`) for live job activity. It **writes** through the same
-HTTP API (pause, add job, retry, rate-limit, …), with every job action gated
-by the job's actual current state so the UI never offers an action the server
-would reject (`lib/jobActions.ts`). The one thing HTTP cannot do, manage the
+HTTP API (pause, add job, promote, rate-limit, …), with every job action gated
+by the job's actual current state and the atomic guarantees available in the
+v2.8.55 server contract (`lib/jobActions.ts`). DLQ retry and completed-job
+requeue remain unavailable even when a prior read looks safe; see
+[known-issues.md](known-issues.md). The one thing HTTP cannot do, manage the
 server *process*, is delegated to a tiny local **control agent** (`agent/`)
 that the dashboard calls over `/control/*` to start, stop and restart
-bunqueue; that agent has **no authentication** today (see
-[known-issues.md](known-issues.md)), so keep it off any network beyond your
-own loopback.
+bunqueue. Loopback use can stay zero-config; when the agent is exposed or
+proxied beyond loopback, `AGENT_TOKEN` is mandatory and every agent route is
+authenticated. The dashboard proxy also keeps remote control disabled unless
+that token is configured; see [agent.md](agent.md).
 
 Two API clients coexist: `src/lib/api.ts` (original view pages, the
 **classic** family) and `src/lib/bq.ts` (the complete, shape-verified, strict-error-checked client behind every `pages/control/*` **Pro** page). New

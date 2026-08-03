@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button, IconButton } from '@/components/ui/Button';
 import { CopyButton } from '@/components/ui/CopyButton';
-import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/form';
 import {
   IconChevronRight,
@@ -20,8 +20,10 @@ import { bq } from '@/lib/bq';
 import type { DlqEntryFull } from '@/lib/bqTypes';
 import { cn } from '@/lib/cn';
 import { downloadCsv } from '@/lib/exportFile';
+import { FLOW_BULK_RETRY_UNAVAILABLE, FLOW_DELETION_UNAVAILABLE } from '@/lib/flowMutationSafety';
 import { formatDateTime, formatDuration, formatNumber, formatRelativeTime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
+import { loadAllQueuePages } from './QueueControl';
 
 const PAGE_SIZE = 25;
 
@@ -33,10 +35,13 @@ export function DlqControl() {
   const [reason, setReason] = useState('all');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const { data: qs } = usePolledData(() => bq.queues(), [], { intervalMs: 30000 });
+  const {
+    data: qs,
+    error: discoveryError,
+    loading: discoveryLoading,
+    refetch: refetchQueues,
+  } = usePolledData(loadAllQueuePages, [], { intervalMs: 30000 });
 
   useEffect(() => {
     if (queue || !qs?.queues?.length) return;
@@ -44,27 +49,41 @@ export function DlqControl() {
   }, [qs, queue]);
 
   // Tagged with queue+page (QueueControl pattern): a queue switch must not
-  // leave the old queue's entries rendered — their per-row Retry would fire
-  // bq.retryDlq(newQueue, oldEntry.job.id) against the wrong queue.
+  // leave the old queue's entries rendered under the new queue heading.
   const fetcher = useCallback(async () => {
-    if (!queue) return { queue, page, entries: [] as DlqEntryFull[], total: 0, stats: null };
-    const [list, statsRes] = await Promise.all([
+    if (!queue)
+      return {
+        queue,
+        page,
+        entries: [] as DlqEntryFull[],
+        total: 0,
+        stats: null,
+        statsError: null as string | null,
+      };
+    const [list, statsResult] = await Promise.all([
       bq.dlq(queue, PAGE_SIZE, page * PAGE_SIZE),
-      bq.dlqStats(queue).catch(() => null),
+      bq
+        .dlqStats(queue)
+        .then((result) => ({ stats: result.stats, error: null as string | null }))
+        .catch((statsError: unknown) => ({
+          stats: null,
+          error: (statsError as Error).message || 'Unknown error',
+        })),
     ]);
     return {
       queue,
       page,
       entries: list.entries ?? [],
       total: list.total ?? 0,
-      stats: statsRes?.stats ?? null,
+      stats: statsResult.stats,
+      statsError: statsResult.error,
     };
   }, [queue, page]);
   const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue, page]);
   const data = raw && raw.queue === queue && raw.page === page ? raw : null;
 
-  // Clamp the page when the DLQ shrinks (retry-all/purge here, or external
-  // retries) so a stale offset can't render "empty" while entries remain.
+  // Clamp the page when the DLQ shrinks externally so a stale offset cannot
+  // render "empty" while entries remain.
   useEffect(() => {
     if (!data) return;
     const last = Math.max(0, Math.ceil((data.total ?? 0) / PAGE_SIZE) - 1);
@@ -77,30 +96,6 @@ export function DlqControl() {
   useEffect(() => {
     setExpanded(new Set());
   }, [queue, page]);
-
-  const run = async (verb: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = (await fn()) as { count?: number };
-      const n = r?.count ?? 0;
-      const text = `${verb} ${formatNumber(n)} ${n === 1 ? 'entry' : 'entries'}`;
-      setMsg({ ok: true, text });
-      toast.success(text, queue);
-      refetch();
-    } catch (e) {
-      const text = (e as Error).message;
-      setMsg({ ok: false, text });
-      // `verb` is past tense for the success line ("Retried 5 entries"); the
-      // failure title wants the present tense (a naive /ed$/ strip yields
-      // "Retri"/"Purg").
-      const action = verb === 'Purged' ? 'Purge' : 'Retry';
-      toast.error(`${action} failed`, text);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const byReason = data?.stats?.byReason ?? {};
   const reasons = useMemo(() => Object.keys(byReason).filter((r) => byReason[r] > 0), [byReason]);
@@ -152,59 +147,57 @@ export function DlqControl() {
     <div>
       <PageHeader
         title="DLQ Control"
-        description="Inspect, triage, and replay one queue's dead-lettered jobs."
-        live
+        description="Inspect and triage one queue's dead-lettered jobs."
+        live={!!queue && !!data && !data.statsError && !error && !discoveryError}
         actions={
           <>
             <Button size="sm" disabled={!queue || !entries.length} onClick={exportEntries}>
               <IconDownload className="size-3.5" /> Export
             </Button>
-            <Button
-              size="sm"
-              disabled={!queue || busy || !data?.total}
-              onClick={() =>
-                run(
-                  'Retried',
-                  () => bq.retryDlq(queue),
-                  `Retry all ${data?.total ?? 0} DLQ entries for "${queue}"?`
-                )
-              }
-            >
+            <Button size="sm" disabled title={FLOW_BULK_RETRY_UNAVAILABLE}>
               <IconRefresh className="size-3.5" /> Retry all
             </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={!queue || busy || !data?.total}
-              onClick={() => {
-                // Type-to-confirm: a plain confirm is too easy to click through
-                // for an irreversible bulk delete.
-                const typed = window.prompt(
-                  `Purge all ${data?.total ?? 0} DLQ entries for "${queue}"? This cannot be undone.\n\nType the queue name to confirm:`
-                );
-                if (typed == null) return;
-                if (typed.trim() !== queue) {
-                  setMsg({ ok: false, text: 'Purge cancelled — queue name did not match.' });
-                  return;
-                }
-                run('Purged', () => bq.purgeDlq(queue));
-              }}
-            >
+            <Button variant="danger" size="sm" disabled title={FLOW_DELETION_UNAVAILABLE}>
               Purge
             </Button>
           </>
         }
       />
 
-      {error && <OfflineBanner onRetry={refetch} />}
+      {error && data && (
+        <OfflineBanner
+          message="DLQ refresh failed — showing the last successful page."
+          onRetry={refetch}
+        />
+      )}
+      {discoveryError && (
+        <OfflineBanner
+          onRetry={refetchQueues}
+          message={`Could not discover queues — ${discoveryError.message}. Retry before selecting a queue.`}
+        />
+      )}
+      {data?.statsError && (
+        <OfflineBanner
+          message={`DLQ statistics are unavailable — ${data.statsError}. The entry list may still be current.`}
+          onRetry={refetch}
+        />
+      )}
 
       {/* At-a-glance triage summary for the selected queue. */}
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           label="Entries"
-          value={formatNumber(data?.total)}
-          tone={data?.total ? 'red' : 'green'}
-          hint={data?.total ? (topReason ? `top: ${topReason}` : undefined) : 'queue is clean'}
+          value={queue && data ? formatNumber(data.total) : '—'}
+          tone={!queue || !data ? 'default' : data.total ? 'red' : 'green'}
+          hint={
+            !queue || !data
+              ? 'waiting for queue data'
+              : data.total
+                ? topReason
+                  ? `top: ${topReason}`
+                  : undefined
+                : 'queue is clean'
+          }
           compact
         />
         <StatCard
@@ -234,14 +227,14 @@ export function DlqControl() {
           <Select
             value={queue}
             aria-label="Queue"
+            name="dlq-control-queue"
+            autoComplete="off"
             onChange={(e) => {
               setQueue(e.target.value);
               setPage(0);
               setReason('all');
-              // Drop cross-queue leftovers so a stale status line / filter can't
-              // describe the previous queue against the newly-selected one.
+              // Drop cross-queue filter text so it cannot describe the previous queue.
               setSearch('');
-              setMsg(null);
             }}
           >
             {(qs?.queues ?? []).map((x) => (
@@ -255,6 +248,8 @@ export function DlqControl() {
           <Select
             value={reason}
             aria-label="Filter by reason"
+            name="dlq-control-reason"
+            autoComplete="off"
             onChange={(e) => setReason(e.target.value)}
           >
             <option value="all">All reasons</option>
@@ -272,18 +267,32 @@ export function DlqControl() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder={pageScoped ? 'Filter this page by job ID…' : 'Filter by job ID…'}
             aria-label="Filter by job ID"
+            name="dlq-control-job-filter"
+            autoComplete="off"
             className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
           />
         </div>
-        {msg && (
-          <span role="status" className={msg.ok ? 'text-sm text-success' : 'text-sm text-danger'}>
-            {msg.text}
-          </span>
-        )}
       </div>
+      <p className="mb-4 text-xs text-warning">{FLOW_BULK_RETRY_UNAVAILABLE}</p>
 
-      {loading && !data && !error ? (
+      {error && !data ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : discoveryLoading && !qs && !queue && !discoveryError ? (
+        <LoadingState label="Discovering queues…" />
+      ) : loading && !data && !error ? (
         <LoadingState label="Loading DLQ…" />
+      ) : discoveryError && !queue ? (
+        <EmptyState
+          icon={<IconDlq />}
+          title="Could not discover queues"
+          hint={`${discoveryError.message}. Retry the queue discovery request above.`}
+        />
+      ) : !queue ? (
+        <EmptyState
+          icon={<IconDlq />}
+          title={qs?.queues.length === 0 ? 'No queues available' : 'Select a queue'}
+          hint="A queue must be selected before its dead letter entries can be inspected."
+        />
       ) : entries.length === 0 ? (
         <EmptyState
           icon={<IconDlq />}
@@ -320,15 +329,7 @@ export function DlqControl() {
                     key={key}
                     entry={e}
                     isOpen={isOpen}
-                    busy={busy}
                     onToggle={() => toggleExpand(key)}
-                    onRetry={() =>
-                      run(
-                        'Retried',
-                        () => bq.retryDlq(queue, e.job.id),
-                        `Retry job ${e.job.id.slice(0, 8)}… from "${queue}"?`
-                      )
-                    }
                     attempts={attempts}
                   />
                 );
@@ -354,16 +355,12 @@ export function DlqControl() {
 function DlqRow({
   entry,
   isOpen,
-  busy,
   onToggle,
-  onRetry,
   attempts,
 }: {
   entry: DlqEntryFull;
   isOpen: boolean;
-  busy: boolean;
   onToggle: () => void;
-  onRetry: () => void;
   attempts: NonNullable<DlqEntryFull['attempts']>;
 }) {
   const e = entry;
@@ -411,12 +408,18 @@ function DlqRow({
         </td>
         <td className="px-4 py-3">
           <div className="flex items-center justify-end gap-1">
-            <Link to={`/job?id=${encodeURIComponent(e.job.id)}`}>
-              <IconButton aria-label="Inspect job">
-                <IconEye className="size-3.5" />
-              </IconButton>
+            <Link
+              to={`/job?id=${encodeURIComponent(e.job.id)}`}
+              aria-label={`Inspect job ${e.job.id}`}
+              className="inline-flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            >
+              <IconEye className="size-3.5" />
             </Link>
-            <IconButton aria-label="Retry job" disabled={busy} onClick={onRetry}>
+            <IconButton
+              aria-label="Retry job unavailable"
+              disabled
+              title={FLOW_BULK_RETRY_UNAVAILABLE}
+            >
               <IconRefresh className="size-3.5" />
             </IconButton>
           </div>

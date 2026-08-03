@@ -12,16 +12,21 @@ describe('s3Store persistence', () => {
       bucket: 'my-bucket',
       accessKeyId: 'AKIAEXAMPLEKEYID',
       secretAccessKey: 'super-secret-do-not-persist',
+      sessionToken: 'temporary-session-secret',
       schedule: '24h',
       pathPrefix: 'backups/',
+      virtualHostedStyle: 'virtual-hosted',
+      retention: 14,
       set: () => {},
     });
 
     expect(persisted).toMatchObject({ bucket: 'my-bucket', region: 'eu-west-1' });
     expect(persisted).not.toHaveProperty('secretAccessKey');
     expect(persisted).not.toHaveProperty('accessKeyId');
+    expect(persisted).not.toHaveProperty('sessionToken');
     const serialized = JSON.stringify(persisted);
     expect(serialized).not.toContain('super-secret-do-not-persist');
     expect(serialized).not.toContain('AKIAEXAMPLEKEYID');
+    expect(serialized).not.toContain('temporary-session-secret');
   });
 });

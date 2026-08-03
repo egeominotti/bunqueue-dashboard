@@ -95,6 +95,66 @@ export interface ModelConfig {
   model: string;
 }
 
+function customBaseHasDisallowedCharacters(value: string): boolean {
+  return [...value].some((character) => {
+    const code = character.charCodeAt(0);
+    return character === '\\' || /\s/u.test(character) || code < 32 || code === 127;
+  });
+}
+
+/**
+ * Validate the only user-controlled destination that may receive an LLM key.
+ * Fixed providers never consult this field. Returning a canonical URL also
+ * keeps an empty query/fragment marker or credential-bearing authority from
+ * being hidden by WHATWG URL normalization.
+ */
+export function normalizeCustomProviderBaseURL(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const candidate = value.trim();
+  if (
+    !candidate ||
+    !/^https?:\/\//iu.test(candidate) ||
+    candidate.includes('?') ||
+    candidate.includes('#') ||
+    customBaseHasDisallowedCharacters(candidate)
+  ) {
+    return null;
+  }
+  try {
+    const parsed = new URL(candidate);
+    if (
+      (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+      !parsed.hostname ||
+      parsed.username ||
+      parsed.password
+    ) {
+      return null;
+    }
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    return `${parsed.origin}${pathname}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Resolve a compatible provider without ever trusting a stale hidden URL. */
+export function resolveCompatibleProviderBaseURL(cfg: ModelConfig, def: ProviderDef): string {
+  if (def.id === 'custom') {
+    const custom = normalizeCustomProviderBaseURL(cfg.baseURL);
+    if (!custom) {
+      throw new Error(
+        'Custom provider base URL must be a non-empty http(s) endpoint without credentials, query, or fragment.'
+      );
+    }
+    return custom;
+  }
+  // Z.ai/OpenRouter and any future named compatible provider are fixed
+  // destinations. Ignore cfg.baseURL even if a legacy/XSS-written value exists.
+  const fixed = normalizeCustomProviderBaseURL(def.baseURL);
+  if (!fixed) throw new Error(`Copilot provider "${def.id}" has no valid fixed endpoint.`);
+  return fixed;
+}
+
 /**
  * Build a v7 LanguageModel for the chosen provider, keyed with the user's key.
  * Each provider SDK is loaded only when selected, keeping the Copilot panel and
@@ -124,7 +184,7 @@ export async function createModel(cfg: ModelConfig): Promise<LanguageModel> {
       const { createOpenAICompatible } = await import('@ai-sdk/openai-compatible');
       return createOpenAICompatible({
         name: cfg.provider || 'custom',
-        baseURL: (cfg.baseURL || def?.baseURL || '').replace(/\/+$/, ''),
+        baseURL: resolveCompatibleProviderBaseURL(cfg, def),
         apiKey,
       })(cfg.model);
     }

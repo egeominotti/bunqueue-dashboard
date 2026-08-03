@@ -9,6 +9,16 @@ bunqueue ships a Model Context Protocol server, `bunqueue-mcp`, that lets an AI
 agent (Claude Desktop, Claude Code) drive the queue with tools, resources, and
 prompts.
 
+::: warning External MCP mutations bypass dashboard safety gates
+The upstream v2.8.55 MCP tool set includes Cancel, Discard, Drain, Obliterate,
+DLQ Retry and DLQ Purge. Those tools do not gain atomic
+generation/state/topology or reverse-dependency checks merely because an MCP
+client invokes them. The dashboard's own Copilot exposes only Promote, Pause
+and Resume mutations; its DLQ retry tool is absent. Grant the external MCP
+server write access only when you have independently established that flow
+topology cannot be stranded and that job-ID reuse cannot retarget the action.
+:::
+
 It is a separate **stdio** process, launched by the MCP client rather than by
 this dashboard, and it is not part of the HTTP API on `:6790`. That is why the
 dashboard's **MCP** page (and this guide) is a setup and reference, not a live

@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { frameIndicatesConnected, parseFrame, streamEvents } from '../src/lib/sse';
+import {
+  frameIndicatesConnected,
+  parseFrame,
+  SSE_MAX_EVENT_ID_CHARS,
+  SSE_MAX_FRAME_CHARS,
+  SseConnectError,
+  type SseFrame,
+  shouldDiscardLastEventId,
+  streamEvents,
+} from '../src/lib/sse';
 
 describe('parseFrame', () => {
   test('parses an event with JSON data', () => {
@@ -13,6 +22,23 @@ describe('parseFrame', () => {
     const f = parseFrame('id: 42\nevent: job:active\ndata: {}');
     expect(f?.id).toBe('42');
     expect(f?.event).toBe('job:active');
+  });
+
+  test('ignores NUL-bearing and oversized id fields without dropping valid event data', () => {
+    const nul = parseFrame('id: poisoned\0id\nevent: job:active\ndata: {"jobId":"nul"}');
+    expect(nul).toMatchObject({ event: 'job:active', data: { jobId: 'nul' } });
+    expect(nul?.id).toBeUndefined();
+
+    const oversized = parseFrame(
+      `id: ${'x'.repeat(SSE_MAX_EVENT_ID_CHARS + 1)}\nevent: job:active\ndata: {"jobId":"large"}`
+    );
+    expect(oversized).toMatchObject({ event: 'job:active', data: { jobId: 'large' } });
+    expect(oversized?.id).toBeUndefined();
+  });
+
+  test('an invalid id field does not overwrite an earlier valid id in the same frame', () => {
+    const f = parseFrame('id: safe-42\nid: ignored\0tail\ndata: {}');
+    expect(f?.id).toBe('safe-42');
   });
 
   test('comment-only / heartbeat frame → null', () => {
@@ -66,6 +92,19 @@ describe('frameIndicatesConnected', () => {
   });
 });
 
+describe('Last-Event-ID retry policy', () => {
+  test('only explicit replay/header rejection statuses discard the checkpoint', () => {
+    for (const status of [400, 409, 413, 431]) {
+      expect(shouldDiscardLastEventId(new SseConnectError('rejected', status, true))).toBe(true);
+    }
+    for (const status of [200, 401, 403, 408, 429, 500, 502, 503]) {
+      expect(shouldDiscardLastEventId(new SseConnectError('unrelated', status, true))).toBe(false);
+    }
+    expect(shouldDiscardLastEventId(new SseConnectError('no replay header', 431))).toBe(false);
+    expect(shouldDiscardLastEventId(new TypeError('network offline'))).toBe(false);
+  });
+});
+
 describe('streamEvents frame boundaries', () => {
   function mockFetchOnce(body: string) {
     const stream = new ReadableStream<Uint8Array>({
@@ -76,7 +115,9 @@ describe('streamEvents frame boundaries', () => {
     });
     const orig = globalThis.fetch;
     globalThis.fetch = (() =>
-      Promise.resolve(new Response(stream, { status: 200 }))) as typeof fetch;
+      Promise.resolve(
+        new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+      )) as typeof fetch;
     return () => {
       globalThis.fetch = orig;
     };
@@ -111,6 +152,103 @@ describe('streamEvents frame boundaries', () => {
       expect(ids).toEqual(['a', 'b']);
     } finally {
       restore();
+    }
+  });
+
+  test('rejects an unterminated frame once the pending buffer exceeds its bound', async () => {
+    const restore = mockFetchOnce(`data: ${'x'.repeat(SSE_MAX_FRAME_CHARS)}`);
+    try {
+      const frames: SseFrame[] = [];
+      await expect(
+        streamEvents('/events', (frame) => frames.push(frame), new AbortController().signal)
+      ).rejects.toThrow(`${SSE_MAX_FRAME_CHARS}-character limit`);
+      expect(frames).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+
+  test('rejects a delimited oversized frame before parsing or dispatching it', async () => {
+    const restore = mockFetchOnce(`data: ${'x'.repeat(SSE_MAX_FRAME_CHARS)}\n\n`);
+    try {
+      const frames: SseFrame[] = [];
+      await expect(
+        streamEvents('/events', (frame) => frames.push(frame), new AbortController().signal)
+      ).rejects.toThrow(`${SSE_MAX_FRAME_CHARS}-character limit`);
+      expect(frames).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+
+  test('rejects a successful non-SSE response before parsing its body', async () => {
+    const orig = globalThis.fetch;
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response('data: {"jobId":"should-not-parse"}\n\n', {
+          status: 200,
+          headers: { 'content-type': 'application/json; charset=utf-8' },
+        })
+      )) as typeof fetch;
+    try {
+      const frames: SseFrame[] = [];
+      await expect(
+        streamEvents('/events', (frame) => frames.push(frame), new AbortController().signal)
+      ).rejects.toThrow('expected text/event-stream, received application/json');
+      expect(frames).toEqual([]);
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
+
+  test('sends Last-Event-ID when reconnecting through the authenticated fetch reader', async () => {
+    const orig = globalThis.fetch;
+    let headers = new Headers();
+    globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      headers = new Headers(init?.headers);
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.close();
+        },
+      });
+      return Promise.resolve(
+        new Response(stream, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+      );
+    }) as typeof fetch;
+    try {
+      await streamEvents('/events', () => {}, new AbortController().signal, undefined, 'event-42');
+      expect(headers.get('Last-Event-ID')).toBe('event-42');
+      expect(headers.get('Accept')).toBe('text/event-stream');
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
+
+  test('omits unsafe direct Last-Event-ID values instead of failing before fetch', async () => {
+    const orig = globalThis.fetch;
+    const seen: Headers[] = [];
+    globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+      seen.push(new Headers(init?.headers));
+      return Promise.resolve(
+        new Response(new ReadableStream({ start: (controller) => controller.close() }), {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        })
+      );
+    }) as typeof fetch;
+    try {
+      await streamEvents('/events', () => {}, new AbortController().signal, undefined, 'bad\0id');
+      await streamEvents(
+        '/events',
+        () => {},
+        new AbortController().signal,
+        undefined,
+        'x'.repeat(SSE_MAX_EVENT_ID_CHARS + 1)
+      );
+      expect(seen).toHaveLength(2);
+      expect(seen.every((headers) => headers.get('Last-Event-ID') === null)).toBe(true);
+    } finally {
+      globalThis.fetch = orig;
     }
   });
 });

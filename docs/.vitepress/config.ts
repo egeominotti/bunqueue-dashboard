@@ -20,10 +20,11 @@ export default withMermaid({
     'How the bunqueue dashboard works: an illustrated, user-first guide to every page, plus deployment (Docker, Kubernetes, PM2), the architecture, and the HTTP API it drives.',
   cleanUrls: true,
   lastUpdated: true,
-  // The reference docs mention source paths and a few planned pages that don't
-  // exist yet; don't fail the build on those. README.md is the GitHub-facing
-  // index, index.md is the site home, so keep README out of the built site.
-  ignoreDeadLinks: true,
+  // Keep internal links honest: a broken docs route or anchor fails docs:build.
+  // The one exception is architecture.md's source-repository link to the root
+  // SECURITY.md, which sits outside VitePress's docs source directory.
+  ignoreDeadLinks: ['./../SECURITY'],
+  // README.md is the GitHub-facing index; index.md is the site home.
   srcExclude: ['README.md'],
 
   // Generates sitemap.xml for search engines.

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { Field, Input, Toggle } from '@/components/ui/form';
 import { IconLightning, IconTrash } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -10,6 +10,11 @@ import { Pagination } from '@/components/ui/Pagination';
 import { type AddWebhookBody, bq, WEBHOOK_EVENTS } from '@/lib/bq';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
+import {
+  assertSuccessfulMutationResponse,
+  type ServerActionLease,
+  useServerActionGuard,
+} from '@/lib/useServerActionGuard';
 
 /**
  * Page state clamped to the live page count. Clamps the STATE, not just the
@@ -32,42 +37,120 @@ export function Webhooks() {
   const [safePage, setPage] = useClampedPage(pageCount);
 
   const [actErr, setActErr] = useState<string | null>(null);
-  const act = async (fn: () => Promise<unknown>) => {
+  const [removing, setRemoving] = useState<Set<string>>(new Set());
+  const actionGuard = useServerActionGuard('webhooks');
+
+  // Optimistic enable/disable: flip the switch immediately, then let the server
+  // confirm. Each value carries its intent token: an older request's finally
+  // may only remove its own override, never a newer click's value.
+  const [optimistic, setOptimistic] = useState<Record<string, { value: boolean; intent: symbol }>>(
+    {}
+  );
+  const toggleRuns = useRef(
+    new Map<string, { desired: boolean; intent: symbol; lease: ServerActionLease }>()
+  );
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection lifecycle boundary
+  useEffect(() => {
     setActErr(null);
+    setRemoving(new Set());
+    setOptimistic({});
+    toggleRuns.current.clear();
+  }, [actionGuard.scopeKey]);
+
+  const remove = async (id: string) => {
+    const lease = actionGuard.begin(['registry-write', `webhook:${id}`]);
+    if (!lease) return;
+    setActErr(null);
+    setRemoving((current) => new Set(current).add(id));
     try {
-      await fn();
-      refetch();
+      const response = await bq.removeWebhook(id);
+      assertSuccessfulMutationResponse(response, 'Remove webhook');
+      if (!lease.isCurrent()) return;
+      void refetch();
     } catch (e) {
-      // Surface the failure — a silently-snapping-back toggle or a no-op
-      // confirmed delete otherwise reads as "it worked".
+      if (!lease.isCurrent()) return;
+      // Surface the failure — a confirmed delete that silently no-ops reads as
+      // success even though the row remains.
       setActErr((e as Error).message);
+    } finally {
+      if (lease.finish()) {
+        setRemoving((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+      }
     }
   };
 
-  // Optimistic enable/disable: flip the switch immediately, then let the server
-  // confirm. On failure the override is dropped (switch rolls back) and the
-  // error surfaces as a toast.
-  const [optimistic, setOptimistic] = useState<Record<string, boolean>>({});
-  const toggleEnabled = async (id: string, next: boolean) => {
-    setOptimistic((m) => ({ ...m, [id]: next }));
-    try {
-      await bq.setWebhookEnabled(id, next);
-      await refetch();
-    } catch (e) {
-      toast.error('Webhook toggle failed', (e as Error).message);
-    } finally {
-      setOptimistic((m) => {
-        const { [id]: _dropped, ...rest } = m;
-        return rest;
-      });
+  const toggleEnabled = (id: string, next: boolean) => {
+    // Keep one network writer per webhook. New clicks update the desired value
+    // and are coalesced; a newer request is launched only after the previous
+    // response, so an older server mutation can never finish last.
+    const intent = Symbol('webhook-toggle');
+    const active = toggleRuns.current.get(id);
+    if (active) {
+      active.desired = next;
+      active.intent = intent;
+      setOptimistic((current) => ({ ...current, [id]: { value: next, intent } }));
+      return;
     }
+    const lease = actionGuard.begin(`webhook:${id}`);
+    if (!lease) return;
+    const run = { desired: next, intent, lease };
+    toggleRuns.current.set(id, run);
+    setOptimistic((current) => ({ ...current, [id]: { value: next, intent } }));
+
+    void (async () => {
+      while (lease.isCurrent() && toggleRuns.current.get(id) === run) {
+        const sentValue = run.desired;
+        let error: Error | null = null;
+        try {
+          const response = await bq.setWebhookEnabled(id, sentValue);
+          assertSuccessfulMutationResponse(response, 'Toggle webhook');
+        } catch (caught) {
+          error = caught instanceof Error ? caught : new Error(String(caught));
+        }
+        if (!lease.isCurrent() || toggleRuns.current.get(id) !== run) return;
+        // If the desired state changed while this request was in flight, send
+        // only the newest value. Intermediate clicks never reach the server.
+        if (run.desired !== sentValue) continue;
+        // Reconcile even after an error: the server may have committed the
+        // write before the response was lost. The optimistic value stays in
+        // place while this read completes, so it cannot visibly snap back.
+        await refetch();
+        if (!lease.isCurrent() || toggleRuns.current.get(id) !== run) return;
+        // A click can arrive while the final refetch is in flight.
+        if (run.desired !== sentValue) continue;
+        toggleRuns.current.delete(id);
+        const finalIntent = run.intent;
+        setOptimistic((current) => {
+          if (current[id]?.intent !== finalIntent) return current;
+          const { [id]: _dropped, ...rest } = current;
+          return rest;
+        });
+        if (error) toast.error('Webhook toggle failed', error.message);
+        lease.finish();
+        return;
+      }
+    })();
   };
 
   return (
     <div>
-      <PageHeader title="Webhooks" description="HTTP callbacks fired on job events." live />
+      <PageHeader
+        title="Webhooks"
+        description="HTTP callbacks fired on job events."
+        live={!!data && !error}
+      />
 
-      {error && <OfflineBanner onRetry={refetch} />}
+      {error && data && (
+        <OfflineBanner
+          message="Webhook refresh failed — showing the last successful registry."
+          onRetry={refetch}
+        />
+      )}
       {actErr && (
         <div
           role="status"
@@ -80,14 +163,16 @@ export function Webhooks() {
       <Card className="mb-6">
         <CardHeader title="Add webhook" />
         <WebhookForm
-          onAdd={async (b) => {
-            await bq.addWebhook(b);
-            refetch();
-          }}
+          onAdd={(body) => bq.addWebhook(body)}
+          onAccepted={() => void refetch()}
+          beginAdd={() => actionGuard.begin(['registry-write', 'add'])}
+          scopeKey={actionGuard.scopeKey}
         />
       </Card>
 
-      {loading && !data && !error ? (
+      {error && !data ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : loading && !data ? (
         <LoadingState label="Loading webhooks…" />
       ) : webhooks.length === 0 ? (
         <EmptyState
@@ -117,7 +202,7 @@ export function Webhooks() {
                     className="border-b border-line last:border-0 align-top hover:bg-surface-2/40"
                   >
                     <td className="max-w-xs truncate px-5 py-3 font-mono text-xs text-fg">
-                      {w.url}
+                      {displayWebhookUrl(w.url)}
                     </td>
                     <td className="px-5 py-3 text-xs text-muted">{w.events.join(', ')}</td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">{w.queue ?? 'all'}</td>
@@ -133,17 +218,18 @@ export function Webhooks() {
                     </td>
                     <td className="px-5 py-3">
                       <Toggle
-                        checked={optimistic[w.id] ?? w.enabled}
-                        label={`${(optimistic[w.id] ?? w.enabled) ? 'Disable' : 'Enable'} webhook`}
+                        checked={optimistic[w.id]?.value ?? w.enabled}
+                        label={`${(optimistic[w.id]?.value ?? w.enabled) ? 'Disable' : 'Enable'} webhook`}
                         onChange={(v) => toggleEnabled(w.id, v)}
                       />
                     </td>
                     <td className="px-5 py-3 text-right">
                       <IconButton
                         aria-label="Remove webhook"
+                        disabled={removing.has(w.id)}
                         onClick={() =>
-                          window.confirm(`Remove webhook for ${w.url}?`) &&
-                          act(() => bq.removeWebhook(w.id))
+                          window.confirm(`Remove webhook for ${displayWebhookUrl(w.url)}?`) &&
+                          remove(w.id)
                         }
                       >
                         <IconTrash className="size-3.5" />
@@ -170,9 +256,27 @@ export function Webhooks() {
 /** True when the exact string given can be fetched by the server (http/https). */
 export function isDeliverableUrl(u: string): boolean {
   try {
-    return /^https?:$/.test(new URL(u).protocol);
+    const parsed = new URL(u);
+    return (
+      u.length <= 2_048 &&
+      /^https?:$/.test(parsed.protocol) &&
+      parsed.username === '' &&
+      parsed.password === ''
+    );
   } catch {
     return false;
+  }
+}
+
+export function displayWebhookUrl(value: string): string {
+  try {
+    const parsed = new URL(value);
+    if (!parsed.username && !parsed.password) return value;
+    parsed.username = 'redacted';
+    parsed.password = 'redacted';
+    return parsed.toString();
+  } catch {
+    return value;
   }
 }
 
@@ -194,20 +298,40 @@ export function buildWebhookBody(
   // The server calls this URL blind — catch a pasted hostname/typo here
   // instead of shipping a webhook that can never fire.
   if (!isDeliverableUrl(u)) {
-    return { ok: false, msg: 'URL must be a valid http:// or https:// address' };
+    return {
+      ok: false,
+      msg: 'URL must be a valid http:// or https:// address without embedded credentials',
+    };
+  }
+  const q = queue.trim();
+  if (q && (q.length > 256 || !/^[a-zA-Z0-9_\-.:]+$/.test(q))) {
+    return {
+      ok: false,
+      msg: 'Queue must be at most 256 characters using letters, numbers, _, -, . or :',
+    };
   }
   return {
     ok: true,
     body: {
       url: u,
       events,
-      queue: queue.trim() || undefined,
+      queue: q || undefined,
       secret: secret.trim() || undefined,
     },
   };
 }
 
-function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> }) {
+function WebhookForm({
+  onAdd,
+  onAccepted,
+  beginAdd,
+  scopeKey,
+}: {
+  onAdd: (b: AddWebhookBody) => Promise<unknown>;
+  onAccepted: () => void;
+  beginAdd: () => ServerActionLease | null;
+  scopeKey: string;
+}) {
   const [url, setUrl] = useState('');
   const [queue, setQueue] = useState('');
   const [secret, setSecret] = useState('');
@@ -215,26 +339,38 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection lifecycle boundary
+  useEffect(() => {
+    setBusy(false);
+    setErr(null);
+  }, [scopeKey]);
+
   const toggle = (ev: string) =>
     setEvents((prev) => (prev.includes(ev) ? prev.filter((e) => e !== ev) : [...prev, ev]));
 
   const submit = async () => {
-    if (busy) return; // a double-click would register the webhook twice
+    if (busy) return;
     setErr(null);
     const built = buildWebhookBody(url, events, queue, secret);
     if (!built.ok) {
       setErr(built.msg);
       return;
     }
+    const lease = beginAdd();
+    if (!lease) return;
     setBusy(true);
     try {
-      await onAdd(built.body);
+      const response = await onAdd(built.body);
+      assertSuccessfulMutationResponse(response, 'Add webhook');
+      if (!lease.isCurrent()) return;
       setUrl('');
       setSecret('');
+      onAccepted();
     } catch (e) {
+      if (!lease.isCurrent()) return;
       setErr((e as Error).message);
     } finally {
-      setBusy(false);
+      if (lease.finish()) setBusy(false);
     }
   };
 
@@ -251,7 +387,11 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
           <Field label="URL">
             <Input
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onInput={(e) => setUrl(e.currentTarget.value)}
+              name="webhook-url"
+              type="url"
+              maxLength={2_048}
+              autoComplete="url"
               placeholder="https://example.com/hook"
             />
           </Field>
@@ -260,6 +400,9 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
           <Input
             value={queue}
             onChange={(e) => setQueue(e.target.value)}
+            name="webhook-queue"
+            maxLength={256}
+            autoComplete="off"
             placeholder="all queues"
           />
         </Field>
@@ -267,6 +410,8 @@ function WebhookForm({ onAdd }: { onAdd: (b: AddWebhookBody) => Promise<void> })
           <Input
             type="password"
             autoComplete="new-password"
+            name="webhook-secret"
+            maxLength={65_536}
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
             placeholder="HMAC signing secret"

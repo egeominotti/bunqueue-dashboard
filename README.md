@@ -88,8 +88,11 @@ The full dashboard running on sample data, no server needed.
 ## Why
 
 bunqueue exposes a rich HTTP API, but operating it by hand (curl, ad-hoc scripts) is slow and
-error-prone. This dashboard is a **complete operator console**: everything the API can do, plus the
-one thing it can't, managing the server *process*, behind a fast, keyboard-friendly UI.
+error-prone. This dashboard is a production-oriented operator console: it exposes the verified,
+safe subset of the API, fails closed where
+[v2.8.55](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.55) lacks atomic
+flow-safety guarantees, and also manages the
+server *process* through a separate guarded agent.
 
 It talks **only** to bunqueue's public HTTP API (`:6790`) and a small local **control agent**. It
 never imports or modifies bunqueue itself, so it tracks any bunqueue server you point it at.
@@ -101,16 +104,20 @@ never imports or modifies bunqueue itself, so it tracks any bunqueue server you 
 | **Home** | Overview | Live health banner, throughput, queue health, recent activity |
 | **Server** | Control ▸ Server | **Start / stop / restart** the server process, edit its config, tail process logs |
 | **Enqueue** | Control ▸ Add Job | Add jobs (single or bulk) with every option |
-| **Inspect** | Control ▸ Job Inspector | Look up any job; promote / retry / discard / cancel / re-prioritize / delay; view data & result |
-| **Queues** | Control ▸ Queue Control | Pause / resume / drain / clean / promote / retry-completed, rate-limit, concurrency, stall & DLQ policy |
-| **Cron** | Control ▸ Cron Manager | Create (cron or interval) and delete schedules |
-| **DLQ** | Control ▸ DLQ | Inspect dead-letter entries, retry one / all, purge |
+| **Inspect** | Control ▸ Job Inspector | Look up any job; promote / re-prioritize / delay; view data & result |
+| **Queues** | Control ▸ Queue Control | Pause / resume / promote, explicit desired-state limits, stall config & guarded DLQ policy |
+| **Cron** | Control ▸ Cron Manager | Submit acknowledged cron/interval upserts and delete schedules |
+| **DLQ** | Control ▸ DLQ | Inspect entries, failure history and CSV exports; retry and purge stay unavailable |
 | **Webhooks** | Control ▸ Webhooks | Create / enable / delete job-event webhooks |
 | **Ops** | Control ▸ Diagnostics | Health, ping, storage, memory, connections, totals |
 | **Browse** | Queues / Jobs / DLQ / Cron / Metrics / Workers / Logs | Read-only browsing with basic actions |
 
-> Every job action is **gated by the job's real state** (`src/lib/jobActions.ts`), so the UI never
-> offers an action the server would reject.
+> Job actions are gated by the v2.8.55 flow contract. Every DLQ retry and completed-job requeue is
+> unavailable: the DLQ GET + POST sequence has no atomic generation/state/topology precondition and
+> can target a job recreated under the same ID, while `retryCompleted` does not rebuild dependency
+> registration or flow order. Cancel, Discard, Drain, Clean, Obliterate and DLQ Purge also fail
+> closed. DLQ `maxAge`/`maxEntries` are read-only, auto-retry can only be disabled, and Copilot's only
+> mutations are Promote, Pause and Resume.
 
 ## Quick start
 
@@ -127,7 +134,8 @@ One command, **zero dependencies** (a 543 kB download): serves the prebuilt dash
 http://127.0.0.1:8080, proxies `/api/*` to your bunqueue server (`BUNQUEUE_URL`, default
 `http://localhost:6790`), and runs the control agent on `127.0.0.1:6800`. Same env knobs as the
 standalone binaries: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` · `AGENT_PORT` ·
-`AGENT_ALLOWED_ORIGINS` · `AGENT_TOKEN` · `BUNQUEUE_START_CMD`.
+`AGENT_ALLOWED_ORIGINS` · `AGENT_ALLOWED_HOSTS` · `AGENT_TOKEN` · `BUNQUEUE_TOKEN` ·
+`TRUST_PROXY` · `BUNQUEUE_START_CMD`.
 
 Install it permanently instead of running via `bunx`:
 
@@ -189,11 +197,27 @@ in-app **Settings** page. Copy [`.env.example`](.env.example) to `.env` to set d
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `VITE_BUNQUEUE_URL` | bunqueue server origin | `/api` (dev proxy → `:6790`) |
-| `VITE_BUNQUEUE_TOKEN` | Bearer token, if the server has `AUTH_TOKENS` set | _none_ |
 | `VITE_BUNQUEUE_AGENT_URL` | Control-agent origin | `http://localhost:6800` |
+| `BIND_ADDR` | All-in-one dashboard bind address | `127.0.0.1` |
 | `AGENT_PORT` | Control-agent port | `6800` |
 | `AGENT_ALLOWED_ORIGINS` | Extra browser origins allowed to drive the agent (comma-separated) | dev defaults |
-| `AGENT_TOKEN` | Optional bearer token required on state-changing agent requests | _none_ (off) |
+| `AGENT_ALLOWED_HOSTS` | Extra Host names/IPs accepted by the all-in-one server and agent | loopback names |
+| `AGENT_TOKEN` | Agent bearer token; mandatory on every bridged route for LAN/proxy access | _none_ (local-only) |
+| `BUNQUEUE_TOKEN` | Admin-API bearer; mandatory on every `/api/*` route for LAN/proxy access | _none_ (`/api` remote-disabled) |
+| `TRUST_PROXY` | Trust an overwritten `X-Forwarded-Host` from a Host-rewriting proxy (`1`) | _off_ |
+
+Server and agent bearer tokens are secrets: enter them in **Settings** or the
+authentication prompt for the current browser session. Do not put secrets in a
+`VITE_*` variable; Vite values are compiled as plaintext into the public bundle.
+
+For `BIND_ADDR=0.0.0.0`, list every LAN hostname/IP in
+`AGENT_ALLOWED_HOSTS` (or its full origin in `AGENT_ALLOWED_ORIGINS`) and set
+both `AGENT_TOKEN` and `BUNQUEUE_TOKEN`. Enter `BUNQUEUE_TOKEN` as the Server
+token in Settings; when Bunqueue itself uses `AUTH_TOKENS`, use the same token
+there so the forwarded Authorization header is valid upstream. Behind a reverse
+proxy, allowlist the public origin; if it rewrites `Host`, also allowlist the
+rewritten Host and use `TRUST_PROXY=1` only when the proxy overwrites
+`X-Forwarded-Host`.
 
 ## Scripts
 
@@ -282,10 +306,15 @@ The control agent can spawn processes, so it is hardened by design (`agent/serve
 - Binds **`127.0.0.1` only**.
 - **CORS locked to an allowlist**, `Access-Control-Allow-Origin` is never `*`.
 - Requests carrying a **disallowed `Origin` are rejected (403)** before reaching the process manager, blocking drive-by CSRF from a malicious tab.
-- Optional **`AGENT_TOKEN`** adds a bearer-token gate on state-changing requests.
+- A **Host allowlist** blocks DNS-rebinding requests and fails closed for unknown names.
+- Truly local agent reads stay zero-configuration; any LAN/proxied `/agent` bridge requires **`AGENT_TOKEN` on every route**.
+- The all-in-one server requires **`BUNQUEUE_TOKEN` on every LAN/proxied `/api/*` route**; without it the API proxy returns `403` before contacting Bunqueue.
+- Embedded and Docker responses deny framing, MIME sniffing and referrer leakage.
 
-Keep the agent on loopback (or an equivalently trusted network) and set `AGENT_TOKEN` for shared
-machines. See [`docs/known-issues.md`](docs/known-issues.md) for the honest, verified limitations.
+Keep the direct agent port on loopback. Static/Caddy deployments that expose Bunqueue directly must
+still use Bunqueue `AUTH_TOKENS` or front-proxy authentication; the all-in-one `BUNQUEUE_TOKEN`
+boundary applies only to `scripts/serve.ts`. Host/Origin checks are not user authentication. See
+[`docs/known-issues.md`](docs/known-issues.md) for the honest, verified limitations.
 
 ## Contributing
 

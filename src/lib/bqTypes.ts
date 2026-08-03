@@ -62,6 +62,7 @@ export interface QueueSummaryFull {
   paused: boolean;
   counts: {
     waiting: number;
+    prioritized: number;
     active: number;
     completed: number;
     failed: number;
@@ -103,7 +104,8 @@ export interface WebhookFull {
   url: string;
   events: string[];
   queue: string | null;
-  secret: string | null;
+  /** Write-only upstream: list responses intentionally omit the secret. */
+  secret?: string | null;
   createdAt: number;
   lastTriggered: number | null;
   successCount: number;
@@ -137,6 +139,20 @@ export interface CronFull {
   executions: number;
   maxLimit: number | null;
   timezone: string | null;
+  uniqueKey?: string | null;
+  dedup?: { ttl?: number; extend?: boolean; replace?: boolean } | null;
+  skipMissedOnRestart?: boolean;
+  skipIfNoWorker?: boolean;
+  preventOverlap?: boolean;
+  jobOptions?: {
+    maxAttempts?: number;
+    backoff?: number | { type: 'fixed' | 'exponential'; delay: number };
+    timeout?: number;
+    delay?: number;
+    stallTimeout?: number;
+    removeOnComplete?: boolean;
+    removeOnFail?: boolean;
+  } | null;
 }
 
 export interface StorageStatusFlat {

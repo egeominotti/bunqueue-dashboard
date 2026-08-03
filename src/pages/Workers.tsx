@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconWorkers } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
@@ -20,6 +20,14 @@ export function Workers() {
   const [page, setPage] = useState(0);
 
   if (loading && !data && !error) return <LoadingState label="Loading workers…" />;
+  if (error && !data) {
+    return (
+      <div>
+        <PageHeader title="Workers" description="Worker inventory is unavailable." />
+        <ErrorState error={error} onRetry={refetch} />
+      </div>
+    );
+  }
 
   const { workers } = data ?? EMPTY;
   const pageCount = Math.max(1, Math.ceil(workers.list.length / PAGE_SIZE));
@@ -28,8 +36,17 @@ export function Workers() {
 
   return (
     <div>
-      {error && <OfflineBanner onRetry={refetch} />}
-      <PageHeader title="Workers" description="Registered workers and their throughput." live />
+      {error && (
+        <OfflineBanner
+          message="Worker refresh failed — showing the last successful inventory."
+          onRetry={refetch}
+        />
+      )}
+      <PageHeader
+        title="Workers"
+        description="Registered workers and their throughput."
+        live={!!data && !error}
+      />
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Total" value={formatNumber(workers.total)} compact />

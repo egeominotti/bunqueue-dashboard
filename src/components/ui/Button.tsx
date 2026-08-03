@@ -35,7 +35,7 @@ export function Button({
       type="button"
       className={cn(
         'inline-flex items-center justify-center rounded-lg font-medium transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
         'disabled:cursor-not-allowed disabled:opacity-50',
         variants[variant],
         sizes[size],
@@ -60,7 +60,7 @@ export function IconButton({
       type="button"
       className={cn(
         'inline-flex size-8 items-center justify-center rounded-lg transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
         'disabled:cursor-not-allowed disabled:opacity-50',
         variants[variant],
         className

@@ -36,6 +36,8 @@ The page is a single form with two cards and a submit row, no live counters or t
 | **removeOnFail** | Delete the job record once it fails for good. |
 | **durable** | Keep the job persisted. |
 | **lifo** | Add to the front of the queue instead of the back. |
+| **Tags / Group ID / Depends on / Unique key** | Group, dependency and deduplication metadata for advanced workflows. |
+| **Repeat policy (JSON)** | The safe v2.8.55 interval form: `{"every":60000,"limit":10}`. Create cron-expression schedules in **Cron Manager**. |
 
 **Submit row**
 
@@ -64,6 +66,16 @@ Nothing is sent until you press **Add job**, and there's no confirmation step, t
 2. **Data** must be valid JSON, any error shows in red under the editor.
 3. **Count** must be a whole number of at least 1.
 4. **Count** can be at most 10,000.
+5. **Repeat policy**, when present, must contain a positive whole-number `every`
+   value and may contain a positive whole-number `limit`. No other keys are
+   accepted by this dashboard.
+
+::: warning
+Do not send `repeat.pattern` through the v2.8.55 push route. That release stores
+the pattern but continues the repeat with `every ?? 0`, which can create an
+immediate hot loop instead of following the cron expression. Use **Cron Manager**
+for cron-expression schedules; it uses the dedicated `/crons` API.
+:::
 
 ::: warning
 Typing a queue name that doesn't exist creates a brand-new queue. Double-check the name before a large bulk add, or a typo will scatter jobs into an unintended queue.
@@ -72,16 +84,24 @@ Typing a queue name that doesn't exist creates a brand-new queue. Double-check t
 ## Good to know
 
 - **Jobs have no name.** The only identity you control is the **Custom job ID**, everything else lives in the JSON data.
-- **Bulk copies are identical.** Every job in a bulk add shares the exact same data. For different payloads, add them separately.
+- **Count copies are identical.** Every copy shares the exact same data and options. For different payloads, use **Bulk import**, which accepts JSON array/NDJSON job specs and preserves the full v2.8.55 bulk `JobInput` surface (including structured backoff, tags/groups/dependencies, repeat, dedup, retention and dependency-failure controls).
+- **The complete bulk request is bounded.** Bunqueue limits data per job but not
+  data multiplied by Count. The dashboard measures the exact translated JSON
+  envelope without constructing it and refuses submissions above 64 MiB, so a
+  valid large payload cannot exhaust the browser by being copied thousands of
+  times.
 - **Bulk plus a custom ID collapses into one job.** If you set **Count** above 1 *and* a **Custom job ID**, every copy shares that ID, so the server dedupes them into a single job. The result line honestly reports how many distinct jobs were actually created, often just one. See [Known issues](/known-issues).
 - **Fire-and-forget.** This page reports the new job ID but doesn't track the job afterward. Use the Job Inspector or the Jobs page to watch it run.
-- **A couple of advanced options aren't here.** This form covers the common enqueue options; a few rarely used ones can only be set through the raw API.
+- **Rare bulk-only options live in Bulk import.** The friendly form exposes the
+  single-push surface; raw spec mode is the escape hatch for the remaining
+  bulk-only `JobInput` controls.
 - **Autocomplete needs a connection.** Queue suggestions come from your live server. If it's unreachable the field still works as free text, you just won't get suggestions, and submitting shows the error in the result line.
 
 ::: details Under the hood (for developers)
 - Uses the **`bq`** client throughout (never `api.ts`).
 - Queue autocomplete: `GET /dashboard/queues`, polled every **30 s**.
 - Single add (Count = 1): `POST /queues/:q/jobs`.
-- Bulk add (Count > 1): `POST /queues/:q/jobs/bulk` with N copies of the body.
+- Bulk add (Count > 1): `POST /queues/:q/jobs/bulk` with N copies of the body,
+  after enforcing the 64 MiB aggregate UTF-8 envelope budget.
 - The client treats an HTTP 200 carrying `{ ok: false }` as an error, so logical failures surface in the red result line instead of being swallowed.
 :::

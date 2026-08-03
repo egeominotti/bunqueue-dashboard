@@ -3,35 +3,32 @@
  * between JobInspector (single job) and JobsPro (bulk/per-row) so the two
  * surfaces never drift on what's legal to attempt.
  *
- * Mirrors the location-based gating in src/application/operations/jobManagement.ts:
- * cancel/priority only act on queue-resident jobs (waiting/delayed/prioritized/
- * waiting-children); discard/delay also accept an active (processing) job;
- * promote only applies to a delayed job; a DLQ'd job ("failed") can only be
- * retried via the queue-level DLQ retry endpoint, not the generic job actions;
- * a completed job can only be requeued via the queue-level retry-completed
- * endpoint (src/application/dlqManager.ts retryCompletedJobs), which resets
- * attempts/timestamps and re-inserts it into the waiting queue.
+ * Mirrors the location-based gating in src/application/operations/jobManagement.ts
+ * only where the upstream operation is safe for an HTTP client. `waiting-children`
+ * is NOT in the runnable heap, so priority and delay are unavailable there.
+ * Cancel and Discard are deliberately unavailable in every state: v2.8.55 cannot
+ * inspect reverse dependencies or make either transition conditional on the state
+ * that the dashboard read. Discard also bypasses terminal flow-failure resolution
+ * and accepts a job that became active after the snapshot, which can strand its
+ * parent while the worker continues external side effects. DLQ retry is also
+ * unavailable: a read followed by retry is subject to id-reuse TOCTOU, and the
+ * endpoint has no atomic generation/topology precondition. Completed requeue is
+ * unavailable because v2.8.55 does not rebuild a child's dependency registration.
  *
- * `fail` (force-fail via POST /jobs/:id/fail) and `moveToDelayed`
- * (POST /jobs/:id/move-to-delayed) only act on an active (processing) job —
- * fail pushes it down the retry/DLQ path, moveToDelayed parks it as delayed.
+ * Active state transitions are deliberately absent. Bunqueue v2.8.55 removes
+ * the broker processing record but cannot cancel the already-running worker;
+ * retry/discard/fail/move-to-delayed can therefore duplicate external side
+ * effects. The dashboard only permits the non-transitioning progress update.
  */
 export function actionGates(state: string | undefined) {
-  const inQueue =
-    state === 'waiting' ||
-    state === 'delayed' ||
-    state === 'prioritized' ||
-    state === 'waiting-children';
+  const inRunQueue = state === 'waiting' || state === 'delayed' || state === 'prioritized';
   return {
-    cancel: inQueue,
-    discard: inQueue || state === 'active',
+    cancel: false,
+    discard: false,
     promote: state === 'delayed',
-    retryActive: state === 'active',
-    retryDlq: state === 'failed',
-    requeueCompleted: state === 'completed',
-    setPriority: inQueue,
-    setDelay: inQueue || state === 'active',
-    fail: state === 'active',
-    moveToDelayed: state === 'active',
+    retryDlq: false,
+    requeueCompleted: false,
+    setPriority: inRunQueue,
+    setDelay: inRunQueue,
   };
 }

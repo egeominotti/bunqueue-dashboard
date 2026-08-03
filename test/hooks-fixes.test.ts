@@ -14,9 +14,45 @@ const realDateNow = Date.now;
 
 const overview = () => ({
   ok: true,
-  stats: { waiting: 2, active: 1, delayed: 3 },
+  stats: {
+    waiting: 2,
+    active: 1,
+    delayed: 3,
+    completed: 10,
+    dlq: 0,
+    totalPushed: 20,
+    totalPulled: 15,
+    totalCompleted: 10,
+    totalFailed: 1,
+    uptime: 1000,
+  },
   throughput: { pushPerSec: 5, completePerSec: 4, failPerSec: 1 },
 });
+
+const stats = () => ({
+  ok: true,
+  stats: {
+    waiting: 2,
+    prioritized: 0,
+    active: 1,
+    delayed: 3,
+    completed: 10,
+    dlq: 0,
+    'waiting-children': 0,
+    totalPushed: 20,
+    totalPulled: 15,
+    totalCompleted: 10,
+    totalFailed: 1,
+    uptime: 1000,
+    pushPerSec: 5,
+    pullPerSec: 4,
+    completePerSec: 4,
+    failPerSec: 1,
+  },
+});
+
+const telemetryResponse = (input: RequestInfo | URL): Response =>
+  Response.json(String(input).endsWith('/stats') ? stats() : overview());
 
 afterEach(() => {
   globalThis.fetch = realFetch;
@@ -30,8 +66,12 @@ describe('useThroughputSeries — malformed /dashboard body', () => {
   });
 
   test('a 200 body with no stats is a true no-op: latest stays null, error surfaces', async () => {
-    globalThis.fetch = (() =>
-      Promise.resolve(Response.json({ ok: true, throughput: { pushPerSec: 1 } }))) as typeof fetch;
+    globalThis.fetch = ((input) =>
+      Promise.resolve(
+        String(input).endsWith('/stats')
+          ? Response.json(stats())
+          : Response.json({ ok: true, throughput: { pushPerSec: 1 } })
+      )) as typeof fetch;
     const h = renderHook(() => useThroughputSeries(60));
     await settle(20);
     expect(h.result.current.latest).toBeNull();
@@ -41,19 +81,45 @@ describe('useThroughputSeries — malformed /dashboard body', () => {
   });
 
   test('a good sample clears the error and publishes latest', async () => {
-    globalThis.fetch = (() => Promise.resolve(Response.json(overview()))) as typeof fetch;
+    globalThis.fetch = ((input) => Promise.resolve(telemetryResponse(input))) as typeof fetch;
     const h = renderHook(() => useThroughputSeries(60));
     await settle(20);
     expect(h.result.current.error).toBeNull();
     expect(h.result.current.latest?.stats.waiting).toBe(2);
     h.unmount();
   });
+
+  test('every sampled metric must be a finite number before latest is published', async () => {
+    const corruptions: Array<[string, (body: ReturnType<typeof overview>) => void]> = [
+      ['waiting', (body) => Object.assign(body.stats, { waiting: '2' })],
+      ['active', (body) => Object.assign(body.stats, { active: null })],
+      ['delayed', (body) => Object.assign(body.stats, { delayed: undefined })],
+      ['pushPerSec', (body) => Object.assign(body.throughput, { pushPerSec: '5' })],
+      ['completePerSec', (body) => Object.assign(body.throughput, { completePerSec: null })],
+      ['failPerSec', (body) => Object.assign(body.throughput, { failPerSec: undefined })],
+    ];
+
+    for (const [, corrupt] of corruptions) {
+      const body = overview();
+      corrupt(body);
+      globalThis.fetch = ((input) =>
+        Promise.resolve(
+          String(input).endsWith('/stats') ? Response.json(stats()) : Response.json(body)
+        )) as typeof fetch;
+      const h = renderHook(() => useThroughputSeries(60));
+      await settle(10);
+      expect(h.result.current.latest).toBeNull();
+      expect(h.result.current.depth).toEqual([]);
+      expect(h.result.current.error?.message).toContain('numeric metrics');
+      h.unmount();
+    }
+  });
 });
 
 describe('useThroughputSeries — series integrity', () => {
   beforeEach(() => {
     useConnectionStore.setState({ baseUrl: 'http://srv', token: '' });
-    globalThis.fetch = (() => Promise.resolve(Response.json(overview()))) as typeof fetch;
+    globalThis.fetch = ((input) => Promise.resolve(telemetryResponse(input))) as typeof fetch;
   });
 
   test('retargeting the server clears the series instead of splicing two servers', async () => {
@@ -72,9 +138,9 @@ describe('useThroughputSeries — series integrity', () => {
 
   test('a long outage restarts the window; ordinary jitter does not', async () => {
     let healthy = true;
-    globalThis.fetch = (() =>
+    globalThis.fetch = ((input) =>
       Promise.resolve(
-        healthy ? Response.json(overview()) : Response.json({ ok: false, error: 'down' })
+        healthy ? telemetryResponse(input) : Response.json({ ok: false, error: 'down' })
       )) as typeof fetch;
 
     const h = renderHook(() => useThroughputSeries(60));

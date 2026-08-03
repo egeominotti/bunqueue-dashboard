@@ -1,6 +1,6 @@
 ---
 title: "Web dashboard for bunqueue with full queue control and server lifecycle"
-description: "bunqueue dashboard is a free, open source web UI that fully drives a bunqueue server: queues, jobs, dead-letter queue, cron, webhooks, workers, live activity, and the server process itself. Try the live demo, no server required."
+description: "bunqueue dashboard is a free, open source web UI for safely operating a bunqueue server: queues, jobs, dead-letter queue, cron, webhooks, workers, live activity, and the server process itself. Try the live demo, no server required."
 layout: home
 ---
 
@@ -19,7 +19,7 @@ import { withBase } from 'vitepress'
 
 <h1 class="lp-h1">The only queue dashboard that also<br>runs the server</h1>
 
-<p class="lp-sub">A free, open source web UI that <strong>fully drives</strong> a bunqueue server (a fast, Redis-free, Bun-native background-job queue): queues, jobs, dead-letter queue, cron, webhooks, workers and live activity, plus start / stop / restart of the server process itself. Built for Bun developers and AI-agent builders who want to <em>operate</em> their queue, not just watch it. It talks only to bunqueue's public HTTP API and a tiny loopback control agent.</p>
+<p class="lp-sub">A free, open source web UI that <strong>safely operates</strong> a bunqueue server (a fast, Redis-free, Bun-native background-job queue): queues, jobs, dead-letter queue, cron, webhooks, workers and live activity, plus start / stop / restart of the server process itself. Built for Bun developers and AI-agent builders who want to <em>operate</em> their queue, not just watch it. It talks only to bunqueue's public HTTP API and a tiny loopback control agent, and fails closed when the v2.8.55 contract cannot make a mutation atomic.</p>
 
 <p class="lp-ctas">
 <a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">Open the live demo</a>
@@ -58,7 +58,7 @@ import { withBase } from 'vitepress'
 
 ### State-gated job actions
 
-Add, inspect, promote, retry, requeue and cancel jobs. Every action is gated by the job's <em>actual</em> current state, so the UI never offers something the server would reject. <a href="./guide/job-inspector">Job Inspector →</a>
+Add and inspect jobs, promote delayed work, and update eligible job data, priority, delay or progress. DLQ retry, completed-job requeue and destructive Cancel fail closed under the v2.8.55 contract. <a href="./guide/job-inspector">Job Inspector →</a>
 
 </article>
 
@@ -74,7 +74,7 @@ A Server-Sent-Events feed with automatic reconnect shows jobs flowing in real ti
 
 ### DLQ triage
 
-A fleet-wide dead-letter dashboard plus a single-queue triage surface: failure reasons, per-attempt history, retry one / retry all / purge, CSV export. <a href="./guide/dlq-control">DLQ Control →</a>
+A fleet-wide dead-letter dashboard plus a single-queue triage surface: failure reasons, per-attempt history and CSV export. Manual, bulk and Copilot retry remain unavailable because the GET + POST sequence has no atomic generation/state/topology precondition; purge is disabled too. <a href="./guide/dlq-control">DLQ Control →</a>
 
 </article>
 
@@ -146,7 +146,7 @@ Parent / children / depends-on relationships drawn as a graph, laid out client-s
 
 ### AI Copilot <em class="lp-tag">experimental</em>
 
-An in-app assistant that drives the same API through tools. Bring your own key, and requests go straight from your browser to your provider. <a href="./guide/copilot">Copilot →</a>
+An in-app assistant that reads the same API through tools; its only mutations are Promote, Pause and Resume, each confirmed by you. Bring your own key, and requests go straight from your browser to your provider. <a href="./guide/copilot">Copilot →</a>
 
 </article>
 
@@ -173,12 +173,12 @@ An in-app assistant that drives the same API through tools. Bring your own key, 
 ## Everything you can drive {.lp-title}
 
 <div class="lp-tiles">
-<a href="./guide/queues"><strong>Queues</strong><span>pause · resume · rate-limit · concurrency · drain · obliterate</span></a>
-<a href="./guide/jobs"><strong>Jobs</strong><span>add · inspect · promote · retry · requeue · cancel</span></a>
-<a href="./guide/dlq"><strong>DLQ</strong><span>reasons · per-row retry · retry-all · purge</span></a>
+<a href="./guide/queues"><strong>Queues</strong><span>pause · resume · desired-state limits · flow-safe controls</span></a>
+<a href="./guide/jobs"><strong>Jobs</strong><span>add · inspect · promote · guarded metadata edits</span></a>
+<a href="./guide/dlq"><strong>DLQ</strong><span>reasons · attempt history · CSV · read-only retry controls</span></a>
 <a href="./guide/cron"><strong>Cron</strong><span>expressions or intervals · next-runs preview</span></a>
 <a href="./guide/webhooks"><strong>Webhooks</strong><span>event scoping · HMAC secrets · delivery stats</span></a>
-<a href="./guide/workers"><strong>Workers</strong><span>health · last seen · unregister</span></a>
+<a href="./guide/workers"><strong>Workers</strong><span>health · last seen · stale-record cleanup</span></a>
 <a href="./guide/server"><strong>Server</strong><span>start · stop · restart · live process logs</span></a>
 <a href="./guide/database"><strong>Database</strong><span>read-only SQLite tables · schema · queries</span></a>
 </div>
@@ -329,7 +329,7 @@ No. It never imports or modifies bunqueue source. It speaks only to the public H
 
 ### Is the control agent safe to run?
 
-The agent can spawn processes, so it's locked down: bound to 127.0.0.1, an Origin allowlist with CORS never set to `*`, a Host-header allowlist against DNS rebinding, and an optional `AGENT_TOKEN` on state-changing requests. The full threat model is in <a href="./agent">the agent docs</a>.
+The agent can spawn processes, so it's locked down: a direct loopback listener, an Origin allowlist with CORS never set to `*`, and a Host-header allowlist against DNS rebinding. Truly local access can remain zero-config; a LAN or reverse-proxied `/agent` bridge requires `AGENT_TOKEN` on every route, while the all-in-one `/api` proxy separately requires `BUNQUEUE_TOKEN`. The full threat model is in <a href="./agent">the agent docs</a>.
 
 </article>
 
@@ -337,7 +337,7 @@ The agent can spawn processes, so it's locked down: bound to 127.0.0.1, an Origi
 
 ### Where do my tokens and secrets live?
 
-In memory only. Server tokens, agent tokens, S3 keys and webhook targets are deliberately excluded from localStorage, so re-enter them per session or supply them via environment variables.
+In memory only. Server tokens, agent tokens, S3 keys and webhook targets are deliberately excluded from localStorage, so re-enter them per session or use authentication at your front proxy. Never put secrets in `VITE_*` variables: they become plaintext in the public bundle.
 
 </article>
 
@@ -361,7 +361,7 @@ Four ways: the zero-dependency npm package (`bunx bunqueue-dashboard`), a standa
 
 ### What doesn't it do?
 
-Alerts are evaluated in the browser while a tab is open, so it's not away-from-desk paging. S3 backup is configured by the server's environment, not from the UI. Every other verified gap is listed, with file references, on the <a href="./known-issues">known issues</a> page.
+Alerts are evaluated in the browser while a tab is open, so it's not away-from-desk paging. S3 backup is configured by the server's environment, not from the UI. Mutations that v2.8.55 cannot make atomic are intentionally disabled, including every DLQ retry and completed-job requeue. DLQ <code>maxAge</code>/<code>maxEntries</code> are shown read-only and omitted from saves; auto-retry can only be disabled. Every verified contract gap is listed on the <a href="./known-issues">known issues</a> page.
 
 </article>
 

@@ -6,15 +6,37 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { StatCard } from '@/components/ui/StatCard';
 import { StatusBadge } from '@/components/ui/StatusBadge';
-import { api } from '@/lib/api';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { useActivityStream } from '@/lib/useActivityStream';
 import { usePolledData } from '@/lib/usePolledData';
+import { discoverAllQueues } from './Jobs';
 
 const ALL = '__all__';
 const STATUS = ['all', 'waiting', 'active', 'completed', 'failed'] as const;
 type StatusFilter = (typeof STATUS)[number];
 const PAGE = 10;
+
+export async function discoverAllLogQueues() {
+  const result = await discoverAllQueues();
+  if (
+    !Number.isFinite(result.timestamp) ||
+    result.queues.some(
+      (entry) =>
+        !Number.isSafeInteger(entry.waiting) ||
+        entry.waiting < 0 ||
+        !Number.isSafeInteger(entry.delayed) ||
+        entry.delayed < 0 ||
+        !Number.isSafeInteger(entry.active) ||
+        entry.active < 0 ||
+        !Number.isSafeInteger(entry.dlq) ||
+        entry.dlq < 0 ||
+        typeof entry.paused !== 'boolean'
+    )
+  ) {
+    throw new Error('Queue discovery returned malformed queue summaries');
+  }
+  return result;
+}
 
 export function Logs() {
   const [queue, setQueue] = useState(ALL);
@@ -22,10 +44,18 @@ export function Logs() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
 
-  const { data: qs } = usePolledData(() => api.queues(500), [], { intervalMs: 30000 });
-  const { events, counters, throughput, connected } = useActivityStream(
-    queue === ALL ? undefined : queue
-  );
+  const {
+    data: qs,
+    error: discoveryError,
+    refetch: refetchQueues,
+  } = usePolledData(discoverAllLogQueues, [], { intervalMs: 30000 });
+  const {
+    events,
+    counters,
+    throughput,
+    connected,
+    error: streamError,
+  } = useActivityStream(queue === ALL ? undefined : queue);
 
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -49,12 +79,20 @@ export function Logs() {
 
   return (
     <div>
-      {!connected && events.length === 0 && <OfflineBanner />}
       <PageHeader
         title="Activity Logs"
         description="Real-time job activity across all queues."
         live={connected}
       />
+      {discoveryError && (
+        <OfflineBanner
+          onRetry={refetchQueues}
+          message={`Could not discover queues — ${discoveryError.message}. The current stream can still be used.`}
+        />
+      )}
+      {streamError && (
+        <OfflineBanner message={`Event stream unavailable — ${streamError.message}. Retrying…`} />
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Total Events" value={formatNumber(counters.total)} compact />
@@ -72,7 +110,13 @@ export function Logs() {
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="w-48">
-          <Select value={queue} onChange={(e) => setQueue(e.target.value)}>
+          <Select
+            value={queue}
+            aria-label="Filter by queue"
+            name="classic-activity-queue-filter"
+            autoComplete="off"
+            onChange={(e) => setQueue(e.target.value)}
+          >
             <option value={ALL}>All Queues</option>
             {(qs?.queues ?? []).map((q) => (
               <option key={q.name} value={q.name}>
@@ -85,6 +129,9 @@ export function Logs() {
         <div className="relative ml-auto min-w-56 flex-1 md:max-w-xs">
           <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
           <input
+            aria-label="Search by job name or ID"
+            name="classic-activity-search"
+            autoComplete="off"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by job name or ID…"
@@ -96,8 +143,18 @@ export function Logs() {
       {rows.length === 0 ? (
         <EmptyState
           icon={<IconLogs />}
-          title={connected ? 'Waiting for activity…' : 'Connecting to the event stream…'}
-          hint="Job events stream in here live as they happen on the server."
+          title={
+            streamError
+              ? 'Event stream unavailable'
+              : connected
+                ? 'Waiting for activity…'
+                : 'Connecting to the event stream…'
+          }
+          hint={
+            streamError
+              ? `${streamError.message}. The dashboard is retrying automatically.`
+              : 'Job events stream in here live as they happen on the server.'
+          }
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border border-line bg-surface">

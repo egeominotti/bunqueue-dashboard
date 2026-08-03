@@ -86,7 +86,9 @@ import cleanly under `bun test`.
   resolution, just concatenation. Fine because Tailwind classes here are
   written statically, not dynamically composed in ways that would conflict.
 - **`jobActions.ts`**, `actionGates(state)`, the single source of truth for
-  "which job actions does the server currently accept". Shared by
+  "which job actions may the dashboard safely expose". This is deliberately
+  narrower than what the upstream server would accept: DLQ retry and
+  completed-job requeue always fail closed. Shared by
   `JobInspector` (single-job actions) and `JobsPro` (per-row + bulk actions)
   so the two pages can never drift on what's legal, see
   [api-mapping.md](api-mapping.md#job-action-gating) for the full state table.

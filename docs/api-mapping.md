@@ -5,9 +5,9 @@ description: "Every bunqueue HTTP endpoint the dashboard drives, with verified r
 
 # API mapping & shape gotchas
 
-`bq` (`src/lib/bq.ts`) targets bunqueue's HTTP API. Shapes below were **verified
-against a running server**, several differ from what the route/command source
-suggests, so trust this table over guessing from the server source alone.
+`bq` (`src/lib/bq.ts`) targets bunqueue's HTTP API. Shapes below were verified
+against the exact [bunqueue v2.8.55 release](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.55)
+(`bb2a32b`); several differ from older dashboard assumptions.
 
 ## Response-shape gotchas (important)
 
@@ -17,7 +17,7 @@ suggests, so trust this table over guessing from the server source alone.
 | `GET /webhooks` | `{ ok, data: { webhooks[], stats } }` | **wrapped in `data`** |
 | `GET /workers` | `{ ok, data: { workers[], stats } }` | **wrapped in `data`** |
 | `GET /ping` | `{ ok, data: { pong, time } }` | **wrapped in `data`** |
-| `GET /health` | `{ ok, status, version, uptime, queues, connections, memory }` | flat; `ok` is a **health flag** (disk-full → `false` with HTTP 200), not a request-success flag, see "Strict mode" below |
+| `GET /health` | `{ ok, status, version, uptime, queues, connections, memory, storage? }` | flat; `ok` is a **health flag**. Disk-full returns the structured degraded body with **HTTP 503**, which both clients deliberately accept as diagnostic data |
 | `GET /queues/:q/dlq` | `{ ok, entries[], total }` | flat (no `data`) |
 | `GET /queues/:q/dlq/stats` | `{ ok, stats }` | flat |
 | `GET /crons` | `{ ok, crons[] }` | flat |
@@ -40,10 +40,12 @@ suggests, so trust this table over guessing from the server source alone.
   just in-memory ones.
 - **`backoffConfig`** is `{ type: 'fixed'|'exponential', delay, maxDelay? } |
   null`. `null` doesn't mean "no backoff", it means the job used the plain
-  numeric `backoff` field with the server's default strategy (exponential, `job.backoff * 2^attemptsMade`, ±50% jitter, capped at 1h). The
-  `Queue.add()` client SDK only accepts a numeric `backoff` at the top level
-  today (no object form), so in practice `backoffConfig` is null for almost
-  every job pushed through the standard SDK path.
+  numeric `backoff` field with the server's default strategy (exponential,
+  `job.backoff * 2^attemptsMade`, ±50% jitter, capped at 1h). v2.8.55 accepts
+  both numeric and structured backoff inputs. One upstream readback caveat:
+  SQLite's list-row serializer currently restores `backoffConfig` and the
+  deduplication detail fields as defaults, so `/jobs/list` can omit those
+  details even though `GET /jobs/:id` still reports the live job accurately.
 - Job `delay` is **milliseconds, relative**; timestamps are ms.
 
 ## Strict mode: `{ ok: false }` on HTTP 200
@@ -55,8 +57,8 @@ finished, purging an empty DLQ, rate-limiting an unknown queue, etc. `bq.ts`'s
 `ok === false`, so these now surface as errors at the call site instead of
 silently resolving as success. **One deliberate exception:** `bq.health()`
 passes `strict:false`, because `/health`'s `ok` field means "is the server
-healthy" (legitimately `false` while still a fully successful, informative
-response), treating that as a thrown error would break any page rendering a
+healthy" (legitimately `false` in the informative HTTP 503 disk-full response),
+treating that as a thrown error would break any page rendering a
 "degraded" state. If you add a new endpoint whose `ok` means something other
 than request-success, follow that pattern (`srv(path, init, false)`) rather
 than special-casing it in a page.
@@ -67,46 +69,49 @@ health rather than request success.
 
 ## Job action gating
 
-Which job actions the server will actually accept depends on the job's
-**current state** (really: its internal *location*, queue vs. processing vs.
-storage). `lib/jobActions.ts::actionGates(state)` is the single client-side
-model of this, used by both `JobInspector` and `JobsPro` so they can't drift:
+The upstream endpoints below still exist, but endpoint availability is not the
+same as dashboard authorization. `lib/jobActions.ts::actionGates(state)` is the
+single client-side model used by `JobInspector` and `JobsPro`; it additionally
+fails closed where v2.8.55 cannot prove worker or reverse-flow safety:
 
-| Action | Endpoint | Valid states | Why |
+| Action | Endpoint | Upstream scope | Dashboard exposure |
 | --- | --- | --- | --- |
-| Cancel | `DELETE /jobs/:id` | `waiting`, `delayed`, `prioritized`, `waiting-children` | `cancelJob` only handles the `queue`-location branch server-side; active/completed/DLQ'd jobs return `false` (→ now throws, see Strict mode above) |
-| Discard (→ DLQ) | `POST /jobs/:id/discard` | the above **+** `active` | `discardJob` also handles the `processing`-location branch |
-| Set priority | `PUT /jobs/:id/priority` | `waiting`, `delayed`, `prioritized`, `waiting-children` | `changeJobPriority` is queue-location only |
-| Set/move delay | `PUT /jobs/:id/delay`, `POST /jobs/:id/move-to-delayed` | queue states **+** `active` | `changeDelay` routes to `changeWaitingDelay` (queue) or `moveJobToDelayed` (processing) |
-| Promote (run now) | `POST /jobs/:id/promote` | `delayed` only | `promoteJob` requires `location.type==='queue'` **and** `runAt > now` |
-| Retry (move to waiting) | `POST /jobs/:id/move-to-wait` | `active` only | `moveActiveToWait` is specifically Active → Waiting |
-| Retry from DLQ | `POST /queues/:q/dlq/retry { jobId }` | `failed` only | the only retry path for a job that's actually in the DLQ table |
-| Requeue | `POST /queues/:q/retry-completed { id }` | `completed` only | `retryCompletedJobs(queue, ctx, jobId)` resets `attempts`/`startedAt`/`completedAt`/`runAt` and re-inserts into the waiting queue, this **is** the "requeue a completed job" action; it verifies `job.queue === queue` first |
+| Cancel | `DELETE /jobs/:id` | Queue-resident jobs | **Never.** Hidden reverse dependencies can be stranded. |
+| Discard (→ DLQ) | `POST /jobs/:id/discard` | Queue or processing location, without an expected-state precondition or terminal flow-failure resolution | **Never.** A stale runnable snapshot can become active, and a flow child can strand its parent. |
+| Edit data | `PUT /jobs/:id/data` | Replaces the complete payload | Waiting/delayed/prioritized non-Flow jobs only. Flow jobs are read-only because replacement would erase reserved parent/children metadata. |
+| Set priority / delay | `PUT /jobs/:id/priority` · `PUT /jobs/:id/delay` | Queue location (and active for some delay paths) | Waiting/delayed/prioritized only. |
+| Promote | `POST /jobs/:id/promote` | Delayed only | Delayed only. |
+| Retry active | `POST /jobs/:id/move-to-wait` | Active only | **Never.** It can duplicate side effects from the still-running worker. |
+| Retry from DLQ | `POST /queues/:q/dlq/retry { jobId }` | Failed/DLQ | **Never.** The separate GET + POST has no atomic job-generation, state or topology precondition; the POST can hit a different job recreated under the same ID. |
+| Requeue | `POST /queues/:q/retry-completed { id }` | Completed only | **Never.** Upstream `retryCompleted` does not reconstruct dependency registration or original flow order. |
 
-A state not listed for a given action means the server-side handler returns
-`false` for that location, pre-my-fix that resolved as a silent no-op
-Promise; post-fix it throws. The dashboard avoids ever offering the button in
-the first place by computing `actionGates` from the job's live `state`.
+A logical `{ok:false}` always throws. The dashboard also refuses unsafe actions
+before transport, even where the upstream handler would accept them. A pinned
+target, exact ID and fresh empty-topology snapshot cannot authorize DLQ retry:
+none of those observations is an atomic condition on the later POST.
+
+The dashboard Copilot uses the same fail-closed policy. Its only mutating tools
+are Promote, Pause and Resume; DLQ retry and completed-job requeue are absent.
 
 ## Request bodies
 
 | Action | Method · Path | Body |
 | --- | --- | --- |
-| Add job | `POST /queues/:q/jobs` | `{ data, priority?, delay?, maxAttempts?, backoff?, timeout?, jobId?, removeOnComplete?, removeOnFail?, durable?, ttl?, uniqueKey?, lifo? }` → `{ ok, id }` |
-| Add bulk | `POST /queues/:q/jobs/bulk` | `{ jobs: [...] }` → `{ ok, ids }`, **a shared `jobId` across elements dedupes to one job server-side**, but `ids` still has one entry per element (see known-issues.md) |
+| Add job | `POST /queues/:q/jobs` | `{ data, priority?, delay?, maxAttempts?, backoff?, timeout?, jobId?, removeOnComplete?, removeOnFail?, durable?, ttl?, uniqueKey?, lifo?, tags?, groupId?, dependsOn?, repeat? }` → `{ ok, id }`. The dashboard accepts only interval repeat `{ every, limit? }`: v2.8.55's continuation path treats `pattern` as `every ?? 0`, so cron expressions must use `/crons`. The client validates and sends one captured JSON representation, preventing mutable getters or root `toJSON()` from changing repeat, IDs, dependencies or topology after preflight |
+| Add bulk | `POST /queues/:q/jobs/bulk` | `{ jobs: JobInput[] }` → `{ ok, ids }`; the domain shape calls a custom id `customId`, so the client translates dashboard `jobId` before sending. Bulk spec mode preserves tags/groups/dependencies, structured backoff, repeat/dedup, and the remaining v2.8.55 JobInput controls. The dashboard incrementally serializes at most 10,000 jobs, caps the exact translated JSON envelope at 64 MiB, validates repeat/ID/dependency/topology safety from those captured fragments, and sends the same string so getters or `toJSON()` cannot create a second-pass bypass |
 | Update data | `PUT /jobs/:id/data` | `{ data }` |
-| Change priority | `PUT /jobs/:id/priority` | `{ priority }` |
+| Change priority | `PUT /jobs/:id/priority` | `{ priority, lifo? }` |
 | Change/move delay | `PUT /jobs/:id/delay` · `POST /jobs/:id/move-to-delayed` | `{ delay }` (ms) |
-| Fail | `POST /jobs/:id/fail` | `{ error? }` |
-| Clean | `POST /queues/:q/clean` | `{ grace?, state?, limit? }` → `{ ok, count }` |
+| Fail | `POST /jobs/:id/fail` | `{ error?, unrecoverable?, stack? }` |
+| Clean | `POST /queues/:q/clean` | `{ grace?, state?, limit? }` → `{ ok, count }`; upstream route documented, intentionally not exposed outside session-owned Benchmark cleanup |
 | Promote delayed | `POST /queues/:q/promote-jobs` | `{ count? }` → `{ ok, count }` |
-| Retry completed | `POST /queues/:q/retry-completed` | `{ id? }` → `{ ok, count }`, omit `id` to requeue every completed job in the queue; **requeue** semantics (see Job action gating above), not a re-run-in-place |
-| Rate limit | `PUT /queues/:q/rate-limit` | `{ limit }` |
+| Retry completed | `POST /queues/:q/retry-completed` | Upstream accepts `{ id? }` → `{ ok, count }` (omitting `id` targets every completed job), but the dashboard never calls it because `retryCompleted` does not rebuild dependency registration/flow order |
+| Rate limit | `PUT /queues/:q/rate-limit` | `{ limit, duration?, ttl? }` |
 | Concurrency | `PUT /queues/:q/concurrency` | `{ concurrency }` (or `{ limit }`) |
 | Stall config | `PUT /queues/:q/stall-config` | `{ config: { enabled, stallInterval, maxStalls, gracePeriod } }` |
-| DLQ policy | `PUT /queues/:q/dlq-config` | `{ config: { autoRetry, autoRetryInterval, maxAutoRetries, maxAge, maxEntries } }` |
-| Retry DLQ | `POST /queues/:q/dlq/retry` | `{ jobId? }` → `{ ok, count }`, omit `jobId` to retry every entry |
-| Create cron | `POST /crons` | `{ name, queue, data?, schedule? \| repeatEvery?, priority?, timezone?, … }` |
+| DLQ policy | `PUT /queues/:q/dlq-config` | Upstream accepts `{ config: { autoRetry, autoRetryInterval, maxAutoRetries, maxAge, maxEntries } }`. Dashboard saves omit `maxAge` and `maxEntries` because they drive destructive expiry/evacuation without an atomic target check; those fields are read-only. It may send `autoRetry:false` but rejects enabling it. |
+| Retry DLQ | `POST /queues/:q/dlq/retry` | Upstream accepts `{ jobId? }`; the dashboard never calls either the exact-ID or retry-all form because the mutation has no atomic generation/state/topology precondition |
+| Create/upsert cron | `POST /crons` | Last-writer-wins upsert `{ name, queue, data?, schedule? \| repeatEvery?, priority?, timezone?, dedup?, jobOptions? }`; there is no atomic create-only precondition |
 | Add webhook | `POST /webhooks` | `{ url, events[], queue?, secret? }` (events ∈ `job.pushed/started/completed/failed/progress`) |
 
 ## Live stream
@@ -121,11 +126,20 @@ that: `job:pushed`, `job:active`, `job:completed`, `job:failed`, `job:progress`,
 `timestamp` plus optional `error`/`progress`/`prev`/`delay`, **never a job
 name** (jobs don't have one server-side). `useActivityStream` maps event
 suffix → status and keeps a bounded buffer + counters + rolling throughput.
+The fetch client requires `Content-Type: text/event-stream`; a proxy fallback
+returning HTML/JSON with HTTP 200 is rejected instead of entering a silent
+reconnect loop.
 
 ## Auth
 
-If the server sets `AUTH_TOKENS`, provide a token (Settings or
-`VITE_BUNQUEUE_TOKEN`); `bq`/`api` send `Authorization: Bearer <token>`, and the
-SSE reader (fetch-based, not `EventSource`) sends it too, `EventSource` can't
-carry custom headers, which is exactly why `lib/sse.ts` exists instead of the
-native API.
+If the server sets `AUTH_TOKENS`, enter a token in Settings for the current
+browser session; `bq`/`api` send `Authorization: Bearer <token>`, and the SSE
+reader (fetch-based, not `EventSource`) sends it too. `EventSource` can't carry
+custom headers, which is exactly why `lib/sse.ts` exists instead of the native
+API. Never put the token in a `VITE_*` value: it would be plaintext in the
+public bundle.
+
+A remote/proxied all-in-one dashboard also requires its server-side
+`BUNQUEUE_TOKEN` on every `/api/*` request. Enter the same value in Settings;
+the proxy validates it and forwards the Authorization header unchanged. If the
+upstream enables `AUTH_TOKENS`, it must accept that value too.

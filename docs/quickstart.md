@@ -31,8 +31,11 @@ runs the [control agent](/agent) on `127.0.0.1:6800` so the **Server** page can
 start / stop / restart bunqueue for you.
 
 Configure with env vars: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` · `AGENT_PORT` ·
-`AGENT_ALLOWED_ORIGINS` · `AGENT_TOKEN` · `BUNQUEUE_START_CMD`. To install it
-permanently instead of running via `bunx`:
+`AGENT_ALLOWED_ORIGINS` · `AGENT_ALLOWED_HOSTS` · `AGENT_TOKEN` · `BUNQUEUE_TOKEN` ·
+`TRUST_PROXY` · `BUNQUEUE_START_CMD`. LAN and reverse-proxy deployments require
+an explicit Host/origin allowlist plus `AGENT_TOKEN` for `/agent` and
+`BUNQUEUE_TOKEN` for `/api`; see [PM2 deployment](/deploy/pm2).
+To install it permanently instead of running via `bunx`:
 
 ```bash
 bun add -g bunqueue-dashboard   # or: npm i -g bunqueue-dashboard (still runs on Bun)

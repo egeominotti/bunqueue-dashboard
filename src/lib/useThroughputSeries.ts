@@ -7,14 +7,14 @@ export interface ThroughputSeries {
   push: number[];
   complete: number[];
   fail: number[];
-  /** Backlog depth over time: waiting + active + delayed. */
+  /** Total non-terminal depth over time, including priority and flow-blocked jobs. */
   depth: number[];
 }
 
 /**
- * Samples the server's per-second throughput AND queue-depth once a second into
- * a rolling window, for the live charts. One poller feeds both series (no extra
- * request). Independent of the page poll interval.
+ * Samples the server's per-second throughput AND complete queue depth once a
+ * second into a rolling window. v2.8.55's `/dashboard` omits prioritized and
+ * waiting-children counts, so the same tick also reads authoritative `/stats`.
  */
 type Overview = Awaited<ReturnType<typeof bq.overview>>;
 
@@ -48,22 +48,29 @@ const connectionKey = (baseUrl: string, token: string): string => `${baseUrl}\u0
 export function useThroughputSeries(windowSize = 60): ThroughputData {
   const baseUrl = useConnectionStore((s) => s.baseUrl);
   const token = useConnectionStore((s) => s.token);
+  const key = connectionKey(baseUrl, token);
 
   const [series, setSeries] = useState<ThroughputSeries>(EMPTY_SERIES);
   const [latest, setLatest] = useState<Overview | null>(null);
   const [error, setError] = useState<Error | null>(null);
-  const mounted = useRef(true);
-  const inFlight = useRef(false);
+  const generation = useRef(0);
   const lastSampleAt = useRef(0);
-  const connKey = useRef(connectionKey(baseUrl, token));
+  const connKey = useRef(key);
+  // State resets happen in the effect, after render. Gate the public snapshot
+  // during the retarget render so Metrics cannot paint server A's chart,
+  // overview, or error under server B (or briefly claim Live from A).
+  const targetMatches = connKey.current === key;
 
   useEffect(() => {
-    mounted.current = true;
+    const myGeneration = ++generation.current;
+    const controller = new AbortController();
+    // Effect-local: an old request's finally block must never unlock the next
+    // connection generation and let that generation overlap its own request.
+    let inFlight = false;
     // Retargeting Settings ▸ Server URL (or the token) points the very next
     // sample at a DIFFERENT server: keeping the old points would splice two
     // servers into one chart and fabricate a `draining` trend. Mirrors the
     // reset useActivityStream does on the same deps.
-    const key = connectionKey(baseUrl, token);
     if (connKey.current !== key) {
       connKey.current = key;
       setSeries(EMPTY_SERIES);
@@ -77,30 +84,65 @@ export function useThroughputSeries(windowSize = 60): ThroughputData {
       // (>1s) would otherwise overlap requests and produce out-of-order
       // samples. Checked BEFORE the gate so an in-flight skip can't consume
       // the gate's one always-run first tick.
-      if (inFlight.current) return;
+      if (inFlight) return;
       // The gate skips recurring samples while the tab is hidden — the chart
       // isn't visible — but lets the FIRST sample run so `latest` (Server
       // Overview, totals) isn't a zeroed placeholder in a background tab.
       if (!gate()) return;
-      inFlight.current = true;
+      inFlight = true;
       // Stamped BEFORE the request: the gap check below must measure
       // tick-to-tick spacing, not response latency, or a backend answering
       // slower than one interval would look like a hole on every sample.
       const tickAt = monoNow();
       try {
-        const o = await bq.overview();
-        if (!mounted.current) return;
+        const [o, fullStats] = await Promise.all([
+          bq.overview({ signal: controller.signal }),
+          bq.stats({ signal: controller.signal }),
+        ]);
+        // Cleanup aborts the transport, while the generation check remains the
+        // correctness backstop for fetch mocks/servers that still resolve after
+        // abort. A response issued for server A can never publish into server B.
+        if (controller.signal.aborted || generation.current !== myGeneration) return;
         // Read EVERY field before publishing anything: bq.call() validates only
         // `ok`, so a 200 with a drifted/foreign body would otherwise commit
         // `latest` and only then throw on `o.stats.waiting` — leaving consumers
         // with a non-null overview whose `stats` is undefined (a render crash).
         const st = o?.stats;
         const tp = o?.throughput;
-        if (!st || !tp) throw new Error('malformed /dashboard body');
-        const depth = (st.waiting ?? 0) + (st.active ?? 0) + (st.delayed ?? 0);
+        const totals = fullStats?.stats;
+        if (!st || !tp || !totals) throw new Error('malformed telemetry body');
+        const fields = [
+          st.waiting,
+          st.active,
+          st.delayed,
+          st.completed,
+          st.dlq,
+          st.totalPushed,
+          st.totalPulled,
+          st.totalCompleted,
+          st.totalFailed,
+          st.uptime,
+          tp.pushPerSec,
+          tp.completePerSec,
+          tp.failPerSec,
+          totals.waiting,
+          totals.prioritized,
+          totals.active,
+          totals.delayed,
+          totals['waiting-children'],
+        ];
+        if (!fields.every((value) => typeof value === 'number' && Number.isFinite(value))) {
+          throw new Error('malformed telemetry numeric metrics');
+        }
         const p = tp.pushPerSec;
         const c = tp.completePerSec;
         const f = tp.failPerSec;
+        const depth =
+          totals.waiting +
+          totals.prioritized +
+          totals.active +
+          totals.delayed +
+          totals['waiting-children'];
         // Skipped ticks (hidden tab, in-flight, errors) leave no hole in the
         // arrays, so a resumed series would silently span the gap while the
         // index→seconds axis (and depthTrend) still read it as 1 Hz. Restart
@@ -124,20 +166,25 @@ export function useThroughputSeries(windowSize = 60): ThroughputData {
       } catch (e) {
         // Transient for the series (no point appended), but surfaced so a page
         // can tell "sampler is down" from "server is idle".
-        if (mounted.current) setError(e as Error);
+        if (!controller.signal.aborted && generation.current === myGeneration) {
+          setError(e as Error);
+        }
       } finally {
-        inFlight.current = false;
+        inFlight = false;
       }
     };
     tick();
     const id = setInterval(tick, SAMPLE_MS);
     return () => {
-      mounted.current = false;
       clearInterval(id);
+      controller.abort();
+      if (generation.current === myGeneration) generation.current += 1;
     };
-  }, [windowSize, baseUrl, token]);
+  }, [windowSize, key]);
 
-  return { ...series, latest, error };
+  return targetMatches
+    ? { ...series, latest, error }
+    : { ...EMPTY_SERIES, latest: null, error: null };
 }
 
 /**

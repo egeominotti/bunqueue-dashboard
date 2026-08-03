@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { AreaChart } from '@/components/ui/AreaChart';
-import { Button, IconButton } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconArrowRight, IconChevronLeft } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
@@ -12,14 +12,33 @@ import { StatusDot } from '@/components/ui/StatusBadge';
 import { bq } from '@/lib/bq';
 import type { JobFull } from '@/lib/bqTypes';
 import { cn } from '@/lib/cn';
+import { FLOW_DELETION_UNAVAILABLE } from '@/lib/flowMutationSafety';
 import { errorRate, formatDuration, formatNumber, formatPercent } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
+import { assertSuccessfulMutationResponse, useServerActionGuard } from '@/lib/useServerActionGuard';
 import { depthTrend } from '@/lib/useThroughputSeries';
 import { ConfigLoadError, DlqConfigForm, StallForm } from './queue/ConfigForms';
 import { LifecycleCard, LimitsCards } from './queue/QueueActions';
 
-const COUNT_KEYS = ['waiting', 'active', 'completed', 'failed', 'delayed', 'paused'] as const;
-const RECENT_STATES = ['active', 'waiting', 'completed', 'failed', 'delayed'];
+const COUNT_KEYS = [
+  'waiting',
+  'prioritized',
+  'active',
+  'waiting-children',
+  'delayed',
+  'completed',
+  'failed',
+  'paused',
+] as const;
+const RECENT_STATES = [
+  'active',
+  'waiting',
+  'prioritized',
+  'waiting-children',
+  'completed',
+  'failed',
+  'delayed',
+];
 const MAX_DEPTH_POINTS = 40;
 const DEPTH_SAMPLE_MS = 2000;
 
@@ -27,31 +46,59 @@ const DEPTH_SAMPLE_MS = 2000;
  * Pro per-queue operations page, reached by drilling into a queue from the Overview
  * or Queues list (`/queues/:name`). Route-param driven (deep-linkable), unlike the
  * dropdown-based Queue Control page. Reuses the same lifecycle/limits/config
- * building blocks as QueueControl, adds obliterate, a live backlog-depth sparkline,
+ * building blocks as QueueControl, shows the unavailable obliterate capability, a live backlog-depth sparkline,
  * recent jobs, and jump-off links to this queue's Jobs and DLQ views.
  */
 export function QueueDetailPro() {
   const { name = '' } = useParams();
-  const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const actionGuard = useServerActionGuard(`queue:${name}`);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the queue+connection lifecycle boundary
+  useEffect(() => {
+    setBusy(false);
+    setMsg(null);
+  }, [actionGuard.scopeKey]);
 
   const fetcher = useCallback(async () => {
     if (!name) return null;
-    const [detail, stall, dlq, jobs] = await Promise.all([
+    // v2.8.55 synthesizes an empty detail for any valid queue name. Establish
+    // membership first so a typo never exposes destructive controls for a
+    // queue that does not actually exist.
+    const summary = await bq.queuesSummary();
+    if (!summary.some((queue) => queue.name === name)) {
+      return {
+        queue: name,
+        exists: false as const,
+        detail: null,
+        stall: null,
+        dlq: null,
+        jobs: [] as JobFull[],
+        recentJobsError: null as string | null,
+      };
+    }
+    const [detail, stall, dlq, recentJobs] = await Promise.all([
       bq.queueDetail(name, false),
       bq.getStallConfig(name).catch(() => null),
       bq.getDlqConfig(name).catch(() => null),
-      bq.jobsList(name, RECENT_STATES, 12).catch(() => ({ ok: false, jobs: [] as JobFull[] })),
+      bq
+        .jobsList(name, RECENT_STATES, 12)
+        .then((result) => ({ jobs: result.jobs ?? [], error: null as string | null }))
+        .catch((error: unknown) => ({
+          jobs: [] as JobFull[],
+          error: (error as Error).message || 'Unknown error',
+        })),
     ]);
     // Tag with the queue it was fetched for, so a param change can't render (or
     // save) queue A's data under queue B for one round-trip (QueueControl pattern).
     return {
       queue: name,
+      exists: true as const,
       detail,
       stall: stall?.config ?? null,
       dlq: dlq?.config ?? null,
-      jobs: jobs.jobs ?? [],
+      jobs: recentJobs.jobs,
+      recentJobsError: recentJobs.error,
     };
   }, [name]);
   const { data: raw, error, loading, refetch } = usePolledData(fetcher, [name]);
@@ -65,7 +112,14 @@ export function QueueDetailPro() {
   const depthRef = useRef<number | null>(null);
   useEffect(() => {
     const c = data?.detail?.counts;
-    if (c) depthRef.current = (c.waiting ?? 0) + (c.active ?? 0) + (c.delayed ?? 0);
+    if (c) {
+      depthRef.current =
+        (c.waiting ?? 0) +
+        (c.prioritized ?? 0) +
+        (c.active ?? 0) +
+        (c.delayed ?? 0) +
+        (c['waiting-children'] ?? 0);
+    }
   }, [data]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-arm the sampler (and clear the series) only when the queue changes
   useEffect(() => {
@@ -78,40 +132,43 @@ export function QueueDetailPro() {
     return () => clearInterval(id);
   }, [name]);
 
-  const run = (label: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
+  const run = async (
+    label: string,
+    fn: () => Promise<unknown>,
+    confirmMsg?: string,
+    onSuccess?: () => void
+  ) => {
     if (confirmMsg && !window.confirm(confirmMsg)) return;
+    const lease = actionGuard.begin();
+    if (!lease) return;
     setBusy(true);
     setMsg(null);
-    fn()
-      .then((r) => {
-        const count = (r as { count?: number })?.count;
-        const text = `${label}${count != null ? `: ${count}` : ' ✓'}`;
-        setMsg({ ok: true, text });
-        toast.success(text, name);
-        refetch();
-      })
-      .catch((e: unknown) => {
-        const text = (e as Error).message;
-        setMsg({ ok: false, text });
-        toast.error(`${label} failed`, text);
-      })
-      .finally(() => setBusy(false));
-  };
-
-  const obliterate = () => {
-    if (!window.confirm(`Obliterate "${name}"? This removes the queue and all its jobs.`)) return;
-    setBusy(true);
-    bq.obliterate(name)
-      .then(() => {
-        toast.success('Queue obliterated', name);
-        navigate('/queues');
-      })
-      .catch((e: unknown) => {
-        const text = (e as Error).message;
-        setMsg({ ok: false, text });
-        toast.error('Obliterate failed', text);
-        setBusy(false);
-      });
+    try {
+      const summary = await bq.queuesSummary();
+      if (!lease.isCurrent()) return;
+      if (!summary.some((candidate) => candidate.name === name)) {
+        throw new Error(`Queue "${name}" no longer exists`);
+      }
+      const response = await fn();
+      assertSuccessfulMutationResponse(response, label);
+      if (!lease.isCurrent()) return;
+      const count = response.count;
+      if (count !== undefined && (!Number.isSafeInteger(count) || (count as number) < 0)) {
+        throw new Error(`${label} returned an invalid count`);
+      }
+      const text = `${label}${count != null ? `: ${count}` : ' ✓'}`;
+      setMsg({ ok: true, text });
+      toast.success(text, name);
+      onSuccess?.();
+      refetch();
+    } catch (e) {
+      if (!lease.isCurrent()) return;
+      const text = (e as Error).message;
+      setMsg({ ok: false, text });
+      toast.error(`${label} failed`, text);
+    } finally {
+      if (lease.finish()) setBusy(false);
+    }
   };
 
   const detail = data?.detail;
@@ -125,39 +182,59 @@ export function QueueDetailPro() {
     <div>
       <PageHeader
         title={<span className="font-mono">{name}</span>}
-        description="Full per-queue operations and live backlog."
-        live
+        description="Full per-queue operations and complete live non-terminal depth."
+        live={
+          data?.exists === true &&
+          !!data.detail &&
+          !!data.stall &&
+          !!data.dlq &&
+          !data.recentJobsError &&
+          !error
+        }
         back={
-          <IconButton aria-label="Back to queues" onClick={() => navigate('/queues')}>
+          <Link
+            to="/queues"
+            aria-label="Back to queues"
+            className="inline-flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          >
             <IconChevronLeft className="size-4" />
-          </IconButton>
+          </Link>
         }
         actions={
-          <>
-            <Link
-              to={`/jobs?queue=${encodeURIComponent(name)}`}
-              className="flex items-center gap-1 rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
-            >
-              Jobs <IconArrowRight className="size-3.5" />
-            </Link>
-            <Link
-              to={`/dlq?queue=${encodeURIComponent(name)}`}
-              className="flex items-center gap-1 rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
-            >
-              DLQ <IconArrowRight className="size-3.5" />
-            </Link>
-            <Button variant="danger" size="sm" disabled={busy} onClick={obliterate}>
-              Obliterate
-            </Button>
-          </>
+          data?.exists === true ? (
+            <>
+              <Link
+                to={`/jobs?queue=${encodeURIComponent(name)}`}
+                className="flex items-center gap-1 rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+              >
+                Jobs <IconArrowRight className="size-3.5" />
+              </Link>
+              <Link
+                to={`/dlq?queue=${encodeURIComponent(name)}`}
+                className="flex items-center gap-1 rounded-lg border border-line px-3 py-1.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+              >
+                DLQ <IconArrowRight className="size-3.5" />
+              </Link>
+              <Button variant="danger" size="sm" disabled title={FLOW_DELETION_UNAVAILABLE}>
+                Obliterate
+              </Button>
+            </>
+          ) : undefined
         }
       />
 
-      {error && <OfflineBanner onRetry={refetch} />}
+      {error && data && (
+        <OfflineBanner
+          message="Queue refresh failed — showing the last successful snapshot."
+          onRetry={refetch}
+        />
+      )}
 
-      {loading && !data && !error ? (
+      {error && !data ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : loading && !data ? (
         <LoadingState label={`Loading ${name}…`} />
-      ) : !detail || !c ? (
+      ) : data?.exists === false || !detail || !c ? (
         !error && (
           <EmptyState
             title="Queue not found"
@@ -187,9 +264,10 @@ export function QueueDetailPro() {
                 {msg.text}
               </span>
             )}
+            <span className="text-xs text-warning">{FLOW_DELETION_UNAVAILABLE}</span>
           </div>
 
-          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
             {COUNT_KEYS.map((k) => (
               <StatCard
                 key={k}
@@ -230,7 +308,13 @@ export function QueueDetailPro() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.jobs.length === 0 ? (
+                  {data.recentJobsError ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-10 text-center text-sm text-danger">
+                        Could not load recent jobs — {data.recentJobsError}. Retry the page.
+                      </td>
+                    </tr>
+                  ) : data.jobs.length === 0 ? (
                     <tr>
                       <td colSpan={4} className="px-5 py-10 text-center text-sm text-faint">
                         No recent jobs.
@@ -299,18 +383,18 @@ export function QueueDetailPro() {
               />
             )}
             <div className="mt-1 flex items-center justify-between text-xs text-faint">
-              <span>waiting + active + delayed</span>
+              <span>waiting + prioritized + active + delayed + waiting-children</span>
               <span className="tnum">Error rate {rate == null ? '—' : formatPercent(rate)}</span>
             </div>
           </Card>
 
           <LifecycleCard queue={name} paused={detail.paused} busy={busy} run={run} />
-          <LimitsCards queue={name} busy={busy} run={run} />
+          <LimitsCards key={`${name}:limits`} queue={name} busy={busy} run={run} />
 
           <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {data.stall ? (
               <StallForm
-                key={name}
+                key={`${name}:stall`}
                 queue={name}
                 config={data.stall}
                 onSaved={() => {
@@ -323,7 +407,7 @@ export function QueueDetailPro() {
             )}
             {data.dlq ? (
               <DlqConfigForm
-                key={name}
+                key={`${name}:dlq`}
                 queue={name}
                 config={data.dlq}
                 onSaved={() => {

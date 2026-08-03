@@ -170,9 +170,12 @@ Pages sub-path.
 
 The agent can spawn processes, so `agent/server.ts` enforces: **loopback bind (127.0.0.1)**, **CORS
 locked to an allowlist** (ACAO never `*`), **403 on any disallowed `Origin`** (blocks drive-by CSRF),
-and an **optional `AGENT_TOKEN`** bearer gate on state-changing requests. It is *not* the
-"unauthenticated RCE by design" it once was — do not describe it that way. Configure via
-`AGENT_ALLOWED_ORIGINS` / `AGENT_TOKEN`. Full threat model in `agent/server.ts`; verified limits in
+and an optional local `AGENT_TOKEN` bearer gate on state-changing requests. The all-in-one server
+requires `AGENT_TOKEN` on every remote/proxied `/agent/*` route and independently requires
+`BUNQUEUE_TOKEN` on every remote/proxied `/api/*` route; either bridge fails closed if its token is
+missing. It is *not* the "unauthenticated RCE by design" it once was — do not describe it that way.
+Configure via `AGENT_ALLOWED_ORIGINS`, `AGENT_ALLOWED_HOSTS`, `AGENT_TOKEN`, and `BUNQUEUE_TOKEN`.
+Full threat model in `agent/server.ts` and `scripts/serve.ts`; verified limits in
 `docs/known-issues.md`.
 
 ## Verified API-shape gotchas (learned from live testing — keep `bq.ts` honest)
@@ -183,7 +186,7 @@ and an **optional `AGENT_TOKEN`** bearer gate on state-changing requests. It is 
 - Jobs have **no `name`** field, **no embedded `result`** (fetch separately via `GET /jobs/:id/result`), and use
   **`startedAt` / `completedAt`** (not `processedOn` / `finishedOn`). `timeline[]` IS persisted (despite an
   in-source comment saying otherwise), capped at 20 entries.
-- `PUT /queues/:q/rate-limit` takes **`{ limit }`**; concurrency takes `{ concurrency }` (or `{ limit }`).
+- bunqueue v2.8.55 `PUT /queues/:q/rate-limit` takes **`{ limit, duration?, ttl? }`**; concurrency takes `{ concurrency }` (or `{ limit }`).
 - `bq.ts`'s `call()` throws on HTTP-200-with-`{ok:false}` too (many mutating endpoints use this for logical
   failure) — except `health()`, which passes `strict:false` because `/health`'s `ok` is a health flag, not a
   success flag. Follow that pattern for any endpoint where `ok` isn't "did this request succeed".

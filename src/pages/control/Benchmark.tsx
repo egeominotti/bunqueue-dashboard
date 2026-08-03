@@ -1,5 +1,5 @@
-import { type ChangeEvent, useEffect, useState } from 'react';
-import { getBaseUrl } from '@/components/dashboard/stores/connectionStore';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
+import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
 import { AreaChart } from '@/components/ui/AreaChart';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -7,27 +7,36 @@ import { Field, Input, SegmentedControl, Toggle } from '@/components/ui/form';
 import { IconPause, IconPlay } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
-import { bq } from '@/lib/bq';
+import { bq, type ServerRequestTarget, type ServerTargetClient } from '@/lib/bq';
 import { cn } from '@/lib/cn';
 import { formatBytes, formatMs, formatNumber } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 import {
+  benchmarkQueueError,
   clampInt,
+  createBenchmarkQueueName,
   DEFAULT_CONFIG,
   fmtRate,
+  isDashboardBenchmarkQueue,
   LIMITS,
   PRESETS,
   type RunConfig,
   type RunMode,
 } from './benchmark/engine';
 import { RunHistory } from './benchmark/RunHistory';
-import { useBenchmark } from './benchmark/useBenchmark';
+import { assertBenchmarkSuccess, benchmarkQueueJobs, useBenchmark } from './benchmark/useBenchmark';
 
 const MODES: readonly RunMode[] = ['count', 'duration'] as const;
 
 // States "Clean queue" deletes — and, therefore, exactly the states the
 // post-clean verification must find empty before it may claim success.
-const CLEAN_STATES: readonly string[] = ['waiting', 'completed', 'failed', 'delayed'] as const;
+const CLEAN_STATES: readonly string[] = ['waiting', 'completed', 'failed'] as const;
+let tabBenchmarkQueue: string | null = null;
+
+function sessionBenchmarkQueue(): string {
+  tabBenchmarkQueue ??= createBenchmarkQueueName();
+  return tabBenchmarkQueue;
+}
 
 // Numeric fields are string-backed in the form (so a field can be cleared while
 // typing — a controlled type=number with Number() coercion can never be emptied)
@@ -42,6 +51,11 @@ type NumKey =
   | 'workerBatch'
   | 'processMs';
 type Draft = Omit<RunConfig, NumKey> & Record<NumKey, string>;
+
+interface PinnedBenchmarkTarget {
+  target: ServerRequestTarget;
+  client: ServerTargetClient;
+}
 
 const NUM_KEYS: readonly NumKey[] = [
   'total',
@@ -79,8 +93,27 @@ const toConfig = (d: Draft): RunConfig => ({
 });
 
 export function Benchmark() {
-  const [draft, setDraft] = useState<Draft>(() => toDraft(DEFAULT_CONFIG));
+  const [dedicatedQueue] = useState(sessionBenchmarkQueue);
+  const [draft, setDraft] = useState<Draft>(() =>
+    toDraft({ ...DEFAULT_CONFIG, queue: dedicatedQueue })
+  );
   const bench = useBenchmark();
+  const currentServer = useConnectionStore((state) => state.baseUrl);
+  // Once a run is confirmed, its queue telemetry and cleanup stay on the exact
+  // origin/credential snapshot used by the engine. Settings may retarget the
+  // rest of the dashboard without relabelling server B's counts as this run's.
+  const [runTarget, setRunTarget] = useState<PinnedBenchmarkTarget | null>(null);
+  // React state does not update until the next render. This ref is the actual
+  // same-tick mutex between the two destructive multi-request operations.
+  const operationRef = useRef<'run' | 'clean' | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      operationRef.current = null;
+    };
+  }, []);
   const { phase, live, summary, history } = bench;
   const active = phase === 'running' || phase === 'draining' || phase === 'stopping';
 
@@ -98,7 +131,7 @@ export function Benchmark() {
 
   // Debounce the queue name so typing doesn't fire a counts fetch per keystroke
   // (and the card header always matches the queue whose counts are shown).
-  const [pollQueue, setPollQueue] = useState(DEFAULT_CONFIG.queue);
+  const [pollQueue, setPollQueue] = useState(dedicatedQueue);
   useEffect(() => {
     const t = setTimeout(() => setPollQueue(draft.queue.trim() || DEFAULT_CONFIG.queue), 400);
     return () => clearTimeout(t);
@@ -106,9 +139,10 @@ export function Benchmark() {
 
   // Live server-side queue depth — proof the load lands and drains. Errors flow
   // to usePolledData, which keeps the last good counts (card stays mounted).
+  const pollBaseUrl = runTarget?.target.baseUrl ?? currentServer;
   const { data: counts, error: countsError } = usePolledData(
-    () => bq.counts(pollQueue),
-    [pollQueue],
+    () => (runTarget ? runTarget.client.counts(pollQueue) : bq.counts(pollQueue)),
+    [pollQueue, runTarget],
     {
       intervalMs: 1000,
     }
@@ -121,21 +155,43 @@ export function Benchmark() {
   );
   const cleanup = async () => {
     const q = draft.queue.trim();
-    if (cleaning || !q) return;
+    if (operationRef.current || !q) return;
+    if (!isDashboardBenchmarkQueue(q) || q !== dedicatedQueue) {
+      setCleanResult({ error: 'refusing to clean a queue not owned by this dashboard session' });
+      return;
+    }
+    operationRef.current = 'clean';
+    let pinned = runTarget;
+    if (!pinned) {
+      const target = bq.captureServerRequestTarget();
+      pinned = { target, client: bq.createServerTargetClient(target) };
+    }
     // Echo the live counts so the confirm says what is actually being deleted
     // (only when the polled counts are for this exact queue).
     const countsNote =
       c && pollQueue === q
         ? ` Currently ${formatNumber(c.waiting ?? 0)} waiting / ${formatNumber(c.completed ?? 0)} completed.`
         : '';
-    if (!window.confirm(`Remove benchmark jobs from "${q}"?${countsNote}`)) return;
+    if (
+      !window.confirm(
+        `Clean every cleanable job from the dedicated dashboard benchmark queue "${q}" on ${pinned.target.baseUrl}? This is queue-wide; the cryptographic queue name is owned by this browser session.${countsNote}`
+      )
+    ) {
+      operationRef.current = null;
+      return;
+    }
     setCleaning(true);
     setCleanResult(null);
     try {
       let lastErr: string | null = null;
       for (const state of CLEAN_STATES) {
+        if (!mountedRef.current) return;
         try {
-          await bq.clean(q, { state, limit: LIMITS.total });
+          const response = await pinned.client.clean(q, { state, limit: LIMITS.total });
+          assertBenchmarkSuccess(response, `Clean ${state} jobs`);
+          if (!Number.isSafeInteger(response.count) || response.count < 0) {
+            throw new Error(`Clean ${state} jobs returned an invalid count.`);
+          }
         } catch (e) {
           // A per-state clean can legitimately fail (state not cleanable); the
           // authoritative signal is the verification count below. Keep the last
@@ -146,30 +202,44 @@ export function Benchmark() {
       // Verify against the live queue. If this fetch fails the server is
       // unreachable, so we CANNOT claim "0 jobs remain" — surface the error
       // instead of a false green success.
-      const after = await bq.counts(q).catch((e) => {
+      if (!mountedRef.current) return;
+      const after = await pinned.client.counts(q).catch((e) => {
         lastErr = (e as Error).message;
         return null;
       });
+      if (!mountedRef.current) return;
       if (after == null) {
         setCleanResult({ error: lastErr ?? 'server unreachable — could not verify' });
+      } else if (
+        after.ok !== true ||
+        !after.counts ||
+        typeof after.counts !== 'object' ||
+        Array.isArray(after.counts)
+      ) {
+        setCleanResult({ error: 'server returned a malformed queue-count response' });
       } else {
         // The verification must cover every state the loop tried to clean —
         // checking only `active` would report a spotless clean while thousands
         // of waiting/completed jobs are still there after a failed per-state call.
-        const cnt = after.counts ?? {};
-        const leftover = CLEAN_STATES.reduce((n, s) => n + (cnt[s] ?? 0), 0);
+        const cnt = after.counts;
+        let leftover: number;
+        try {
+          leftover = benchmarkQueueJobs(cnt);
+        } catch {
+          setCleanResult({ error: 'server returned malformed queue counts' });
+          return;
+        }
         if (lastErr || leftover > 0) {
           setCleanResult({
             error: lastErr ?? `${formatNumber(leftover)} job(s) still present`,
           });
         } else {
-          // Pulled-but-unacked jobs can't be cleaned; the server requeues them
-          // after its stall timeout — report the residual active count honestly.
-          setCleanResult({ remaining: cnt.active ?? 0 });
+          setCleanResult({ remaining: 0 });
         }
       }
     } finally {
-      setCleaning(false);
+      if (mountedRef.current) setCleaning(false);
+      if (operationRef.current === 'clean') operationRef.current = null;
     }
   };
 
@@ -241,22 +311,45 @@ export function Benchmark() {
               disabled={cleaning}
               onClick={() => {
                 // A clean in flight deletes whatever the producers push, so the
-                // two must never overlap on the same queue.
-                if (cleaning) return;
+                // two must never overlap, including two clicks in one render.
+                if (operationRef.current) return;
+                operationRef.current = 'run';
                 // One confirm, stating the real target — this enqueues genuine
                 // jobs, not a simulation.
                 const cfg = toConfig(draft);
-                const q = cfg.queue.trim() || DEFAULT_CONFIG.queue;
-                // Simulated workers pull whatever is in the queue, so anything
-                // already there is processed and counted as this run's work.
-                const pre = c && pollQueue === q ? (c.waiting ?? 0) + (c.delayed ?? 0) : 0;
-                const preNote =
-                  cfg.workers > 0 && pre > 0
-                    ? ` Warning: it already holds ${formatNumber(pre)} job(s) — the simulated workers will pull and ack those too, and they will be counted as completed.`
-                    : '';
-                if (!window.confirm(`Enqueue real jobs into "${q}" on ${getBaseUrl()}?${preNote}`))
+                const q = cfg.queue.trim();
+                const target = bq.captureServerRequestTarget();
+                const client = bq.createServerTargetClient(target);
+                if (benchmarkQueueError(q)) {
+                  void bench.run({ ...cfg, queue: q }, client).finally(() => {
+                    if (operationRef.current === 'run') operationRef.current = null;
+                  });
                   return;
-                bench.run(cfg);
+                }
+                // The engine performs an authoritative all-state empty-queue
+                // preflight; this live snapshot gives an earlier explanation.
+                let pre = 0;
+                if (!runTarget && c && pollQueue === q) {
+                  try {
+                    pre = benchmarkQueueJobs(c);
+                  } catch {
+                    // The authoritative preflight validates a fresh response.
+                  }
+                }
+                const preNote =
+                  pre > 0
+                    ? ` Warning: it already holds ${formatNumber(pre)} job(s) across all states; the safety preflight will refuse the run until the dedicated queue is empty.`
+                    : '';
+                if (
+                  !window.confirm(`Enqueue real jobs into "${q}" on ${target.baseUrl}?${preNote}`)
+                ) {
+                  operationRef.current = null;
+                  return;
+                }
+                setRunTarget({ target, client });
+                void bench.run(cfg, client).finally(() => {
+                  if (operationRef.current === 'run') operationRef.current = null;
+                });
               }}
             >
               <IconPlay className="size-3.5" /> Run benchmark
@@ -290,11 +383,16 @@ export function Benchmark() {
         <Card className="lg:col-span-1">
           <CardHeader title="Configuration" />
           <div className="flex flex-col gap-3">
-            <Field label="Queue" hint="Jobs are enqueued here (created on first push).">
+            <Field
+              label="Dedicated queue"
+              hint="Cryptographically generated for this browser tab; production queue names cannot be entered here."
+            >
               <Input
+                name="benchmark-queue"
+                autoComplete="off"
                 value={draft.queue}
-                disabled={active}
-                onChange={(e) => set('queue', e.target.value)}
+                readOnly
+                aria-readonly="true"
               />
             </Field>
 
@@ -317,6 +415,8 @@ export function Benchmark() {
             {draft.mode === 'count' ? (
               <Field label="Total jobs" hint={`max ${formatNumber(LIMITS.total)}`}>
                 <Input
+                  name="benchmark-total"
+                  autoComplete="off"
                   type="number"
                   min={1}
                   max={LIMITS.total}
@@ -328,6 +428,8 @@ export function Benchmark() {
             ) : (
               <Field label="Duration (s)" hint={`max ${LIMITS.durationS}s`}>
                 <Input
+                  name="benchmark-duration-seconds"
+                  autoComplete="off"
                   type="number"
                   min={1}
                   max={LIMITS.durationS}
@@ -344,8 +446,10 @@ export function Benchmark() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Producers" hint={`parallel, max ${LIMITS.producers}`}>
                 <Input
+                  name="benchmark-producers"
+                  autoComplete="off"
                   type="number"
-                  min={draft.mode === 'duration' ? 0 : 1}
+                  min={1}
                   max={LIMITS.producers}
                   value={draft.producers}
                   disabled={active}
@@ -354,6 +458,8 @@ export function Benchmark() {
               </Field>
               <Field label="Push batch" hint={`jobs/req, max ${LIMITS.batch}`}>
                 <Input
+                  name="benchmark-push-batch"
+                  autoComplete="off"
                   type="number"
                   min={1}
                   max={LIMITS.batch}
@@ -364,6 +470,8 @@ export function Benchmark() {
               </Field>
               <Field label="Payload" hint={`bytes/job, max ${formatNumber(LIMITS.payload)}`}>
                 <Input
+                  name="benchmark-payload-bytes"
+                  autoComplete="off"
                   type="number"
                   min={0}
                   max={LIMITS.payload}
@@ -380,6 +488,8 @@ export function Benchmark() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Workers" hint={`0 = produce only, max ${LIMITS.workers}`}>
                 <Input
+                  name="benchmark-workers"
+                  autoComplete="off"
                   type="number"
                   min={0}
                   max={LIMITS.workers}
@@ -390,6 +500,8 @@ export function Benchmark() {
               </Field>
               <Field label="Pull batch" hint={`jobs/pull, max ${LIMITS.workerBatch}`}>
                 <Input
+                  name="benchmark-pull-batch"
+                  autoComplete="off"
                   type="number"
                   min={1}
                   max={LIMITS.workerBatch}
@@ -400,6 +512,8 @@ export function Benchmark() {
               </Field>
               <Field label="Process (ms)" hint="simulated work per pull">
                 <Input
+                  name="benchmark-process-ms"
+                  autoComplete="off"
                   type="number"
                   min={0}
                   max={LIMITS.processMs}
@@ -410,24 +524,24 @@ export function Benchmark() {
               </Field>
             </div>
 
-            {/* biome-ignore lint/a11y/noLabelWithoutControl: Toggle renders a native <button role="switch">, a labelable control the rule can't see through the component */}
-            <label className="flex cursor-pointer items-center gap-2">
+            <div className="flex items-center gap-2">
               <Toggle
                 checked={draft.durable}
                 onChange={(v) => set('durable', v)}
                 disabled={active}
+                label="Durable (fsync each job)"
               />
               <span className="text-sm text-muted">Durable (fsync each job)</span>
-            </label>
-            {/* biome-ignore lint/a11y/noLabelWithoutControl: Toggle renders a native <button role="switch">, a labelable control the rule can't see through the component */}
-            <label className="flex cursor-pointer items-center gap-2">
+            </div>
+            <div className="flex items-center gap-2">
               <Toggle
                 checked={draft.removeOnComplete}
                 onChange={(v) => set('removeOnComplete', v)}
                 disabled={active}
+                label="Remove on complete"
               />
               <span className="text-sm text-muted">Remove on complete</span>
-            </label>
+            </div>
 
             <div className="flex items-center gap-3 pt-1">
               <Button variant="ghost" size="sm" disabled={active || cleaning} onClick={cleanup}>
@@ -458,7 +572,10 @@ export function Benchmark() {
           <Card>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-semibold text-fg">{heading}</h3>
-              <span className="text-xs text-faint">{etaText}</span>
+              <span className="text-right text-xs text-faint">
+                <span className="block">Benchmark target: {pollBaseUrl}</span>
+                {etaText && <span className="block">{etaText}</span>}
+              </span>
             </div>
 
             <ProgressBar
@@ -558,7 +675,10 @@ export function Benchmark() {
             ) : undefined
           }
         />
-        <p className="-mt-3 mb-4 text-xs text-faint">Live counts from the server (poll 1s).</p>
+        <p className="-mt-3 mb-4 text-xs text-faint">
+          Live counts from {pollBaseUrl} (poll 1s).
+          {runTarget ? ' Pinned to the current or last benchmark run.' : ''}
+        </p>
         {c ? (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
             <StatCard label="Waiting" value={formatNumber(c.waiting ?? 0)} tone="amber" compact />
@@ -604,10 +724,17 @@ function ProgressBar({
         <span>{label}</span>
         <span className="tnum">{pct.toFixed(0)}%</span>
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+      <div
+        className="h-1.5 overflow-hidden rounded-full bg-surface-2"
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+      >
         <div
           className={cn(
-            'h-full rounded-full transition-all',
+            'h-full rounded-full transition-[width] motion-reduce:transition-none',
             tone === 'accent' ? 'bg-accent' : 'bg-emerald-500'
           )}
           style={{ width: `${pct}%` }}

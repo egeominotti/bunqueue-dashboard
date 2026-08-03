@@ -1,7 +1,12 @@
 import { tool } from 'ai';
 import { z } from 'zod';
 import { useCopilotStore } from '@/components/dashboard/stores/copilotStore';
-import { bq } from '@/lib/bq';
+import {
+  assertCurrentServerRequestTarget,
+  captureServerRequestTarget,
+  createServerTargetClient,
+  type ServerRequestTarget,
+} from '@/lib/bq';
 
 /**
  * Copilot tools. READ tools run immediately; MUTATING tools pause on the
@@ -29,7 +34,17 @@ interface ToolMeta {
 }
 
 /** Wrap a bq action with ToolEvent bookkeeping + (for mutations) a confirm gate. */
-async function run<T>(msgId: string, meta: ToolMeta, args: unknown, action: () => Promise<T>) {
+async function run<T>(
+  msgId: string,
+  target: ServerRequestTarget,
+  meta: ToolMeta,
+  args: unknown,
+  action: () => Promise<T>,
+  turnSignal?: AbortSignal
+) {
+  const stopped = () => ({ ok: false, aborted: true, message: 'The Copilot turn was stopped.' });
+  if (turnSignal?.aborted) return stopped();
+
   const s = useCopilotStore.getState();
   const evId = uid();
   s.addTool(msgId, {
@@ -47,41 +62,82 @@ async function run<T>(msgId: string, meta: ToolMeta, args: unknown, action: () =
       s.updateTool(msgId, evId, { status: 'declined' });
       return { ok: false, declined: true, message: 'The user declined this action.' };
     }
+    if (turnSignal?.aborted) {
+      s.updateTool(msgId, evId, { status: 'declined' });
+      return stopped();
+    }
     s.updateTool(msgId, evId, { status: 'running' });
   }
 
   try {
+    if (turnSignal?.aborted) {
+      s.updateTool(msgId, evId, {
+        status: meta.mutates ? 'declined' : 'error',
+        error: 'The Copilot turn was stopped.',
+      });
+      return stopped();
+    }
+    // The confirmation was rendered for this exact target. A Settings change
+    // while the card was pending invalidates it; never redirect an approved
+    // action to the new live store, nor silently execute it on the old server.
+    if (meta.mutates) assertCurrentServerRequestTarget(target);
     const result = await action();
+    if (turnSignal?.aborted) {
+      s.updateTool(msgId, evId, {
+        status: meta.mutates ? 'declined' : 'error',
+        error: 'The Copilot turn was stopped.',
+      });
+      return stopped();
+    }
     s.updateTool(msgId, evId, { status: 'done', result });
     return result;
   } catch (e) {
+    if (turnSignal?.aborted) {
+      s.updateTool(msgId, evId, {
+        status: meta.mutates ? 'declined' : 'error',
+        error: 'The Copilot turn was stopped.',
+      });
+      return stopped();
+    }
     const error = (e as Error).message || 'request failed';
     s.updateTool(msgId, evId, { status: 'error', error });
     return { ok: false, error };
   }
 }
 
-/** Build the tool set for one assistant turn, bound to its message id. */
-export function buildTools(msgId: string) {
+/**
+ * Build one assistant turn's tools around a single immutable URL + bearer
+ * snapshot. Direct callers may omit the target; it is still captured exactly
+ * once here, before any tool closure exists.
+ */
+export function buildTools(
+  msgId: string,
+  target: ServerRequestTarget = captureServerRequestTarget(),
+  turnSignal?: AbortSignal
+) {
+  const client = createServerTargetClient(target, turnSignal);
+  const mutationLabel = (label: string) => `${label} on server ${target.baseUrl}`;
+  const executeTool = <T>(meta: ToolMeta, args: unknown, action: () => Promise<T>) =>
+    run(msgId, target, meta, args, action, turnSignal);
+
   return {
     list_queues: tool({
       description:
         'List all queues with their job counts (waiting, active, completed, failed, delayed, dlq).',
       inputSchema: z.object({}),
       execute: () =>
-        run(msgId, { name: 'list_queues', label: 'List queues', mutates: false }, {}, () =>
-          bq.queuesSummary()
+        executeTool({ name: 'list_queues', label: 'List queues', mutates: false }, {}, () =>
+          client.queuesSummary()
         ),
     }),
     queue_counts: tool({
       description: 'Get the exact job counts for one queue by state.',
       inputSchema: z.object({ queue: z.string().describe('Queue name') }),
       execute: ({ queue }) =>
-        run(
-          msgId,
+        executeTool(
           { name: 'queue_counts', label: `Counts: ${queue}`, mutates: false },
           { queue },
-          () => bq.counts(queue)
+          () => client.counts(queue)
         ),
     }),
     list_jobs: tool({
@@ -93,11 +149,10 @@ export function buildTools(msgId: string) {
         limit: z.number().int().min(1).max(100).optional(),
       }),
       execute: ({ queue, states, limit }) =>
-        run(
-          msgId,
+        executeTool(
           { name: 'list_jobs', label: `Jobs: ${queue}`, mutates: false },
           { queue, states, limit },
-          () => bq.jobsList(queue, states, limit ?? 20)
+          () => client.jobsList(queue, states, limit ?? 20)
         ),
     }),
     get_job: tool({
@@ -105,22 +160,20 @@ export function buildTools(msgId: string) {
         'Fetch one job by id, including its state, data, attempts, timeline, parent/children.',
       inputSchema: z.object({ id: z.string() }),
       execute: ({ id }) =>
-        run(
-          msgId,
+        executeTool(
           { name: 'get_job', label: `Job ${id.slice(0, 8)}`, mutates: false },
           { id },
-          () => bq.job(id)
+          () => client.job(id)
         ),
     }),
     dlq_stats: tool({
       description: 'Get dead-letter-queue statistics for a queue (count, reasons).',
       inputSchema: z.object({ queue: z.string() }),
       execute: ({ queue }) =>
-        run(
-          msgId,
+        executeTool(
           { name: 'dlq_stats', label: `DLQ stats: ${queue}`, mutates: false },
           { queue },
-          () => bq.dlqStats(queue)
+          () => client.dlqStats(queue)
         ),
     }),
     list_dlq: tool({
@@ -131,122 +184,86 @@ export function buildTools(msgId: string) {
         limit: z.number().int().min(1).max(100).optional(),
       }),
       execute: ({ queue, limit }) =>
-        run(
-          msgId,
+        executeTool(
           { name: 'list_dlq', label: `DLQ: ${queue}`, mutates: false },
           { queue, limit },
-          () => bq.dlq(queue, limit ?? 25)
+          () => client.dlq(queue, limit ?? 25)
         ),
     }),
     server_health: tool({
       description: 'Get overall server health and status.',
       inputSchema: z.object({}),
       execute: () =>
-        run(msgId, { name: 'server_health', label: 'Health', mutates: false }, {}, () =>
-          bq.health()
+        executeTool({ name: 'server_health', label: 'Health', mutates: false }, {}, () =>
+          client.health()
         ),
     }),
     server_stats: tool({
       description: 'Get aggregate server stats (totals across queues, throughput).',
       inputSchema: z.object({}),
       execute: () =>
-        run(msgId, { name: 'server_stats', label: 'Stats', mutates: false }, {}, () => bq.stats()),
+        executeTool({ name: 'server_stats', label: 'Stats', mutates: false }, {}, () =>
+          client.stats()
+        ),
     }),
     list_workers: tool({
       description: 'List connected workers and their status.',
       inputSchema: z.object({}),
       execute: () =>
-        run(msgId, { name: 'list_workers', label: 'Workers', mutates: false }, {}, () =>
-          bq.workers()
+        executeTool({ name: 'list_workers', label: 'Workers', mutates: false }, {}, () =>
+          client.workers()
         ),
     }),
     list_crons: tool({
       description: 'List scheduled cron jobs.',
       inputSchema: z.object({}),
       execute: () =>
-        run(msgId, { name: 'list_crons', label: 'Crons', mutates: false }, {}, () => bq.crons()),
+        executeTool({ name: 'list_crons', label: 'Crons', mutates: false }, {}, () =>
+          client.crons()
+        ),
     }),
 
     // --- Mutating tools (confirmation-gated) ---
-    retry_job: tool({
-      description:
-        'Move a failed/completed job back to waiting so it runs again. Mutating: needs user confirmation.',
-      inputSchema: z.object({ id: z.string() }),
-      execute: ({ id }) =>
-        run(
-          msgId,
-          { name: 'retry_job', label: `Retry job ${id.slice(0, 8)}`, mutates: true },
-          { id },
-          () => bq.retryJob(id)
-        ),
-    }),
-    remove_job: tool({
-      description: 'Permanently remove a job by id. Mutating: needs user confirmation.',
-      inputSchema: z.object({ id: z.string() }),
-      execute: ({ id }) =>
-        run(
-          msgId,
-          { name: 'remove_job', label: `Remove job ${id.slice(0, 8)}`, mutates: true },
-          { id },
-          () => bq.cancelJob(id)
-        ),
-    }),
     promote_job: tool({
       description: 'Promote a delayed job so it runs now. Mutating: needs user confirmation.',
       inputSchema: z.object({ id: z.string() }),
       execute: ({ id }) =>
-        run(
-          msgId,
-          { name: 'promote_job', label: `Promote job ${id.slice(0, 8)}`, mutates: true },
+        executeTool(
+          {
+            name: 'promote_job',
+            label: mutationLabel(`Promote job ${id.slice(0, 8)}`),
+            mutates: true,
+          },
           { id },
-          () => bq.promoteJob(id)
+          () => client.promoteJob(id)
         ),
     }),
     pause_queue: tool({
       description: 'Pause a queue (stops processing new jobs). Mutating: needs user confirmation.',
       inputSchema: z.object({ queue: z.string() }),
       execute: ({ queue }) =>
-        run(msgId, { name: 'pause_queue', label: `Pause ${queue}`, mutates: true }, { queue }, () =>
-          bq.pause(queue)
+        executeTool(
+          {
+            name: 'pause_queue',
+            label: mutationLabel(`Pause ${queue}`),
+            mutates: true,
+          },
+          { queue },
+          () => client.pause(queue)
         ),
     }),
     resume_queue: tool({
       description: 'Resume a paused queue. Mutating: needs user confirmation.',
       inputSchema: z.object({ queue: z.string() }),
       execute: ({ queue }) =>
-        run(
-          msgId,
-          { name: 'resume_queue', label: `Resume ${queue}`, mutates: true },
-          { queue },
-          () => bq.resume(queue)
-        ),
-    }),
-    retry_dlq: tool({
-      description:
-        'Retry dead-letter-queue jobs for a queue: one by jobId, or all if jobId is omitted. Mutating: needs user confirmation.',
-      inputSchema: z.object({ queue: z.string(), jobId: z.string().optional() }),
-      execute: ({ queue, jobId }) =>
-        run(
-          msgId,
+        executeTool(
           {
-            name: 'retry_dlq',
-            label: jobId ? `Retry DLQ job in ${queue}` : `Retry ALL DLQ in ${queue}`,
+            name: 'resume_queue',
+            label: mutationLabel(`Resume ${queue}`),
             mutates: true,
           },
-          { queue, jobId },
-          () => bq.retryDlq(queue, jobId)
-        ),
-    }),
-    purge_dlq: tool({
-      description:
-        'Permanently delete all dead-letter-queue entries for a queue. Mutating: needs user confirmation.',
-      inputSchema: z.object({ queue: z.string() }),
-      execute: ({ queue }) =>
-        run(
-          msgId,
-          { name: 'purge_dlq', label: `Purge DLQ: ${queue}`, mutates: true },
           { queue },
-          () => bq.purgeDlq(queue)
+          () => client.resume(queue)
         ),
     }),
   };

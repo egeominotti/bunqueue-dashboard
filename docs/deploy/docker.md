@@ -70,6 +70,12 @@ the **same** origin. Extend the Caddyfile:
 :80 {
 	root * /usr/share/caddy
 	encode gzip zstd
+	header {
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
 
 	# Forward /api/* to the bunqueue server, stripping the /api prefix.
 	handle_path /api/* {
@@ -88,6 +94,13 @@ Leave `VITE_BUNQUEUE_URL` **unset** so the client uses the default `/api` path,
 which Caddy now proxies. `handle_path` strips `/api`, so `/api/dashboard`
 reaches bunqueue as `/dashboard`, exactly like the dev proxy and the all-in-one
 server.
+
+::: warning Authenticate a public API proxy
+This route exposes bunqueue's administrative API. Enable bunqueue
+`AUTH_TOKENS` and enter its token at runtime, or require authentication at the
+front proxy. Host/Origin routing and CORS are not user authentication, and a
+token must never be baked into a public `VITE_*` build value.
+:::
 
 Mount the file over the image's default and put both containers on one network:
 

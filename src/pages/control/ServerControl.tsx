@@ -273,6 +273,9 @@ function ConfigCard({
           hint="The exact command the agent runs to launch bunqueue. It receives HTTP_PORT, TCP_PORT and BUNQUEUE_DATA_PATH in its environment. The default needs a global 'bunqueue' binary — or point it at a local entry, e.g. bun run /path/to/bunqueue/src/main.ts."
         >
           <Input
+            name="server-command"
+            autoComplete="off"
+            spellCheck={false}
             value={value.command}
             disabled={busy}
             onChange={(e) => set({ command: e.target.value })}
@@ -282,6 +285,8 @@ function ConfigCard({
         <div className="grid grid-cols-2 gap-3">
           <Field label="HTTP port" hint="Dashboard API + SSE.">
             <Input
+              name="server-http-port"
+              autoComplete="off"
               type="number"
               min={1}
               max={65535}
@@ -292,6 +297,8 @@ function ConfigCard({
           </Field>
           <Field label="TCP port" hint="Binary protocol. Must differ from HTTP.">
             <Input
+              name="server-tcp-port"
+              autoComplete="off"
               type="number"
               min={1}
               max={65535}
@@ -306,6 +313,9 @@ function ConfigCard({
           hint="SQLite database file, relative to the agent's working directory. The parent folder must already exist — SQLite creates the file, not the directory."
         >
           <Input
+            name="server-data-path"
+            autoComplete="off"
+            spellCheck={false}
             value={value.dataPath}
             disabled={busy}
             onChange={(e) => set({ dataPath: e.target.value })}

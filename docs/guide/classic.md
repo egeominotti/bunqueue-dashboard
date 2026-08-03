@@ -15,7 +15,7 @@ been superseded by a Pro page at the plain path (the classic version moved to a
 
 ![Queue Detail (classic)](../screenshots/queue-detail.png)
 
-**What it shows:** The single-queue drill-in, opened by clicking a row on the classic Queues list. The screenshot shows the `emails` queue: six stat cards (Waiting 0, Active 1, Completed 397, Failed 0, Delayed 0, Error Rate 0.00%), a 12-row Recent Jobs table (ID, Name from each job's `data.name`, here `send`, Status, Duration, Created) with a "View all jobs" link that opens Jobs pre-filtered to this queue, and a Configuration section with Rate Limit and Concurrency cards (Set/Clear with inline Saved/error feedback). Header buttons Pause/Resume, Drain, and Obliterate act on the bunqueue HTTP API; Drain and Obliterate ask for confirmation, and Obliterate returns you to the queue list. Data refreshes by polling, the green "Live" pill is decorative, not a real connection indicator.
+**What it shows:** The single-queue drill-in, opened by clicking a row on the classic Queues list. The screenshot shows the `emails` queue: six stat cards, a 12-row Recent Jobs table and a Configuration section. The route first verifies real membership through `/queues/summary`; an unknown queue exposes no mutations. Pause/Resume is guarded by server+queue ownership and a fresh membership check. Drain and Obliterate remain visible but disabled because v2.8.55 cannot prove cross-queue flow safety. Rate-limit and concurrency cards perform explicitly labelled blind desired-state writes with safe-integer validation, a mandatory rate window, explicit TTL mode, typed queue confirmation for clear, and timestamped receipts.
 
 **Differences vs the Pro page:** no Pro drill-in exists; [Queue Control](/guide/queue-control) offers the same actions plus stall/DLQ configuration, but via a queue dropdown rather than a per-queue URL.
 
@@ -51,11 +51,11 @@ dashboard totals and therefore remain stable while paging.
 
 ![Jobs (classic)](../screenshots/classic-jobs.png)
 
-**What it shows.** A cross-queue job explorer over the bunqueue HTTP API: six stat cards (in the screenshot: 47,157 total, 41,300 waiting, 5,854 completed, 3 failed, 0.05% error rate) above a merged job table, here mostly completed `notifications` and `emails` jobs plus one waiting `maintenance` job. Filter with the queue dropdown and the All/Waiting/Active/Completed/Failed segments, search by job ID, and cancel a job with the trash icon (confirm prompt). "All Queues" fans out over the first 25 queues, 40 jobs each, newest-first, capped at 100 rows; arriving via `?queue=` preselects a queue.
+**What it shows.** A cross-queue job explorer over the bunqueue HTTP API: six stat cards above a merged job table. Filter with the queue dropdown and the All/Waiting/Active/Completed/Failed segments or search by job ID. Cancel is deliberately unavailable because the server cannot inspect hidden reverse flow dependencies. "All Queues" is available for up to 100 discovered queues and displays the newest 100 jobs. Above that threshold the page makes no job-list requests and asks you to select a queue, avoiding a 10,000-request periodic fan-out. Each bounded load pins one server/token and is cancelled when the view or connection changes; arriving via `?queue=` preselects a queue.
 
 The optional Name value comes from `job.data.name`, Duration uses the server's
-`startedAt`/`completedAt` timestamps, and Cancel is enabled only for states the
-server accepts. The queue picker refreshes every 30 seconds.
+`startedAt`/`completedAt` timestamps. Non-string `data.name` values are ignored
+instead of crashing the table. The queue picker refreshes every 30 seconds.
 
 **Differences vs the Pro page:** [`/jobs`](/guide/jobs) (JobsPro) is the replacement, single-queue, server-paginated, with multi-select bulk actions and correct Name/Duration.
 
@@ -65,13 +65,17 @@ server accepts. The queue picker refreshes every 30 seconds.
 
 ![DLQ (classic)](../screenshots/classic-dlq.png)
 
-**What it shows.** The first-generation dead-letter view: a queue selector (with per-queue DLQ counts), a "DLQ Entries" stat card, a paginated entries table (Job ID, Name, Reason, Attempts, Failed), and Retry all / Purge buttons with confirmation prompts. It polls the bunqueue HTTP API via the legacy `api` client.
+**What it shows.** The first-generation dead-letter view: a queue selector (with per-queue DLQ counts), a "DLQ Entries" stat card, a paginated entries table (Job ID, Name, Reason, Attempts, Failed), and Retry all / Purge buttons that remain disabled by the same flow-safety policy. It polls the bunqueue HTTP API via the legacy `api` client.
 
 The client and table use the server's nested
 `{ job, enteredAt, reason, attempts[] }` shape, including the nested job id,
 attempt count and latest failure time.
 
-**Differences vs the Pro pages:** use [`/dlq`](/guide/dlq) (DlqPro, cross-queue dashboard with filters and per-row retry) or [`/dlq-control`](/guide/dlq-control) (single-queue actions), both read the correct nested shape and work.
+**Differences vs the Pro pages:** use [`/dlq`](/guide/dlq) (DlqPro,
+cross-queue filters plus CSV export) or
+[`/dlq-control`](/guide/dlq-control) (focused single-queue inspection). Both
+read the correct nested shape; every row/bulk/queue-wide retry control is
+disabled by the v2.8.55 atomicity policy.
 
 ## Cron (classic)
 
@@ -103,7 +107,7 @@ Note: the percentile list once rendered broken values (`[object Object]`/zeros);
 
 **What it shows.** A live, read-only table of every worker registered with the bunqueue server, polled via the same `api.overview()` call the classic Overview uses. Two stat cards summarize Total and Active counts (2 / 2 in the screenshot). Each row lists the worker's name and full ID (here `notifications` and `emails` workers from the seeded demo), the queues it consumes, and its Active / Processed / Failed job counts plus a relative "Last Seen" timestamp (9s ago). The list is client-paginated at 20 rows; if the server truncates the list at 100 workers, an amber "showing first N of M" hint appears. Nothing here is clickable, the page is purely for monitoring throughput.
 
-**Differences vs the Pro page:** [`/workers`](/guide/workers) (WorkersPro) adds an active/stale status indicator and a per-row Unregister action.
+**Differences vs the Pro page:** [`/workers`](/guide/workers) (WorkersPro) adds an active/stale status indicator and guarded registry cleanup for stale, idle records. The action does not stop worker processes.
 
 ## Logs (classic)
 

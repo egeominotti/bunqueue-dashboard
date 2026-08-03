@@ -63,7 +63,7 @@ flowchart LR
     P["usePolledData<br/>(interval poll)"]
     S["useActivityStream<br/>(SSE reader)"]
     T["useThroughputSeries<br/>(1s tick)"]
-    W["Page actions<br/>(pause / add / retry / …)"]
+    W["Page actions<br/>(pause / add / promote / …)"]
   end
 
   subgraph Server["bunqueue server :6790"]
@@ -102,17 +102,25 @@ flowchart LR
   `throughput.{pushPerSec,completePerSec,failPerSec}` into a rolling window
   for `MetricsPro`'s `AreaChart`. This means the chart's cadence is fixed at
   1s regardless of `connectionStore.refreshMs`.
-- **Writes.** Page actions call `bq.*`/`api.*` (POST/PUT/DELETE) and then
-  `refetch()`. Destructive actions (Cancel, Drain, Obliterate, Purge, Restart, Stop, remove-webhook) are gated behind `window.confirm`, there is no
-  bespoke confirmation dialog component, by consistent convention across the
-  whole app.
-- **Job action gating.** Anywhere a job's Promote/Retry/Discard/Cancel/Requeue
-  action is offered (`JobInspector`, `JobsPro`), the button set is computed by
-  the single shared `lib/jobActions.ts::actionGates(state)` from the job's
-  *current* state, mirroring exactly what the server's location-based
-  handlers will accept (e.g. Cancel only for a queue-resident job). This
-  avoids offering an action that would silently fail or throw. See
+- **Writes.** Page actions call `bq.*`/`api.*` and then `refetch()`, behind
+  synchronous server/credential/owner leases and strict `{ok:true}` checks.
+  Confirmations remain for authorized high-impact writes such as process
+  lifecycle and webhook deletion. Cancel, queue Discard,
+  Drain/Clean/Obliterate, every DLQ Retry/Purge and completed-job requeue are
+  disabled because a confirmation cannot compensate for missing atomic
+  generation/state/topology guarantees. DLQ `maxAge`/`maxEntries` are rendered
+  read-only and omitted from saves; auto-retry can only be disabled.
+- **Job action gating.** Anywhere job lifecycle actions are rendered
+  (`JobInspector`, `JobsPro`), the button set is computed by the single shared
+  `lib/jobActions.ts::actionGates(state)`. Promote is available only for delayed
+  jobs. DLQ retry remains false because a fresh exact-ID GET cannot atomically
+  constrain the later POST, which may hit a recreated job; completed-job
+  requeue remains false because `retryCompleted` does not rebuild dependency
+  registration or flow order. Cancel and Discard are always false. See
   [api-mapping.md](api-mapping.md#job-action-gating) for the full table.
+- **Copilot mutations.** The assistant can read queue, job, DLQ, worker, cron
+  and health data, but exposes only Promote, Pause and Resume as confirmed
+  mutations. It has no DLQ retry or completed-job requeue tool.
 
 ## The API layer
 
@@ -141,6 +149,8 @@ Because it can spawn processes it binds `127.0.0.1` only and is guarded by a
 **locked-CORS Origin allowlist** (never `*`) plus an optional `AGENT_TOKEN`
 bearer gate, see [agent.md](agent.md#security) and [SECURITY.md](../SECURITY.md).
 Keep its port on loopback (or an equally trusted network) regardless.
+The all-in-one server independently gates every remote/proxied administrative
+`/api/*` request with `BUNQUEUE_TOKEN`; this is not the agent credential.
 
 ## Theming
 

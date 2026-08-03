@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
 import { api } from './api';
-import { frameIndicatesConnected, type SseFrame, streamEvents } from './sse';
+import {
+  frameIndicatesConnected,
+  type SseFrame,
+  shouldDiscardLastEventId,
+  streamEvents,
+} from './sse';
 import type { ActivityEvent } from './types';
 
 export interface ActivityCounters {
@@ -22,6 +27,45 @@ const MAX_EVENTS = 250;
  * window stops pruning, `stamps` grows unbounded and the rate stays inflated.
  */
 const monoNow = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function optionalString(value: unknown, maxChars: number): string | undefined {
+  return typeof value === 'string' && value.length <= maxChars ? value : undefined;
+}
+
+function optionalFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function validTimestamp(value: unknown, fallback: number): number {
+  const timestamp = optionalFiniteNumber(value);
+  if (timestamp !== undefined && Math.abs(timestamp) <= 8.64e15) return timestamp;
+  return Number.isFinite(fallback) && Math.abs(fallback) <= 8.64e15 ? fallback : 0;
+}
+
+/** Normalize the untrusted JSON carried by a job SSE frame. */
+function activityPayload(data: unknown): {
+  queue?: string;
+  jobId?: string;
+  name?: string;
+  timestamp: number;
+  error?: string;
+  progress?: number;
+} {
+  const record = isRecord(data) ? data : {};
+  const wallNow = Date.now();
+  return {
+    queue: optionalString(record.queue, 256),
+    jobId: optionalString(record.jobId, 1024),
+    name: optionalString(record.name, 512),
+    timestamp: validTimestamp(record.timestamp, wallNow),
+    error: optionalString(record.error, 4096),
+    progress: optionalFiniteNumber(record.progress),
+  };
+}
 
 function statusFromEvent(event: string): string {
   const suffix = event.includes(':') ? event.split(':')[1] : event;
@@ -55,10 +99,21 @@ export function useActivityStream(queue?: string) {
   const [error, setError] = useState<Error | null>(null);
 
   const stamps = useRef<number[]>([]);
-  // Incoming job events and counter deltas are buffered here and applied on a
-  // ~150ms flush timer, so a high-rate stream can't force a re-render per frame.
-  const pendingEvents = useRef<ActivityEvent[]>([]);
-  const pendingCounters = useRef<ActivityCounters>({ ...EMPTY });
+  // Every effect instance owns a unique generation. AbortSignal is cooperative:
+  // a mocked/custom fetch or ReadableStream may ignore abort and deliver bytes
+  // later, so callbacks and queued React updaters must also prove ownership.
+  const streamGeneration = useRef(0);
+  const targetKey = JSON.stringify([baseUrl, token, queue ?? null]);
+  // A passive effect resets the stored stream state below, but it runs after
+  // render. Gate the entire public snapshot too so a target switch cannot paint
+  // one frame of server/queue A's data or Live status under selection B.
+  const publishedTarget = useRef(targetKey);
+  const targetMatches = publishedTarget.current === targetKey;
+  const visibleEvents = targetMatches ? events : [];
+  const visibleCounters = targetMatches ? counters : EMPTY;
+  const visibleThroughput = targetMatches ? throughput : 0;
+  const visibleConnected = targetMatches ? connected : false;
+  const visibleError = targetMatches ? error : null;
 
   // baseUrl/token aren't read directly in the body (api.eventsUrl / getAuthHeaders
   // read them fresh at connect time) — they're deps so the stream tears down and
@@ -67,15 +122,27 @@ export function useActivityStream(queue?: string) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reconnect triggers
   useEffect(() => {
     const ctrl = new AbortController();
+    const generation = ++streamGeneration.current;
     let seq = 0;
     let cancelled = false;
+    // Buffers are generation-local. An obsolete callback can therefore never
+    // append into the replacement stream's pending batch even if it ignores
+    // cancellation; the isCurrent guard below also prevents publishing it.
+    let pendingEvents: ActivityEvent[] = [];
+    let pendingCounters: ActivityCounters = { ...EMPTY };
+    // Server event ids are generation-local: retain one across reconnects to
+    // activate v2.8.55's replay buffer, but never carry it to another queue,
+    // origin, or bearer credential.
+    let lastEventId: string | undefined;
+    const isCurrent = () => !cancelled && streamGeneration.current === generation;
 
+    publishedTarget.current = targetKey;
     setEvents([]);
     setCounters(EMPTY);
+    setThroughput(0);
+    setConnected(false);
     setError(null);
     stamps.current = [];
-    pendingEvents.current = [];
-    pendingCounters.current = { ...EMPTY };
 
     // Abortable delay so a pending reconnect wait resolves immediately on
     // cleanup. The abort listener is removed on both paths so repeated
@@ -94,22 +161,19 @@ export function useActivityStream(queue?: string) {
       });
 
     const onFrame = (frame: SseFrame) => {
+      if (!isCurrent()) return;
+      if (frame.id !== undefined) lastEventId = frame.id || undefined;
       // Any delivered frame means the stream is established and flowing — the
       // handshake ({connected:true}, event defaults to 'message'), periodic
       // stats/health frames on an idle queue, and job:* events all qualify.
       if (frameIndicatesConnected(frame)) {
-        setConnected(true);
-        setError(null);
+        // Check again when React evaluates these updaters: an update queued by
+        // generation A just before a target switch must not overwrite B's reset.
+        setConnected((previous) => (isCurrent() ? true : previous));
+        setError((previous) => (isCurrent() ? null : previous));
       }
       if (!frame.event.startsWith('job:')) return;
-      const d = (frame.data ?? {}) as {
-        queue?: string;
-        jobId?: string;
-        name?: string;
-        timestamp?: number;
-        error?: string;
-        progress?: number;
-      };
+      const d = activityPayload(frame.data);
       const status = statusFromEvent(frame.event);
       const ev: ActivityEvent = {
         seq: ++seq,
@@ -118,13 +182,13 @@ export function useActivityStream(queue?: string) {
         jobId: d.jobId,
         name: d.name,
         status,
-        timestamp: d.timestamp ?? Date.now(),
+        timestamp: d.timestamp,
         error: d.error,
         progress: d.progress,
       };
       // Buffer instead of setState-per-frame; the flush timer applies these.
-      pendingEvents.current.push(ev);
-      const pc = pendingCounters.current;
+      pendingEvents.push(ev);
+      const pc = pendingCounters;
       pc.total += 1;
       if (status === 'completed') pc.completed += 1;
       else if (status === 'failed') pc.failed += 1;
@@ -143,18 +207,41 @@ export function useActivityStream(queue?: string) {
       let attempts = 0;
       while (!cancelled) {
         let failure: Error | null = null;
+        const replayId = lastEventId;
+        let deliveredFrame = false;
         try {
-          await streamEvents(api.eventsUrl(queue), onFrame, ctrl.signal);
+          await streamEvents(
+            api.eventsUrl(queue),
+            (frame) => {
+              deliveredFrame = true;
+              onFrame(frame);
+            },
+            ctrl.signal,
+            undefined,
+            replayId
+          );
         } catch (e) {
           // Not necessarily transient: a 401/404 (no /events endpoint, wrong
           // token, proxy rejecting text/event-stream) fails identically every
           // time. Surface it instead of retrying silently forever, and widen
           // the backoff so a permanent failure isn't hammered twice a second.
-          failure = e as Error;
+          failure = e instanceof Error ? e : new Error(String(e));
         }
-        if (cancelled) break;
-        setConnected(false);
-        setError(failure);
+        // Only explicit response statuses that plausibly reject the replay
+        // header may discard it. A network error, auth failure, 5xx, clean EOF,
+        // or malformed 2xx response is unrelated to checkpoint validity and
+        // must preserve replay. If a newer ID arrived, preserve that too.
+        if (
+          replayId &&
+          !deliveredFrame &&
+          lastEventId === replayId &&
+          shouldDiscardLastEventId(failure)
+        ) {
+          lastEventId = undefined;
+        }
+        if (!isCurrent()) break;
+        setConnected((previous) => (isCurrent() ? false : previous));
+        setError((previous) => (isCurrent() ? failure : previous));
         attempts = failure ? Math.min(attempts + 1, MAX_BACKOFF) : 0;
         await delay(RECONNECT_MS * Math.max(1, attempts));
       }
@@ -164,36 +251,41 @@ export function useActivityStream(queue?: string) {
     // Coalesce buffered events/counters into at most ~7 state updates/sec,
     // independent of the stream's frame rate.
     const flushTimer = setInterval(() => {
-      if (pendingEvents.current.length) {
-        const batch = pendingEvents.current;
-        pendingEvents.current = [];
+      if (!isCurrent()) return;
+      if (pendingEvents.length) {
+        const batch = pendingEvents;
+        pendingEvents = [];
         // Reverse OUTSIDE the updater: React can invoke an updater more than
         // once (StrictMode double-invoke), and an in-updater reverse() would
         // mutate `batch` and flip the order back on the second call.
         batch.reverse();
-        setEvents((prev) => [...batch, ...prev].slice(0, MAX_EVENTS));
+        setEvents((prev) => (isCurrent() ? [...batch, ...prev].slice(0, MAX_EVENTS) : prev));
       }
-      const pc = pendingCounters.current;
+      const pc = pendingCounters;
       if (pc.total) {
-        pendingCounters.current = { ...EMPTY };
-        setCounters((prev) => ({
-          total: prev.total + pc.total,
-          completed: prev.completed + pc.completed,
-          failed: prev.failed + pc.failed,
-          waiting: prev.waiting + pc.waiting,
-          active: prev.active + pc.active,
-        }));
+        pendingCounters = { ...EMPTY };
+        setCounters((prev) =>
+          isCurrent()
+            ? {
+                total: prev.total + pc.total,
+                completed: prev.completed + pc.completed,
+                failed: prev.failed + pc.failed,
+                waiting: prev.waiting + pc.waiting,
+                active: prev.active + pc.active,
+              }
+            : prev
+        );
       }
     }, 150);
 
     return () => {
       cancelled = true;
+      if (streamGeneration.current === generation) streamGeneration.current += 1;
       ctrl.abort();
       clearInterval(flushTimer);
-      setConnected(false);
     };
     // Reconnect when the target queue or connection settings change.
-  }, [queue, baseUrl, token]);
+  }, [queue, baseUrl, token, targetKey]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -204,5 +296,11 @@ export function useActivityStream(queue?: string) {
     return () => clearInterval(timer);
   }, []);
 
-  return { events, counters, throughput, connected, error };
+  return {
+    events: visibleEvents,
+    counters: visibleCounters,
+    throughput: visibleThroughput,
+    connected: visibleConnected,
+    error: visibleError,
+  };
 }

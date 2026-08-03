@@ -87,20 +87,30 @@ export function EnvVarsEditor({
               row and the value field collapsed to a sliver. */}
           <div className="w-2/5 shrink-0">
             <Input
+              id={`env-key-${r.id}`}
+              name={`env-key-${r.id}`}
+              aria-label={`Variable name${r.key ? ` ${r.key}` : ''}`}
               className="font-mono"
               placeholder="KEY"
               value={r.key}
               disabled={disabled}
+              autoComplete="off"
+              spellCheck={false}
               onChange={(e) => setRow(r.id, { key: e.target.value })}
             />
           </div>
           <span className="text-faint">=</span>
           <div className="min-w-0 flex-1">
             <Input
+              id={`env-value-${r.id}`}
+              name={`env-value-${r.id}`}
+              aria-label={`Value for ${r.key || 'variable'}`}
               className="font-mono"
               placeholder="value"
               value={r.value}
               disabled={disabled}
+              autoComplete="off"
+              spellCheck={false}
               onChange={(e) => setRow(r.id, { value: e.target.value })}
             />
           </div>

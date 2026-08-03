@@ -4,19 +4,20 @@ import { IconCheck, IconClose, IconCopy } from './icons';
 
 /** Copy `value` via the legacy hidden-textarea path (insecure-context fallback). */
 function execCommandCopy(value: string): boolean {
+  let ta: HTMLTextAreaElement | null = null;
   try {
-    const ta = document.createElement('textarea');
+    ta = document.createElement('textarea');
     ta.value = value;
     ta.setAttribute('readonly', '');
     ta.style.position = 'fixed';
     ta.style.opacity = '0';
     document.body.appendChild(ta);
     ta.select();
-    const ok = document.execCommand('copy');
-    ta.remove();
-    return ok;
+    return document.execCommand('copy');
   } catch {
     return false;
+  } finally {
+    ta?.remove();
   }
 }
 
@@ -54,25 +55,37 @@ export function CopyButton({ value, className }: { value: string; className?: st
     timer.current = setTimeout(() => setState('idle'), 1500);
   };
 
+  const accessibleLabel =
+    state === 'copied'
+      ? 'Copied to clipboard'
+      : state === 'failed'
+        ? 'Copy failed'
+        : 'Copy to clipboard';
+
   return (
-    <button
-      type="button"
-      onClick={copy}
-      aria-label="Copy to clipboard"
-      title={state === 'failed' ? 'Copy failed' : 'Copy to clipboard'}
-      className={cn(
-        'inline-flex size-6 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:bg-surface-2 hover:text-fg',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
-        className
-      )}
-    >
-      {state === 'copied' ? (
-        <IconCheck className="size-3.5 text-success" />
-      ) : state === 'failed' ? (
-        <IconClose className="size-3.5 text-danger" />
-      ) : (
-        <IconCopy className="size-3.5" />
-      )}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={accessibleLabel}
+        title={accessibleLabel}
+        className={cn(
+          'inline-flex size-6 shrink-0 items-center justify-center rounded-md text-faint transition-colors hover:bg-surface-2 hover:text-fg',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+          className
+        )}
+      >
+        {state === 'copied' ? (
+          <IconCheck className="size-3.5 text-success" />
+        ) : state === 'failed' ? (
+          <IconClose className="size-3.5 text-danger" />
+        ) : (
+          <IconCopy className="size-3.5" />
+        )}
+      </button>
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {state === 'idle' ? '' : accessibleLabel}
+      </span>
+    </>
   );
 }

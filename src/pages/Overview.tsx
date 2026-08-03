@@ -1,5 +1,5 @@
 import { Card, CardHeader } from '@/components/ui/Card';
-import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconCron, IconWorkers } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
@@ -36,17 +36,31 @@ export function Overview() {
   const { data, error, loading, refetch } = usePolledData(() => api.overview(), []);
 
   if (loading && !data && !error) return <LoadingState label="Loading overview…" />;
+  if (error && !data) {
+    return (
+      <div>
+        <PageHeader title="Overview" description="Live health and throughput across all queues." />
+        <ErrorState error={error} onRetry={refetch} />
+      </div>
+    );
+  }
 
   const { stats, throughput, memory, workers, crons, storage } = data ?? EMPTY;
   const rate = errorRate(stats.totalCompleted, stats.totalFailed) ?? 0;
+  const diskKnown = typeof storage.diskFull === 'boolean';
 
   return (
     <div>
-      {error && <OfflineBanner onRetry={refetch} />}
+      {error && (
+        <OfflineBanner
+          message="Connection lost — showing the last successful overview snapshot."
+          onRetry={refetch}
+        />
+      )}
       <PageHeader
         title="Overview"
         description="Live health and throughput across all queues."
-        live
+        live={!!data && !error && diskKnown}
       />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -85,8 +99,10 @@ export function Overview() {
             <Meta label="RSS" value={formatBytes(memory.rss * 1024 * 1024)} />
             <Meta
               label="Storage"
-              value={storage.diskFull ? 'Disk full' : 'Healthy'}
-              tone={storage.diskFull ? 'text-red-400' : 'text-emerald-400'}
+              value={!diskKnown ? 'Unavailable' : storage.diskFull ? 'Disk full' : 'Healthy'}
+              tone={
+                !diskKnown ? 'text-muted' : storage.diskFull ? 'text-red-400' : 'text-emerald-400'
+              }
             />
           </div>
         </Card>

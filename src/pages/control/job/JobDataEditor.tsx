@@ -15,10 +15,14 @@ import type { JobFull } from '@/lib/bqTypes';
 export function JobDataEditor({
   data,
   busy,
+  editable,
+  readOnlyReason,
   onSave,
 }: {
   data: JobFull['data'];
   busy: boolean;
+  editable: boolean;
+  readOnlyReason?: string;
   onSave: (parsed: unknown) => void;
 }) {
   const [text, setText] = useState(() => JSON.stringify(data ?? null, null, 2));
@@ -53,19 +57,72 @@ export function JobDataEditor({
       <CardHeader
         title="Data"
         action={
-          <Button size="sm" disabled={busy} onClick={save}>
-            Save data
-          </Button>
+          editable ? (
+            <Button size="sm" disabled={busy} onClick={save}>
+              Save data
+            </Button>
+          ) : undefined
         }
       />
       <textarea
+        aria-label="Job data JSON"
+        name="job-data-json"
         value={text}
         onChange={(e) => setText(e.target.value)}
+        readOnly={!editable}
         spellCheck={false}
         rows={8}
         className="w-full resize-y rounded-lg border border-line bg-surface-2 p-3 font-mono text-xs text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
       />
-      {parseError && <p className="mt-2 text-xs text-danger">{parseError}</p>}
+      {!editable && (
+        <p className="mt-2 text-xs text-faint">
+          {readOnlyReason ??
+            'Data is read-only after a job starts processing or leaves the runnable queue.'}
+        </p>
+      )}
+      {parseError && (
+        <p role="alert" className="mt-2 text-xs text-danger">
+          {parseError}
+        </p>
+      )}
     </Card>
   );
+}
+
+/** States whose job is present in the runnable heap used by UpdateJobData. */
+export function canEditJobData(state: string | undefined): boolean {
+  return state === 'waiting' || state === 'prioritized' || state === 'delayed';
+}
+
+const FLOW_DATA_KEYS = [
+  '__parentId',
+  '__parentQueue',
+  '__childrenIds',
+  '__flowParentId',
+  '__flowParentIds',
+] as const;
+
+/**
+ * v2.8.55's UpdateJobData replaces the complete payload. FlowProducer stores
+ * topology in reserved data keys as well as the public parent/children fields,
+ * so a normal JSON edit would silently make FlowReader reject the graph.
+ */
+export function jobDataReadOnlyReason(
+  state: string | undefined,
+  job: Pick<JobFull, 'data' | 'parentId' | 'childrenIds'>
+): string | null {
+  if (!canEditJobData(state)) {
+    return 'Data is read-only after a job starts processing or leaves the runnable queue.';
+  }
+
+  const data = job.data;
+  const hasReservedFlowData =
+    data !== null &&
+    typeof data === 'object' &&
+    !Array.isArray(data) &&
+    FLOW_DATA_KEYS.some((key) => Object.hasOwn(data, key));
+  if (job.parentId || (job.childrenIds?.length ?? 0) > 0 || hasReservedFlowData) {
+    return 'Data is read-only for Flow jobs because Bunqueue v2.8.55 replaces the full payload and would remove structural metadata.';
+  }
+  return null;
 }

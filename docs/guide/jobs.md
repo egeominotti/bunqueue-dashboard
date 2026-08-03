@@ -1,11 +1,12 @@
 ---
 title: Jobs Explorer
-description: "Browse the jobs in a queue, open any one to inspect it, and run the right actions, one job at a time or many at once."
+description: "Browse, inspect and export jobs in a queue, with Promote as the only enabled job-lifecycle mutation."
 ---
 
 # Jobs Explorer
 
-Browse the jobs in a queue, open any one to inspect it, and run the right actions, one job at a time or many at once.
+Browse, inspect and export the jobs in a queue. Delayed jobs can be promoted,
+while DLQ retry and completed-job requeue fail closed.
 
 **Where:** open `/jobs` from the sidebar.
 
@@ -49,18 +50,24 @@ The stat cards describe the entire server, so they **won't** match the counts of
 
 **Inspect a job.** Click the eye button on any row to open it in the Job Inspector.
 
-**Act on a single job.** Depending on its state, a row also offers:
+**Act on a single job.** A delayed row also offers:
 
 - **Promote**, move a delayed job to run now.
-- **Retry**, re-run an active or failed job.
-- **Requeue**, put a completed job back in line to run again.
-- **Fail**, force an active job to fail.
-- **Cancel**, remove a job from the queue.
 
-**Act on many jobs at once.** Tick the checkboxes (or the header checkbox to select the whole page) to reveal a bulk toolbar. It shows how many you've selected and offers **Retry**, **Promote**, **Requeue**, **Fail**, and **Cancel** for the selection. A button appears when the action fits at least one selected job; jobs it doesn't fit are reported as "not eligible / failed" rather than skipped silently.
+**Act on many jobs at once.** Tick the checkboxes (or the header checkbox to
+select the whole page) to reveal a bulk toolbar. **Promote selected** appears
+only when at least one visible selected job is delayed; no Retry or Requeue
+bulk action is exposed.
 
-::: warning
-**Fail** and **Cancel** each ask you to confirm first, for one job or a whole selection. **Cancel is destructive**, a cancelled job is removed from the queue and can't be undone.
+**Export CSV**, download the rows on the current page.
+
+::: warning Unsafe lifecycle transitions fail closed
+The dashboard never exposes `DELETE /jobs/:id`. Bunqueue v2.8.55 cannot reveal
+every reverse flow dependency, so deleting an apparently standalone job can
+permanently strand another queue's parent. DLQ retry is also unavailable because
+its GET + POST sequence has no atomic generation/state/topology precondition and
+can hit a recreated job. Completed-job requeue is unavailable because
+`retryCompleted` does not rebuild dependency registration or flow order.
 :::
 
 After any action, the row (or selection) reports success or failure in a short status line above the table, and the list refreshes. Buttons on a busy row are disabled until it finishes.
@@ -69,7 +76,9 @@ After any action, the row (or selection) reports success or failure in a short s
 
 - **The ID filter only searches the current page.** It matches the 25 rows on screen, not the whole queue. To find one specific job in a large queue, use the Job Inspector's direct lookup instead.
 - **There's no "page X of Y."** You page through 25 jobs at a time. **Next** stays available as long as a full page arrives; a shorter page means you've reached the end.
-- **Which actions appear depends on the job's state.** A completed job can be requeued but not failed; an active job can be failed or retried but not promoted, and so on. If none of your selected jobs match an action, the toolbar tells you *"No actions apply to the selected job states."*
+- **Which actions appear depends on the job's state.** A delayed job can be
+  promoted. Active, completed and failed jobs have no state-changing row action;
+  if none of the selected jobs is delayed, the toolbar says so.
 - **Changing queue, status, or page clears your selection.** This is on purpose, so a bulk action can never hit rows you picked under a different view.
 - **If the server is unreachable,** a banner with a **Retry** button appears and your already-loaded rows stay visible.
 - This `/jobs` page is the corrected, server-paginated explorer. A separate legacy jobs page exists but isn't what this screen uses, see [Known issues](/known-issues).
@@ -80,5 +89,6 @@ Everything here uses the shape-verified `bq` client (not the legacy `api` client
 - Queue dropdown: `GET /queues/summary`, polled every 30 s.
 - Stat cards: `GET /dashboard`, polled every 10 s.
 - Job table: `GET /queues/:q/jobs/list?states=…&limit=25&offset=…`, polled at the global refresh interval (default 3 s, configurable in Settings). The response is flat `{ ok, jobs }` with no `total`, so "next page" is inferred from a full 25-row page.
-- Actions map to: `POST /jobs/:id/promote`, `POST /jobs/:id/move-to-wait`, `POST /queues/:q/dlq/retry`, `POST /queues/:q/retry-completed`, `POST /jobs/:id/fail`, and `DELETE /jobs/:id`. Bulk actions run in parallel with `Promise.allSettled`.
+- The only job-lifecycle mutation maps to `POST /jobs/:id/promote`. This page
+  never calls DLQ retry or retry-completed endpoints.
 :::

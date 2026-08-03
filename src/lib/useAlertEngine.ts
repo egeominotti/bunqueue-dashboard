@@ -6,6 +6,10 @@ import {
   type Operator,
   useAlertsStore,
 } from '@/components/dashboard/stores/alertsStore';
+import {
+  normalizeBaseUrl,
+  useConnectionStore,
+} from '@/components/dashboard/stores/connectionStore';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { bq } from '@/lib/bq';
 
@@ -37,14 +41,25 @@ export interface Breach {
 
 interface AlertRuntime {
   breaching: Breach[];
+  status: 'idle' | 'checking' | 'live' | 'degraded';
+  error: string | null;
+  /** Connection generation that owns every value above. */
+  connectionIdentity: string | null;
   setBreaching: (b: Breach[]) => void;
 }
 
 /** Live "currently breaching" set, written by the engine, read by the Alerts page. */
 export const useAlertRuntimeStore = create<AlertRuntime>((set) => ({
   breaching: [],
+  status: 'idle',
+  error: null,
+  connectionIdentity: null,
   setBreaching: (breaching) => set({ breaching }),
 }));
+
+/** Stable identity for alert metrics (the control-agent token is not used here). */
+export const alertConnectionIdentity = (baseUrl: string, token: string): string =>
+  JSON.stringify([baseUrl, token]);
 
 /** Ask the browser for notification permission (must be called from a user gesture). */
 export async function enableNotifications(): Promise<NotificationPermission> {
@@ -75,6 +90,106 @@ function compare(value: number, op: Operator, threshold: number): boolean {
 type SummaryRow = Awaited<ReturnType<typeof bq.queuesSummary>>[number];
 type QueueRow = Awaited<ReturnType<typeof bq.queues>>['queues'][number];
 type Overview = Awaited<ReturnType<typeof bq.overview>>;
+type QueuePage = Awaited<ReturnType<typeof bq.queues>>;
+
+/** Smallest client surface needed to walk the paginated queue snapshot. */
+export interface AlertQueueClient {
+  queues: (limit?: number, offset?: number) => Promise<QueuePage>;
+}
+
+interface AlertTickClient extends AlertQueueClient {
+  queuesSummary: () => Promise<unknown>;
+  overview: () => Promise<unknown>;
+}
+
+interface AlertServerTarget {
+  readonly baseUrl: string;
+  readonly authorization?: string;
+}
+
+const ALERT_REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * Turn the render's identity into one immutable transport target. The token is
+ * kept as its final Authorization value so no request in this effect can read a
+ * later connection-store value. Invalid injected URLs fail closed rather than
+ * receiving a bearer credential (normal Settings writes are already sanitized).
+ */
+function alertServerTarget(connectionIdentity: string): AlertServerTarget {
+  const value = JSON.parse(connectionIdentity) as unknown;
+  if (!Array.isArray(value) || value.length !== 2) {
+    throw new TypeError('Invalid alert connection identity.');
+  }
+  const [rawBaseUrl, rawToken] = value;
+  const baseUrl = normalizeBaseUrl(rawBaseUrl);
+  if (!baseUrl || typeof rawToken !== 'string') {
+    throw new TypeError('Invalid alert server target.');
+  }
+  const token = rawToken.trim();
+  return Object.freeze({
+    baseUrl,
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+  });
+}
+
+/**
+ * Per-tick metrics client pinned to one URL+bearer pair and the owning effect's
+ * lifecycle. This deliberately does not call the global `bq` client: its read
+ * methods resolve Settings afresh per request, which can split queue pages
+ * across servers during a retarget.
+ */
+function createAlertTickClient(
+  target: AlertServerTarget,
+  lifecycleSignal: AbortSignal
+): AlertTickClient {
+  const headers = new Headers({ Accept: 'application/json' });
+  if (target.authorization) headers.set('Authorization', target.authorization);
+
+  const request = async (path: string): Promise<unknown> => {
+    lifecycleSignal.throwIfAborted();
+    const signal = AbortSignal.any([
+      lifecycleSignal,
+      AbortSignal.timeout(ALERT_REQUEST_TIMEOUT_MS),
+    ]);
+    const response = await fetch(target.baseUrl + path, {
+      headers,
+      signal,
+    });
+    // Test doubles and non-standard streams can ignore AbortSignal. Check the
+    // lifecycle again before consuming or returning their late response.
+    lifecycleSignal.throwIfAborted();
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      if (response.status === 401 && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('auth:required', {
+            detail: {
+              scope: 'server',
+              auth: target.authorization,
+              target: target.baseUrl,
+            },
+          })
+        );
+      }
+      throw new Error(`Alert metrics request failed: HTTP ${response.status}`);
+    }
+    const text = await response.text();
+    lifecycleSignal.throwIfAborted();
+    if (!text) throw new Error('Alert metrics request returned an empty response.');
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      throw new Error(`Alert metrics request returned invalid JSON (HTTP ${response.status}).`);
+    }
+  };
+
+  return Object.freeze({
+    queuesSummary: () => request('/queues/summary'),
+    queues: (limit = 500, offset = 0) =>
+      request(`/dashboard/queues?limit=${limit}&offset=${offset}`) as Promise<QueuePage>,
+    overview: () => request('/dashboard'),
+  });
+}
 
 interface MetricCtx {
   // null ⇒ that source's fetch FAILED this tick (distinct from an empty deployment)
@@ -85,9 +200,80 @@ interface MetricCtx {
   overview: Overview | null;
 }
 
-const pct = (completed: number, failed: number): number => {
+const MAX_ALERT_QUEUES = 10_500;
+
+function alertCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+export function parseAlertQueueSummary(value: unknown): SummaryRow[] | null {
+  if (!Array.isArray(value) || value.length > MAX_ALERT_QUEUES) return null;
+  const names = new Set<string>();
+  const rows: SummaryRow[] = [];
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
+    const row = candidate as Record<string, unknown>;
+    const counts = row.counts;
+    if (
+      typeof row.name !== 'string' ||
+      !row.name ||
+      row.name.length > 256 ||
+      !/^[a-zA-Z0-9_\-.:]+$/.test(row.name) ||
+      names.has(row.name) ||
+      typeof row.paused !== 'boolean' ||
+      !counts ||
+      typeof counts !== 'object' ||
+      Array.isArray(counts)
+    ) {
+      return null;
+    }
+    const values = counts as Record<string, unknown>;
+    if (
+      !['waiting', 'active', 'completed', 'failed', 'delayed'].every((key) =>
+        alertCount(values[key])
+      )
+    ) {
+      return null;
+    }
+    names.add(row.name);
+    rows.push(candidate as SummaryRow);
+  }
+  return rows;
+}
+
+export function parseAlertOverview(value: unknown): Overview | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const root = value as Record<string, unknown>;
+  if (
+    root.ok !== true ||
+    !root.latency ||
+    typeof root.latency !== 'object' ||
+    Array.isArray(root.latency)
+  ) {
+    return null;
+  }
+  const percentiles = (root.latency as Record<string, unknown>).percentiles;
+  if (!percentiles || typeof percentiles !== 'object' || Array.isArray(percentiles)) return null;
+  for (const operation of Object.values(percentiles)) {
+    if (
+      !operation ||
+      typeof operation !== 'object' ||
+      Array.isArray(operation) ||
+      typeof (operation as { p99?: unknown }).p99 !== 'number' ||
+      !Number.isFinite((operation as { p99: number }).p99) ||
+      (operation as { p99: number }).p99 < 0
+    ) {
+      return null;
+    }
+  }
+  return value as Overview;
+}
+
+const pct = (completed: number, failed: number): number | null => {
   const total = completed + failed;
-  return total > 0 ? (failed / total) * 100 : 0;
+  // No observations means the error rate is unknown, not 0%. Publishing zero
+  // would falsely breach a `<` rule and falsely clear a `>` rule.
+  return total > 0 ? (failed / total) * 100 : null;
 };
 
 /** Resolve a rule's current metric value, or null when the data isn't available. */
@@ -181,18 +367,84 @@ function notifyAll(breaches: Breach[]) {
  * page makes a rule scoped to queue #501 look permanently "unknown" and a
  * global dlq sum silently under-count. null ⇒ the fetch failed.
  */
-async function allQueues(): Promise<QueueRow[] | null> {
-  try {
-    const first = await bq.queues();
-    const rows = [...first.queues];
-    const total = first.total ?? rows.length;
-    // Bounded: 20 extra pages of 500 = 10k queues, plenty, and can't spin.
-    for (let page = 0; rows.length < total && page < 20; page++) {
-      const next = await bq.queues(500, rows.length);
-      if (!next.queues.length) break;
-      rows.push(...next.queues);
+const QUEUE_PAGE_SIZE = 500;
+const MAX_QUEUE_PAGES = 21; // first page + 20 continuations = at most 10,500 rows
+
+function queuePage(
+  value: unknown,
+  expectedOffset: number,
+  expectedTotal: number | null
+): { queues: QueueRow[]; total: number } | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const page = value as Record<string, unknown>;
+  if (page.ok !== true || !Array.isArray(page.queues)) return null;
+  if (
+    typeof page.total !== 'number' ||
+    !Number.isSafeInteger(page.total) ||
+    page.total < 0 ||
+    page.total > MAX_ALERT_QUEUES ||
+    (expectedTotal !== null && page.total !== expectedTotal)
+  ) {
+    return null;
+  }
+  // The endpoint contract echoes the requested window. Rejecting a mismatched
+  // offset/limit prevents a unique-but-overlapping or skipped page from looking
+  // complete merely because its row count reaches `total`.
+  if (page.offset !== expectedOffset || page.limit !== QUEUE_PAGE_SIZE) return null;
+
+  const expectedRows = Math.min(QUEUE_PAGE_SIZE, page.total - expectedOffset);
+  if (expectedRows < 0 || page.queues.length !== expectedRows) return null;
+
+  const queues: QueueRow[] = [];
+  for (const candidate of page.queues) {
+    if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
+      return null;
     }
-    return rows;
+    const row = candidate as Record<string, unknown>;
+    // allQueues exists solely to evaluate the DLQ metric, so accepting a bad
+    // name/count would turn malformed data into a false queue match or NaN sum.
+    if (
+      typeof row.name !== 'string' ||
+      row.name.length === 0 ||
+      row.name.length > 256 ||
+      !/^[a-zA-Z0-9_\-.:]+$/.test(row.name) ||
+      typeof row.dlq !== 'number' ||
+      !Number.isSafeInteger(row.dlq) ||
+      row.dlq < 0
+    ) {
+      return null;
+    }
+    queues.push(candidate as QueueRow);
+  }
+  return { queues, total: page.total };
+}
+
+export async function allQueues(client: AlertQueueClient = bq): Promise<QueueRow[] | null> {
+  try {
+    const rows: QueueRow[] = [];
+    const names = new Set<string>();
+    let total: number | null = null;
+
+    for (let pageNumber = 0; pageNumber < MAX_QUEUE_PAGES; pageNumber++) {
+      const parsed = queuePage(
+        await client.queues(QUEUE_PAGE_SIZE, rows.length),
+        rows.length,
+        total
+      );
+      if (!parsed) return null;
+      total ??= parsed.total;
+      for (const row of parsed.queues) {
+        // Queue names are unique. Seeing one twice means page overlap or a
+        // deployment mutating under offset pagination; either way the snapshot
+        // is incomplete and must not be published as a trustworthy total.
+        if (names.has(row.name)) return null;
+        names.add(row.name);
+        rows.push(row);
+      }
+      if (rows.length === total) return rows;
+    }
+    // The page cap was reached before the advertised total: incomplete.
+    return null;
   } catch {
     return null;
   }
@@ -205,7 +457,7 @@ async function allQueues(): Promise<QueueRow[] | null> {
  */
 export function useAlertEngine() {
   const rules = useAlertsStore((s) => s.rules);
-  const setBreaching = useAlertRuntimeStore((s) => s.setBreaching);
+  const connectionIdentity = useConnectionStore((s) => alertConnectionIdentity(s.baseUrl, s.token));
   const wasBreaching = useRef<Map<string, boolean>>(new Map());
   const lastNotified = useRef<Map<string, number>>(new Map());
   // When each currently-breaching rule STARTED breaching, so the Alerts page can
@@ -215,37 +467,98 @@ export function useAlertEngine() {
   // metric source failed) carries the known breach forward instead of dropping
   // it — an unevaluated rule must never be published as "within threshold".
   const lastBreach = useRef<Map<string, Breach>>(new Map());
+  const refsConnection = useRef(connectionIdentity);
+  const engineGeneration = useRef(0);
 
   // Re-arm the poller only when the enabled-rule set actually changes (not on
   // every unrelated store update), keyed by a stable signature. Empty ⇒ no
   // enabled rules, so the loop stays idle.
-  const signature = rules
-    .filter((r) => r.enabled)
-    .map((r) => `${r.id}:${r.metric}:${r.operator}:${r.threshold}:${r.queue}`)
-    .join('|');
+  const signature = JSON.stringify(
+    rules.filter((r) => r.enabled).map((r) => [r.id, r.metric, r.operator, r.threshold, r.queue])
+  );
 
   useEffect(() => {
-    if (!signature) {
-      setBreaching([]);
+    const clearEvaluationState = () => {
       wasBreaching.current.clear();
       lastNotified.current.clear();
       breachSince.current.clear();
       lastBreach.current.clear();
+    };
+    const identityChanged = refsConnection.current !== connectionIdentity;
+    if (identityChanged) {
+      refsConnection.current = connectionIdentity;
+      clearEvaluationState();
+    }
+
+    if (signature === '[]') {
+      clearEvaluationState();
+      useAlertRuntimeStore.setState({
+        breaching: [],
+        status: 'idle',
+        error: null,
+        connectionIdentity,
+      });
       return;
     }
+
+    const enabledIds = new Set(
+      useAlertsStore
+        .getState()
+        .rules.filter((rule) => rule.enabled)
+        .map((rule) => rule.id)
+    );
+    const previousBreaches = identityChanged
+      ? []
+      : useAlertRuntimeStore.getState().breaching.filter((breach) => enabledIds.has(breach.ruleId));
+    useAlertRuntimeStore.setState({
+      breaching: previousBreaches,
+      status: 'checking',
+      error: null,
+      connectionIdentity,
+    });
+
+    let target: AlertServerTarget;
+    try {
+      target = alertServerTarget(connectionIdentity);
+    } catch (error) {
+      useAlertRuntimeStore.setState({
+        breaching: [],
+        status: 'degraded',
+        error: `Alert evaluation failed: ${(error as Error).message}`,
+        connectionIdentity,
+      });
+      return;
+    }
+
+    const controller = new AbortController();
+    const generation = ++engineGeneration.current;
     let cancelled = false;
     let inFlight = false;
+    const ownsTarget = () => {
+      if (cancelled || engineGeneration.current !== generation) return false;
+      const current = useConnectionStore.getState();
+      return alertConnectionIdentity(current.baseUrl, current.token) === connectionIdentity;
+    };
 
     const tick = async () => {
       if (inFlight) return;
       inFlight = true;
       try {
+        // One client/target for summary, overview, and every queue page in this
+        // tick. No call below is allowed to consult the live connection store.
+        const client = createAlertTickClient(target, controller.signal);
         const [summary, queues, overview] = await Promise.all([
-          bq.queuesSummary().catch(() => null),
-          allQueues(),
-          bq.overview().catch(() => null),
+          client
+            .queuesSummary()
+            .then(parseAlertQueueSummary)
+            .catch(() => null),
+          allQueues(client),
+          client
+            .overview()
+            .then(parseAlertOverview)
+            .catch(() => null),
         ]);
-        if (cancelled) return;
+        if (!ownsTarget()) return;
         const active = useAlertsStore.getState().rules.filter((r) => r.enabled);
         const liveIds = new Set(active.map((r) => r.id));
         // Forget state for rules that were deleted/disabled. Runs BEFORE the
@@ -267,7 +580,13 @@ export function useAlertEngine() {
         if (!overview) {
           const current = useAlertRuntimeStore.getState().breaching;
           const kept = current.filter((b) => liveIds.has(b.ruleId));
-          if (kept.length !== current.length) setBreaching(kept);
+          if (!ownsTarget()) return;
+          useAlertRuntimeStore.setState({
+            breaching: kept,
+            status: 'degraded',
+            error: 'The bunqueue overview endpoint is unavailable; alert results may be stale.',
+            connectionIdentity,
+          });
           return;
         }
         const ctx: MetricCtx = {
@@ -278,9 +597,11 @@ export function useAlertEngine() {
         const now = Date.now();
         const breaches: Breach[] = [];
         const fresh: Breach[] = [];
+        let hasUnknownRule = false;
         for (const rule of active) {
           const value = metricValue(rule, ctx);
           if (value == null) {
+            hasUnknownRule = true;
             // Unknown ≠ resolved: keep publishing the last known breach so the
             // Alerts page can't claim "all clear" on the strength of a fetch
             // that failed. State refs are left untouched (still breaching).
@@ -325,8 +646,24 @@ export function useAlertEngine() {
           }
           wasBreaching.current.set(rule.id, isBreach);
         }
+        if (!ownsTarget()) return;
         notifyAll(fresh);
-        setBreaching(breaches);
+        const partialFailure = !summary || !queues || hasUnknownRule;
+        useAlertRuntimeStore.setState({
+          breaching: breaches,
+          status: partialFailure ? 'degraded' : 'live',
+          error: partialFailure
+            ? 'Some alert rules could not be evaluated; affected results remain unknown.'
+            : null,
+          connectionIdentity,
+        });
+      } catch (tickError) {
+        if (!ownsTarget()) return;
+        useAlertRuntimeStore.setState({
+          status: 'degraded',
+          error: `Alert evaluation failed: ${(tickError as Error).message}`,
+          connectionIdentity,
+        });
       } finally {
         inFlight = false;
       }
@@ -336,7 +673,9 @@ export function useAlertEngine() {
     const timer = setInterval(tick, POLL_MS);
     return () => {
       cancelled = true;
+      if (engineGeneration.current === generation) engineGeneration.current += 1;
+      controller.abort();
       clearInterval(timer);
     };
-  }, [signature, setBreaching]);
+  }, [signature, connectionIdentity]);
 }

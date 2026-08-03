@@ -5,9 +5,11 @@ description: "Set up, run, build, and test the bunqueue dashboard locally: the o
 
 # Development
 
-New here? Start with [getting-started.md](getting-started.md) for a guided first
-run, and [configuration.md](configuration.md) for the full env reference. This
-page is the day-to-day workflow: run, gate, and how to add a page additively.
+New here? Start with the [Quickstart](quickstart.md) for a guided first run, then
+use the [deployment overview](deploy/index.md#how-the-dashboard-finds-your-server)
+to choose how the dashboard connects to bunqueue. Control-agent environment
+variables are documented under [Control agent configuration](agent.md#configuration).
+This page is the day-to-day workflow: run, gate, and how to add a page additively.
 
 ## Run
 
@@ -27,16 +29,31 @@ bun dev                     # dashboard → http://localhost:5273
 Point it at a server via **Settings** (or `VITE_BUNQUEUE_URL`). In dev, `/api/*`
 is proxied to `http://localhost:6790`.
 
-## Gate (keep all three green)
+## Quality gate
 
 ```bash
-bun run build     # tsc --noEmit + vite build
-bun run check     # biome (lint + format);  bun run check:fix to autofix
-bun test          # format + sse + agent-lifecycle tests
+bun run quality
 ```
 
-This is the exact gate CI runs on every push and PR
-([ci-cd.md](ci-cd.md)), keep all three green before considering a change done.
+This is the exact blocking gate run by the
+[CI workflow](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml)
+on every push and pull request. Release, Pages, and Docker run the same command
+before publishing. It executes, in order:
+
+- `bun run check`: Biome lint and formatting (`bun run check:fix` applies safe fixes).
+- `bun run build`: strict typechecks for `src/`, `agent/`, and `scripts/`, then the
+  production Vite build.
+- `bun run size`: initial-load and total JavaScript bundle budgets.
+- `bun run docs:build`: the VitePress production build, including dead-link checks.
+- `bun run test:coverage`: the complete Bun test suite plus aggregate coverage floors.
+- `bun run audit:high`: a blocking dependency audit for HIGH and CRITICAL advisories.
+
+The audit has one ID-specific exception: `GHSA-qwww-vcr4-c8h2` affects React
+Router's RSC mode. This project is a client-only `BrowserRouter` SPA and has no
+RSC request handler or server actions, so that advisory is not applicable. The
+exception does not suppress any other advisory; a new HIGH or CRITICAL finding
+fails the gate. Remove it if the app adopts RSC, or when a compatible patched
+React Router release becomes available.
 
 Notes:
 - `biome.json` is a **production-grade root config** (`"root": true`, schema pinned
@@ -45,7 +62,9 @@ Notes:
   on every file (a broken gate, not real findings). It enables `recommended` plus a
   curated strict set as errors, with a few aspirational rules as warnings.
   `src/index.css` (Tailwind v4 at-rules), `agent/`, and `scripts/` are excluded from
-  Biome; `agent/` and `scripts/` are Bun runtime code and are not in `tsconfig`.
+  Biome. They are not skipped by typechecking: `tsconfig.json` covers `src/`, while
+  `tsconfig.agent.json` covers both Bun runtime directories (except the generated
+  `scripts/embedded.gen.ts`).
 - `bunfig.toml` preloads `test/setup.ts` (a `localStorage` shim) so store imports
   work under `bun test`.
 
@@ -59,7 +78,10 @@ Notes:
    an existing icon or add one to `ui/icons`).
 4. If the page shows a job/queue state, drive its state-dependent buttons off
    `lib/jobActions.ts::actionGates` rather than re-deriving which actions are
-   legal, see [api-mapping.md](api-mapping.md#job-action-gating).
+   dashboard-authorized, see
+   [api-mapping.md](api-mapping.md#job-action-gating). Upstream endpoint
+   acceptance alone is not authorization: the shared gates intentionally keep
+   DLQ retry and completed-job requeue false.
 
 **Both steps 2 and 3 are required**, a route with no nav entry (or vice
 versa) is a dead end. `src/pages/Alerts.tsx` is exactly this: fully built, routed nowhere, findable only by reading the source (see
@@ -84,6 +106,8 @@ it there if not, rather than silently patching something out of scope.
 
 ## Tests
 
-`bun test` covers pure logic (`format`), SSE frame parsing (`sse`), and the real
-`ProcessManager` lifecycle (`manager`, spawns `sleep`/`echo`). Add tests next to
-these under `test/` for any new pure logic or agent behaviour.
+Use `bun test` for a fast local iteration and `bun run test:coverage` for the
+same suite with the CI coverage floor. Tests live under `test/` and cover pure
+logic, stores and clients, component regressions, SSE parsing, and control-agent
+behaviour. Add focused regression coverage there for every bug fix or new
+testable behaviour.

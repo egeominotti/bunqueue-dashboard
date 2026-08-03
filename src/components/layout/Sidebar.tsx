@@ -1,5 +1,4 @@
 import { NavLink } from 'react-router-dom';
-import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
 import { useThemeStore } from '@/components/dashboard/stores/themeStore';
 import {
   IconAlerts,
@@ -21,9 +20,8 @@ import {
   IconUsage,
   IconWorkers,
 } from '@/components/ui/icons';
-import { api } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { usePolledData } from '@/lib/usePolledData';
+import { ConnectionBadge } from './ConnectionBadge';
 import { SidebarFooter } from './SidebarFooter';
 
 export type NavItem = { to: string; label: string; icon: typeof IconOverview; end?: boolean };
@@ -36,8 +34,10 @@ export const NAV: NavGroup[] = [
   {
     section: 'Queues',
     items: [
-      { to: '/queues', label: 'Queues', icon: IconQueues },
-      { to: '/jobs', label: 'Jobs', icon: IconJobs },
+      // Exact matching prevents both Queues + a queue detail, or Jobs + Bulk
+      // Add, from being announced as the current page at the same time.
+      { to: '/queues', label: 'Queues', icon: IconQueues, end: true },
+      { to: '/jobs', label: 'Jobs', icon: IconJobs, end: true },
       { to: '/dlq', label: 'Dead Letter Queue', icon: IconDlq },
       { to: '/cron', label: 'Cron Jobs', icon: IconCron },
       { to: '/flows', label: 'Flows', icon: IconArrowRight },
@@ -78,35 +78,6 @@ export const NAV: NavGroup[] = [
   },
 ];
 
-function ConnectionBadge() {
-  const baseUrl = useConnectionStore((s) => s.baseUrl);
-  // Passive liveness dot: slow-poll and project the payload to just `ok`, so
-  // the permanent all-pages /health stream is 1 req/15s and steady polls don't
-  // re-render (the full payload carries ever-changing uptime/memory).
-  const { data, error, loading } = usePolledData(
-    async () => ({ ok: (await api.health()).ok }),
-    [],
-    { intervalMs: 15000 }
-  );
-  const ok = !error && data != null && data.ok !== false;
-  const host = baseUrl.replace(/^https?:\/\//, '') || 'local';
-  return (
-    <div className="mx-3 mb-4 flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5">
-      <span
-        className={cn(
-          'size-1.5 rounded-full',
-          loading ? 'bg-zinc-500' : ok ? 'bg-emerald-400' : 'bg-red-400'
-        )}
-        title={loading ? 'connecting' : ok ? 'connected' : 'offline'}
-      />
-      <span className="truncate font-mono text-[11px] text-muted" title={baseUrl}>
-        {host}
-      </span>
-      <span className="sr-only">{loading ? 'connecting' : ok ? 'connected' : 'offline'}</span>
-    </div>
-  );
-}
-
 function ThemeToggle() {
   const theme = useThemeStore((s) => s.theme);
   const toggle = useThemeStore((s) => s.toggle);
@@ -123,7 +94,15 @@ function ThemeToggle() {
   );
 }
 
-export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: () => void }) {
+export function Sidebar({
+  open = false,
+  blocked = false,
+  onClose,
+}: {
+  open?: boolean;
+  blocked?: boolean;
+  onClose?: () => void;
+}) {
   return (
     <>
       {/* Mobile overlay behind the drawer. */}
@@ -131,12 +110,21 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
         <button
           type="button"
           aria-label="Close navigation"
+          tabIndex={-1}
           onClick={onClose}
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
         />
       )}
-      <aside
+      {/* Biome cannot correlate these conditional props: aria-modal is present
+          only in the same branch where role="dialog". */}
+      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: conditional dialog semantics */}
+      <div
         id="app-nav"
+        role={open ? 'dialog' : 'complementary'}
+        aria-modal={open || undefined}
+        aria-label={open ? 'Navigation menu' : undefined}
+        inert={blocked ? true : undefined}
+        aria-hidden={blocked || undefined}
         className={cn(
           'flex w-60 shrink-0 flex-col border-r border-line bg-sidebar',
           // Off-canvas drawer below lg; static column at lg and up. `invisible`
@@ -159,7 +147,7 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
           </span>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 pb-4">
+        <nav className="flex-1 overscroll-contain overflow-y-auto px-3 pb-4">
           {NAV.map((group) => (
             <div key={group.section ?? 'root'} className="mb-4">
               {group.section && (
@@ -202,7 +190,7 @@ export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: (
         <ConnectionBadge />
         <ThemeToggle />
         <SidebarFooter />
-      </aside>
+      </div>
     </>
   );
 }

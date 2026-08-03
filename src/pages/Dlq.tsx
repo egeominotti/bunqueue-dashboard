@@ -1,25 +1,55 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/Button';
-import { EmptyState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
+import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/form';
 import { IconDlq } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { StatCard } from '@/components/ui/StatCard';
 import { api } from '@/lib/api';
+import { FLOW_BULK_RETRY_UNAVAILABLE, FLOW_DELETION_UNAVAILABLE } from '@/lib/flowMutationSafety';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import type { DlqEntry } from '@/lib/types';
 import { usePolledData } from '@/lib/usePolledData';
+import { discoverAllQueues } from './Jobs';
 
 const PAGE_SIZE = 25;
+
+function validQueueCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+// Classic pages share the same bounded, strict pagination walk as Jobs. DLQ
+// additionally consumes the summary counters, so validate every merged row
+// before publishing anything to the selector/default-selection effect.
+export async function discoverAllDlqQueues() {
+  const result = await discoverAllQueues();
+  if (
+    !Number.isFinite(result.timestamp) ||
+    result.queues.some(
+      (entry) =>
+        !validQueueCount(entry.waiting) ||
+        !validQueueCount(entry.delayed) ||
+        !validQueueCount(entry.active) ||
+        !validQueueCount(entry.dlq) ||
+        typeof entry.paused !== 'boolean'
+    )
+  ) {
+    throw new Error('Queue discovery returned malformed queue summaries');
+  }
+  return result;
+}
 
 export function Dlq() {
   const [queue, setQueue] = useState<string>('');
   const [page, setPage] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
 
-  const { data: qs } = usePolledData(() => api.queues(500), [], { intervalMs: 30000 });
+  const {
+    data: qs,
+    error: discoveryError,
+    loading: discoveryLoading,
+    refetch: refetchQueues,
+  } = usePolledData(discoverAllDlqQueues, [], { intervalMs: 30000 });
 
   // Default the selected queue to the first one that has DLQ entries.
   useEffect(() => {
@@ -35,45 +65,32 @@ export function Dlq() {
   }, [queue, page]);
   const { data, error, loading, refetch } = usePolledData(fetcher, [queue, page]);
 
-  const run = async (label: string, fn: () => Promise<unknown>) => {
-    if (!window.confirm(`${label} the dead letter queue for "${queue}"?`)) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      await fn();
-      setMsg(`${label} done`);
-      refetch();
-    } catch (e) {
-      setMsg((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const entries = data?.entries ?? [];
 
   return (
     <div>
-      {error && <OfflineBanner onRetry={refetch} />}
+      {error && data && (
+        <OfflineBanner
+          message="DLQ refresh failed — showing the last successful page."
+          onRetry={refetch}
+        />
+      )}
+      {discoveryError && (
+        <OfflineBanner
+          onRetry={refetchQueues}
+          message={`Could not discover queues — ${discoveryError.message}. Retry before selecting a queue.`}
+        />
+      )}
       <PageHeader
         title="Dead Letter Queue"
         description="Jobs that exhausted their retries."
-        live
+        live={!!queue && !!data && !error && !discoveryError}
         actions={
           <>
-            <Button
-              size="sm"
-              disabled={!queue || busy}
-              onClick={() => run('Retry', () => api.retryDlq(queue))}
-            >
+            <Button size="sm" disabled title={FLOW_BULK_RETRY_UNAVAILABLE}>
               Retry all
             </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              disabled={!queue || busy}
-              onClick={() => run('Purge', () => api.purgeDlq(queue))}
-            >
+            <Button variant="danger" size="sm" disabled title={FLOW_DELETION_UNAVAILABLE}>
               Purge
             </Button>
           </>
@@ -84,6 +101,9 @@ export function Dlq() {
         <div className="w-56">
           <Select
             value={queue}
+            aria-label="Queue"
+            name="classic-dlq-queue"
+            autoComplete="off"
             onChange={(e) => {
               setQueue(e.target.value);
               setPage(0);
@@ -99,16 +119,31 @@ export function Dlq() {
         <div className="w-40">
           <StatCard
             label="DLQ Entries"
-            value={formatNumber(data?.total)}
-            tone={data?.total ? 'red' : 'default'}
+            value={queue && data ? formatNumber(data.total) : '—'}
+            tone={queue && data?.total ? 'red' : 'default'}
             compact
           />
         </div>
-        {msg && <span className="text-xs text-muted">{msg}</span>}
       </div>
 
-      {loading && !data && !error ? (
+      {error && !data ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : discoveryLoading && !qs && !queue && !discoveryError ? (
+        <LoadingState label="Discovering queues…" />
+      ) : loading && !data && !error ? (
         <LoadingState label="Loading DLQ…" />
+      ) : discoveryError && !queue ? (
+        <EmptyState
+          icon={<IconDlq />}
+          title="Could not discover queues"
+          hint={`${discoveryError.message}. Retry the queue discovery request above.`}
+        />
+      ) : !queue ? (
+        <EmptyState
+          icon={<IconDlq />}
+          title={qs?.queues.length === 0 ? 'No queues available' : 'Select a queue'}
+          hint="A queue must be selected before its dead letter entries can be inspected."
+        />
       ) : entries.length === 0 ? (
         <EmptyState
           icon={<IconDlq />}

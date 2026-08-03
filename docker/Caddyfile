@@ -13,6 +13,12 @@
 :80 {
 	root * /usr/share/caddy
 	encode gzip zstd
+	header {
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
 
 	# Fingerprinted build assets: cache immutably, and 404 on a miss (no SPA
 	# fallback here) so a stale chunk import never silently receives the shell.
