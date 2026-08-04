@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from '@/components/dashboard/stores/toastStore';
-import { Button, IconButton } from '@/components/ui/Button';
+import { IconButton } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
-import { Field, Input, Toggle } from '@/components/ui/form';
+import { Toggle } from '@/components/ui/form';
 import { IconLightning, IconTrash } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
-import { type AddWebhookBody, bq, WEBHOOK_EVENTS } from '@/lib/bq';
+import { bq } from '@/lib/bq';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 import {
@@ -15,6 +15,10 @@ import {
   type ServerActionLease,
   useServerActionGuard,
 } from '@/lib/useServerActionGuard';
+import { displayWebhookUrl } from './webhooks/model';
+import { WebhookForm } from './webhooks/WebhookForm';
+
+export { buildWebhookBody, displayWebhookUrl, isDeliverableUrl } from './webhooks/model';
 
 /**
  * Page state clamped to the live page count. Clamps the STATE, not just the
@@ -250,197 +254,5 @@ export function Webhooks() {
         </>
       )}
     </div>
-  );
-}
-
-/** True when the exact string given can be fetched by the server (http/https). */
-export function isDeliverableUrl(u: string): boolean {
-  try {
-    const parsed = new URL(u);
-    return (
-      u.length <= 2_048 &&
-      /^https?:$/.test(parsed.protocol) &&
-      parsed.username === '' &&
-      parsed.password === ''
-    );
-  } catch {
-    return false;
-  }
-}
-
-export function displayWebhookUrl(value: string): string {
-  try {
-    const parsed = new URL(value);
-    if (!parsed.username && !parsed.password) return value;
-    parsed.username = 'redacted';
-    parsed.password = 'redacted';
-    return parsed.toString();
-  } catch {
-    return value;
-  }
-}
-
-/**
- * Build the registration body from the form state. The URL registered is the
- * exact string that passed validation — sending the raw field would persist a
- * hook the server can never call (and the list renders identically).
- */
-export function buildWebhookBody(
-  url: string,
-  events: string[],
-  queue: string,
-  secret: string
-): { ok: true; body: AddWebhookBody } | { ok: false; msg: string } {
-  const u = url.trim();
-  if (!u || events.length === 0) {
-    return { ok: false, msg: 'URL and at least one event are required' };
-  }
-  // The server calls this URL blind — catch a pasted hostname/typo here
-  // instead of shipping a webhook that can never fire.
-  if (!isDeliverableUrl(u)) {
-    return {
-      ok: false,
-      msg: 'URL must be a valid http:// or https:// address without embedded credentials',
-    };
-  }
-  const q = queue.trim();
-  if (q && (q.length > 256 || !/^[a-zA-Z0-9_\-.:]+$/.test(q))) {
-    return {
-      ok: false,
-      msg: 'Queue must be at most 256 characters using letters, numbers, _, -, . or :',
-    };
-  }
-  return {
-    ok: true,
-    body: {
-      url: u,
-      events,
-      queue: q || undefined,
-      secret: secret.trim() || undefined,
-    },
-  };
-}
-
-function WebhookForm({
-  onAdd,
-  onAccepted,
-  beginAdd,
-  scopeKey,
-}: {
-  onAdd: (b: AddWebhookBody) => Promise<unknown>;
-  onAccepted: () => void;
-  beginAdd: () => ServerActionLease | null;
-  scopeKey: string;
-}) {
-  const [url, setUrl] = useState('');
-  const [queue, setQueue] = useState('');
-  const [secret, setSecret] = useState('');
-  const [events, setEvents] = useState<string[]>(['job.completed', 'job.failed']);
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection lifecycle boundary
-  useEffect(() => {
-    setBusy(false);
-    setErr(null);
-  }, [scopeKey]);
-
-  const toggle = (ev: string) =>
-    setEvents((prev) => (prev.includes(ev) ? prev.filter((e) => e !== ev) : [...prev, ev]));
-
-  const submit = async () => {
-    if (busy) return;
-    setErr(null);
-    const built = buildWebhookBody(url, events, queue, secret);
-    if (!built.ok) {
-      setErr(built.msg);
-      return;
-    }
-    const lease = beginAdd();
-    if (!lease) return;
-    setBusy(true);
-    try {
-      const response = await onAdd(built.body);
-      assertSuccessfulMutationResponse(response, 'Add webhook');
-      if (!lease.isCurrent()) return;
-      setUrl('');
-      setSecret('');
-      onAccepted();
-    } catch (e) {
-      if (!lease.isCurrent()) return;
-      setErr((e as Error).message);
-    } finally {
-      if (lease.finish()) setBusy(false);
-    }
-  };
-
-  return (
-    <form
-      className="flex flex-col gap-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-    >
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="md:col-span-1">
-          <Field label="URL">
-            <Input
-              value={url}
-              onInput={(e) => setUrl(e.currentTarget.value)}
-              name="webhook-url"
-              type="url"
-              maxLength={2_048}
-              autoComplete="url"
-              placeholder="https://example.com/hook"
-            />
-          </Field>
-        </div>
-        <Field label="Queue (optional)">
-          <Input
-            value={queue}
-            onChange={(e) => setQueue(e.target.value)}
-            name="webhook-queue"
-            maxLength={256}
-            autoComplete="off"
-            placeholder="all queues"
-          />
-        </Field>
-        <Field label="Secret (optional)">
-          <Input
-            type="password"
-            autoComplete="new-password"
-            name="webhook-secret"
-            maxLength={65_536}
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            placeholder="HMAC signing secret"
-          />
-        </Field>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {WEBHOOK_EVENTS.map((ev) => (
-          <button
-            key={ev}
-            type="button"
-            aria-pressed={events.includes(ev)}
-            onClick={() => toggle(ev)}
-            className={
-              events.includes(ev)
-                ? 'rounded-full bg-accent/15 px-3 py-1 text-xs font-medium text-accent'
-                : 'rounded-full border border-line px-3 py-1 text-xs font-medium text-muted hover:text-fg'
-            }
-          >
-            {ev}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center gap-3">
-        <Button type="submit" variant="accent" size="sm" disabled={busy}>
-          {busy ? 'Adding…' : 'Add webhook'}
-        </Button>
-        {err && <span className="text-xs text-danger">{err}</span>}
-      </div>
-    </form>
   );
 }

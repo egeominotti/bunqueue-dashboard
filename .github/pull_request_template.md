@@ -12,7 +12,9 @@
 
 - [ ] `bun run build` — typecheck + production build passes
 - [ ] `bun run check` — Biome lint + format clean
+- [ ] `bun run architecture` — every TypeScript source stays within 300 lines
 - [ ] `bun test` — unit + agent-lifecycle tests pass
+- [ ] `bun run test:e2e` — real Bunqueue Flow, Workflow, and Queue SDK contracts pass
 
 ## Notes
 

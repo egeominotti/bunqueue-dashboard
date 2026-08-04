@@ -16,44 +16,11 @@ import {
   formatRelativeTime,
   jobDuration,
 } from '@/lib/format';
-import type { Job, QueueDetailResponse } from '@/lib/types';
+import type { Job } from '@/lib/types';
 import { usePolledData } from '@/lib/usePolledData';
 import { assertSuccessfulMutationResponse, useServerActionGuard } from '@/lib/useServerActionGuard';
 import { QueueConfig } from './queue/QueueConfig';
-
-const RECENT_STATES = [
-  'active',
-  'waiting',
-  'prioritized',
-  'waiting-children',
-  'completed',
-  'failed',
-  'delayed',
-  'paused',
-];
-
-const EMPTY: { detail: QueueDetailResponse; jobs: Job[]; recentJobsError: string | null } = {
-  detail: {
-    ok: false,
-    name: '',
-    counts: {
-      waiting: 0,
-      active: 0,
-      completed: 0,
-      failed: 0,
-      delayed: 0,
-      prioritized: 0,
-      'waiting-children': 0,
-      paused: 0,
-    },
-    paused: false,
-    priorityCounts: {},
-    dlqPreview: [],
-    timestamp: 0,
-  },
-  jobs: [],
-  recentJobsError: null,
-};
+import { EMPTY_QUEUE_DETAIL, RECENT_STATES } from './queue/queueDetailData';
 
 export function QueueDetail() {
   const { name = '' } = useParams();
@@ -152,7 +119,7 @@ export function QueueDetail() {
     );
   }
 
-  const d = data?.exists === true ? data : EMPTY;
+  const d = data?.exists === true ? data : EMPTY_QUEUE_DETAIL;
   const { detail } = d;
   const c = detail.counts;
   const rate = errorRate(c.completed ?? 0, c.failed ?? 0);

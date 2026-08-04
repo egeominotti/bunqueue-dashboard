@@ -1,6 +1,6 @@
 {
   "name": "bunqueue-dashboard",
-  "version": "0.0.35",
+  "version": "0.0.36",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun).",
   "bin": {
@@ -9,6 +9,8 @@
   "files": [
     "dist",
     "scripts/serve.ts",
+    "scripts/serveHandler.ts",
+    "scripts/servePolicy.ts",
     "scripts/embedded.gen.ts",
     "agent"
   ],
@@ -54,18 +56,24 @@
     "typecheck": "tsc --noEmit && bun run typecheck:agent",
     "typecheck:agent": "tsc -p tsconfig.agent.json",
     "size": "bun run scripts/check-bundle.ts",
+    "architecture": "bun run scripts/check-file-size.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "bun run scripts/build-docs.ts",
     "docs:preview": "vitepress preview docs",
-    "build:bin": "bun run build && bun run scripts/gen-embed.ts && bun build scripts/serve.ts agent/dbQueryWorker.ts --compile --minify --outfile bunqueue-dashboard",
+    "build:bin": "bun run build && bun run scripts/gen-embed.ts && bun build scripts/serve.ts agent/dbQueryWorker.ts agent/backup/standaloneWorker.ts --compile --minify --outfile bunqueue-dashboard",
     "preview": "vite preview",
     "test": "bun test",
+    "test:e2e:flow": "bun run scripts/validate-flow-runtime.ts",
+    "test:e2e:queue-operations": "bun run scripts/validate-queue-operations.ts",
+    "test:e2e:workflow": "bun run scripts/validate-workflow-runtime.ts",
+    "test:e2e": "bun run test:e2e:flow && bun run test:e2e:workflow && bun run test:e2e:queue-operations",
+    "test:package": "bun run scripts/validate-package-runtime.ts",
     "test:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir=coverage && bun scripts/check-coverage.ts",
     "check": "biome check .",
     "check:fix": "biome check --write .",
     "format": "biome format --write .",
     "audit:high": "bun audit --audit-level=high --ignore=GHSA-qwww-vcr4-c8h2",
-    "quality": "bun run check && bun run build && bun run size && bun run docs:build && bun run test:coverage && bun run audit:high"
+    "quality": "bun run architecture && bun run check && bun run build && bun run size && bun run docs:build && bun run test:coverage && bun run test:e2e && bun run test:package && bun run audit:high"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^4.0.7",
@@ -103,6 +111,7 @@
     "postcss": "^8.5.25"
   },
   "dependencies": {
+    "bunqueue": "2.8.57",
     "msgpackr": "^1.11.8"
   }
 }

@@ -14,7 +14,7 @@ export interface ServerActionLease {
   finish: () => boolean;
 }
 
-/** Mutations in v2.8.55 acknowledge success with a JSON `{ ok: true, ... }` envelope. */
+/** Mutations in v2.8.57 acknowledge success with a JSON `{ ok: true, ... }` envelope. */
 export function assertSuccessfulMutationResponse(
   response: unknown,
   action = 'Operation'

@@ -13,7 +13,7 @@ export interface ThroughputSeries {
 
 /**
  * Samples the server's per-second throughput AND complete queue depth once a
- * second into a rolling window. v2.8.55's `/dashboard` omits prioritized and
+ * second into a rolling window. v2.8.57's `/dashboard` omits prioritized and
  * waiting-children counts, so the same tick also reads authoritative `/stats`.
  */
 type Overview = Awaited<ReturnType<typeof bq.overview>>;

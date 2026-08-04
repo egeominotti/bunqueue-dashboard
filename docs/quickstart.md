@@ -19,7 +19,7 @@ dashboard running on sample data with no server needed.
 
 No clone, no build, the
 [`bunqueue-dashboard` npm package](https://www.npmjs.com/package/bunqueue-dashboard)
-ships the prebuilt dashboard with **zero dependencies**:
+ships the prebuilt dashboard and installs the exact compatible Bunqueue client:
 
 ```bash
 bunx bunqueue-dashboard
@@ -91,6 +91,7 @@ Two ways, pick either:
 - Press **Cmd / Ctrl-K** anywhere for the command palette.
 
 ::: tip Already have a server?
-The dashboard never imports or modifies bunqueue, it only talks to its HTTP API,
-so you can point it at any bunqueue server you already run.
+The dashboard never modifies Bunqueue. Most screens use its HTTP API; Flow,
+Workflow and backup operations go through the loopback agent using the pinned
+public Bunqueue client/CLI, so point the agent at the same server and data path.
 :::

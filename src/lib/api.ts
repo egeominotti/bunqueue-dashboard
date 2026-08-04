@@ -8,9 +8,11 @@ import type {
   DlqEntry,
   DlqStats,
   Job,
+  MetricsResponse,
   OverviewResponse,
   QueueDetailResponse,
   QueuesResponse,
+  ReadinessResponse,
   StatsResponse,
   StorageStatus,
 } from './types';
@@ -46,7 +48,8 @@ async function request<T>(
   path: string,
   init?: RequestInit,
   strict = true,
-  acceptedStatuses: readonly number[] = []
+  acceptedStatuses: readonly number[] = [],
+  responseFormat: 'json' | 'text' = 'json'
 ): Promise<T> {
   const deadline = AbortSignal.timeout(requestTimeoutMs);
   const signal = init?.signal ? AbortSignal.any([init.signal, deadline]) : deadline;
@@ -104,6 +107,7 @@ async function request<T>(
     throw e;
   }
   if (!text) return undefined as T;
+  if (responseFormat === 'text') return text as T;
   let data: T;
   try {
     data = JSON.parse(text) as T;
@@ -150,6 +154,14 @@ export const api = {
   // Disk-full is a diagnostic state, not a transport failure: bunqueue v2.8.57
   // returns its structured health payload with HTTP 503 in that state.
   health: () => request<Record<string, unknown>>('/health', undefined, false, [503]),
+  // Bunqueue 2.8.57 exposes both unauthenticated liveness aliases as plain
+  // text. Keep their raw response so callers can distinguish the exact "OK"
+  // contract from a reverse-proxy fallback page that merely returned HTTP 200.
+  healthz: () => request<string>('/healthz', undefined, true, [], 'text'),
+  live: () => request<string>('/live', undefined, true, [], 'text'),
+  // A persistence failure is a valid readiness result carried by HTTP 503.
+  ready: () => request<ReadinessResponse>('/ready', undefined, false, [503]),
+  metrics: () => request<MetricsResponse>('/metrics'),
 
   // ---- Jobs ----
   jobsList: (queue: string, params: JobsListParams = {}) => {

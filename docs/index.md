@@ -19,7 +19,7 @@ import { withBase } from 'vitepress'
 
 <h1 class="lp-h1">The only queue dashboard that also<br>runs the server</h1>
 
-<p class="lp-sub">A free, open source web UI that <strong>safely operates</strong> a bunqueue server (a fast, Redis-free, Bun-native background-job queue): queues, jobs, dead-letter queue, cron, webhooks, workers and live activity, plus start / stop / restart of the server process itself. Built for Bun developers and AI-agent builders who want to <em>operate</em> their queue, not just watch it. It talks only to bunqueue's public HTTP API and a tiny loopback control agent, and fails closed when the v2.8.57 contract cannot make a mutation atomic.</p>
+<p class="lp-sub">A free, open source web UI that <strong>safely operates</strong> a bunqueue server (a fast, Redis-free, Bun-native background-job queue): queues, jobs, dead-letter queue, cron, webhooks, workers and live activity, plus start / stop / restart of the server process itself. Built for Bun developers and AI-agent builders who want to <em>operate</em> their queue, not just watch it. It uses Bunqueue's public HTTP API plus its pinned public client/CLI behind a tiny loopback control agent, and fails closed when the v2.8.57 contract cannot make a mutation atomic.</p>
 
 <p class="lp-ctas">
 <a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">Open the live demo</a>
@@ -138,7 +138,7 @@ Push and drain load runs against any queue, in count or duration mode, with a li
 
 ### Flow DAG viewer
 
-Parent / children / depends-on relationships drawn as a graph, laid out client-side with no graph library. <a href="./guide/flows">Flows →</a>
+Explore parent/child/dependency DAGs, create every official FlowProducer shape, and operate safe Flow Job methods. <a href="./guide/flows">Job Flows →</a>
 
 </article>
 
@@ -273,7 +273,7 @@ Explore jobs, triage the DLQ, schedule cron, watch live activity. Destructive ac
 
 ```bash [npm (recommended)]
 bunx bunqueue-dashboard
-# → http://127.0.0.1:8080, serves the SPA plus the /api proxy and control agent, zero dependencies
+# → http://127.0.0.1:8080, serves the SPA plus the /api proxy and control agent
 ```
 
 ```bash [Standalone binary]
@@ -321,7 +321,7 @@ A complete operator surface over bunqueue's HTTP API: scheduling, triage, limits
 
 ### Does it touch my server's code or data?
 
-No. It never imports or modifies bunqueue source. It speaks only to the public HTTP API. The SQLite inspector opens its own read-only connection and accepts SELECT-style statements only, so it cannot write even if asked to.
+No. It never modifies Bunqueue. Ordinary operations use the public HTTP API; Flow and Workflow controls use the pinned public client through the loopback agent. Source-mode backup controls invoke the installed CLI, while the standalone executable embeds that same pinned backup command in an isolated worker so it never recursively launches itself. The compile and E2E gates make any internal CLI layout drift fail visibly during an upgrade. The SQLite inspector opens its own read-only connection and accepts SELECT-style statements only, so it cannot write even if asked to.
 
 </article>
 
@@ -353,7 +353,7 @@ Yes, the <a href="https://egeominotti.github.io/bunqueue-dashboard/" target="_bl
 
 ### How do I deploy it?
 
-Four ways: the zero-dependency npm package (`bunx bunqueue-dashboard`), a standalone binary for linux/macOS/windows, the multi-arch Docker image, or from source. The binary embeds the SPA, the API proxy and the agent in one file.
+Four ways: the prebuilt npm package (`bunx bunqueue-dashboard`), a standalone binary for linux/macOS/windows, the multi-arch Docker image, or from source. The binary embeds the SPA, the API proxy and the agent in one file.
 
 </article>
 
@@ -361,7 +361,7 @@ Four ways: the zero-dependency npm package (`bunx bunqueue-dashboard`), a standa
 
 ### What doesn't it do?
 
-Alerts are evaluated in the browser while a tab is open, so it's not away-from-desk paging. S3 backup is configured by the server's environment, not from the UI. Mutations that v2.8.57 cannot make atomic are intentionally disabled, including every DLQ retry and completed-job requeue. DLQ <code>maxAge</code>/<code>maxEntries</code> are shown read-only and omitted from saves; auto-retry can only be disabled. Every verified contract gap is listed on the <a href="./known-issues">known issues</a> page.
+Alerts are evaluated in the browser while a tab is open, so it's not away-from-desk paging. S3 credentials remain session-only even though configuration and operations are available in the UI. Mutations that v2.8.57 cannot make atomic are intentionally disabled, including every DLQ retry and completed-job requeue. DLQ <code>maxAge</code>/<code>maxEntries</code> are shown read-only and omitted from saves; auto-retry can only be disabled. Every verified contract gap is listed on the <a href="./known-issues">known issues</a> page.
 
 </article>
 

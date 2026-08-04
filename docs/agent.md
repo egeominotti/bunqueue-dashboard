@@ -1,6 +1,6 @@
 ---
 title: Control agent
-description: "The local control agent that starts, stops, and restarts the bunqueue process: its endpoints, security model, and read-only SQLite inspector."
+description: "The local Bunqueue operator agent: process lifecycle, Flow and Workflow controls, backups, security model, and read-only SQLite inspection."
 ---
 
 # Control agent
@@ -9,7 +9,10 @@ description: "The local control agent that starts, stops, and restarts the bunqu
 
 A browser cannot start or stop an OS process, and bunqueue's HTTP API has no
 process-lifecycle endpoint (and we don't modify bunqueue). So the dashboard ships
-a tiny **local agent**, a Bun process that supervises a bunqueue server child, and drives it over HTTP.
+a tiny **local agent**, a Bun process that supervises a bunqueue server child.
+It also hosts target-pinned Flow, Workflow, and Queue operations through
+Bunqueue's public 2.8.57 client, runs the pinned backup implementation, and
+exposes read-only SQLite observability that the browser cannot perform directly.
 
 ## Files
 
@@ -22,8 +25,16 @@ a tiny **local agent**, a Bun process that supervises a bunqueue server child, a
   `onExit`/`stop()` only mutate shared state when their token is still current, so a
   `stop()` awaiting an old process can't clobber one a concurrent `start()` brought
   up. `dbStats()` stats the configured SQLite file plus its `-wal`/`-shm` sidecars.
-- `agent/server.ts`, request handling + **auth/Origin policy**, factored out so it
-  is unit-testable without binding a port (`createFetchHandler(mgr, opts)`, `resolveAllowedOrigins`, `isOriginAllowed`, `corsHeaders`).
+- `agent/server.ts` and `agent/server/`, request routing, bounded JSON parsing,
+  error mapping, **auth/Origin policy**, and the shared process/Workflow
+  lifecycle gate, factored so each boundary is unit-testable without binding a
+  port.
+- `agent/flow/`, official `FlowProducer` create/read/result and safe Flow Job
+  operations; `agent/workflow/`, persistent `Engine` lifecycle plus read-only
+  execution storage; `agent/queue/`, the missing live Queue SDK contracts.
+- `agent/backup/`, one serialized, cancellable backup runner. Source mode
+  launches the installed CLI without a shell; compiled mode invokes the same
+  pinned command inside an embedded worker, avoiding executable recursion.
 - `agent/index.ts`, thin `Bun.serve` wrapper. **Binds `127.0.0.1` only** and
   applies the security policy below.
 
@@ -57,6 +68,10 @@ request to `http://127.0.0.1:6800` (CSRF → RCE). Defenses:
    token** or in the authentication prompt; it remains in browser memory for
    the current session. Never put it in a `VITE_*` value, which is public bundle
    plaintext.
+5. **Managed-target and body boundaries**, SDK routes accept only the server
+   port owned by this process manager (including validation of the `/api`
+   proxy target). Streaming JSON is capped before parsing: Queue 8 KiB,
+   backup/config/database query 64 KiB, and Flow/Workflow 1 MiB.
 
 Env: `AGENT_ALLOWED_ORIGINS` (comma-separated; merged with dev defaults
 `http://localhost:5273`, `http://127.0.0.1:5273`), `AGENT_ALLOWED_HOSTS` and
@@ -90,13 +105,26 @@ Env: `AGENT_ALLOWED_ORIGINS` (comma-separated; merged with dev defaults
 
 | Method · Path | Action |
 | --- | --- |
-| `GET /control/status` | `{ status, pid, startedAt, exitCode, healthy, version, config, runningConfig, db }` (probes the managed server's `/health` on `runningConfig.httpPort`; `db` = on-disk SQLite size) |
+| `GET /control/status` | `{ status, generation, pid, startedAt, exitCode, healthy, version, config, runningConfig, db }` (`generation` changes on every process launch; probes `/health` on `runningConfig.httpPort`; `db` = on-disk SQLite size) |
 | `POST /control/start` | Spawn the server, return status |
 | `POST /control/stop` | SIGTERM → SIGKILL, return status |
 | `POST /control/restart` | Stop then start |
 | `GET /control/logs` | `{ lines: [{ seq, ts, stream, line }] }` |
 | `GET /control/config` | current `ServerConfig` |
 | `PUT /control/config` | update config (allowed anytime; ports/data-path apply on next start/restart) |
+
+Operational endpoint families:
+
+| Prefix | Capability |
+| --- | --- |
+| `/flows/*` | Five FlowProducer creates, `getFlow`, parent results, safe Flow Job reads/mutations and bounded completion wait |
+| `/workflows/*` | Runtime status/reload, start, signal, recover, compensation decisions, archive/cleanup, execution reads |
+| `/queue-operations/*` | Live limits/TTL/saturation, deduplication, metrics, and lifecycle-journal retention |
+| `/backup/*` | Configure, status, list, create and stopped-server guarded restore |
+| `/db/*` | Read-only tables, rows, cells, schema, CSV and bounded SELECT-style query execution |
+
+See [API mapping](api-mapping.md) for each exact method, query, and safety
+constraint.
 
 `db` = `{ path, exists, size, walSize, shmSize, totalSize, mtimeMs }`, bytes on
 disk for the SQLite main file plus its WAL/SHM sidecars.
@@ -135,3 +163,14 @@ stop-then-start race** no longer orphans the newly-started process.
 `PUT /control/config` rejected `403` **without** mutating the launch command
 (the CSRF-to-RCE vector), same-origin + non-browser requests succeeding, OPTIONS
 preflight ACAO, loopback mutation auth, and all-route auth for network exposure.
+
+`bun run test:e2e` additionally starts disposable Bunqueue 2.8.57 servers and
+executes every FlowProducer creation mode, every exposed safe Flow Job group,
+Workflow handler discovery/control/compensation/archive, and all eight Queue SDK
+operations. Backup worker and compiled-binary behavior are covered by the
+runtime-safety suite and the standalone build smoke test. The deterministic
+lifecycle suite suspends a Workflow request body across stop and restart and
+proves it cannot run after Engine closure or cross into a new process
+generation. `bun run test:package` then creates the npm tarball, installs it in
+a temporary consumer outside the repository, starts its real bin, and probes
+the dashboard, direct agent, and `/agent` bridge.

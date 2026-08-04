@@ -137,7 +137,10 @@ Note: the percentile list once rendered broken values (`[object Object]`/zeros);
 
 **What it shows.** A read-only reference for bunqueue's S3 snapshot backups. A banner reminds you that backups are configured on the **server via environment variables** and cannot be toggled from the dashboard. Two cards follow: **Storage status** (polls `GET /storage` on the bunqueue API and reports Disk plus any server Error) and **Configuration (server env)**, a static cheat-sheet of the eight variables that actually control backups (`S3_BACKUP_ENABLED`, `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, access/secret keys, `S3_BACKUP_INTERVAL`, `S3_BACKUP_RETENTION`) with defaults. There is nothing to click, use it as a lookup while editing your server's env.
 
-**Differences vs the Pro page:** [`/s3`](/guide/s3) (S3BackupPro) adds a local-only config-builder form, a working "Test Connection", and an honest storage check via `bq.storage()`.
+**Differences vs the Pro page:** [`/s3`](/guide/s3) (S3BackupPro) adds the
+environment builder and live agent-backed status, object listing, on-demand
+backup, and guarded restore operations. This classic page remains a read-only
+reference.
 
 ## Not found (404)
 

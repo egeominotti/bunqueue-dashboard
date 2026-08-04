@@ -94,8 +94,10 @@ safe subset of the API, fails closed where
 flow-safety guarantees, and also manages the
 server *process* through a separate guarded agent.
 
-It talks **only** to bunqueue's public HTTP API (`:6790`) and a small local **control agent**. It
-never imports or modifies bunqueue itself, so it tracks any bunqueue server you point it at.
+It uses Bunqueue's public HTTP API (`:6790`) for ordinary remote observability and a small local
+**control agent** for process, FlowProducer, Workflow Engine, database, and backup operations. The
+agent is pinned to the server it manages and uses the exact installed Bunqueue 2.8.57 client
+contracts; it never patches Bunqueue internals.
 
 ## Features
 
@@ -105,11 +107,14 @@ never imports or modifies bunqueue itself, so it tracks any bunqueue server you 
 | **Server** | Control ▸ Server | **Start / stop / restart** the server process, edit its config, tail process logs |
 | **Enqueue** | Control ▸ Add Job | Add jobs (single or bulk) with every option |
 | **Inspect** | Control ▸ Job Inspector | Look up any job; promote / re-prioritize / delay; view data & result |
-| **Queues** | Control ▸ Queue Control | Pause / resume / promote, explicit desired-state limits, stall config & guarded DLQ policy |
+| **Queues** | Control ▸ Queue Control | Pause/resume/promote; desired-state writes plus live SDK limits, deduplication, metrics and journal retention |
 | **Cron** | Control ▸ Cron Manager | Submit acknowledged cron/interval upserts and delete schedules |
+| **Workflow Engine** | Workflow ▸ Overview / Executions / Waiting / Compensation / Archive | Start, recover, signal, inspect, compensate, archive and clean durable executions |
+| **Job Flows** | Workflow ▸ Job Flows | Explore DAGs, run all FlowProducer create modes and operate safe Flow Job methods |
 | **DLQ** | Control ▸ DLQ | Inspect entries, failure history and CSV exports; retry and purge stay unavailable |
 | **Webhooks** | Control ▸ Webhooks | Create / enable / delete job-event webhooks |
 | **Ops** | Control ▸ Diagnostics | Health, ping, storage, memory, connections, totals |
+| **S3 backup** | Management ▸ S3 Backup | Configure, inspect, list, create and guarded-restore official snapshots |
 | **Browse** | Queues / Jobs / DLQ / Cron / Metrics / Workers / Logs | Read-only browsing with basic actions |
 
 > Job actions are gated by the v2.8.57 flow contract. Every DLQ retry and completed-job requeue is
@@ -130,7 +135,7 @@ agent start one for you from the **Server** page).
 bunx bunqueue-dashboard
 ```
 
-One command, **zero dependencies** (a 543 kB download): serves the prebuilt dashboard on
+One command serves the prebuilt dashboard on
 http://127.0.0.1:8080, proxies `/api/*` to your bunqueue server (`BUNQUEUE_URL`, default
 `http://localhost:6790`), and runs the control agent on `127.0.0.1:6800`. Same env knobs as the
 standalone binaries: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` · `AGENT_PORT` ·
@@ -271,13 +276,14 @@ Because the deployed build is a static shell, point it at a reachable bunqueue s
 
 ## Testing & quality gate
 
-Three commands must be green before a change is considered done, the same checks CI runs:
+The canonical gate must be green before a change is considered done; CI runs the same command:
 
 ```bash
-bun run build     # tsc --noEmit + vite build
-bun run check     # Biome lint + format (production-grade config)
-bun test          # unit + agent-lifecycle tests
+bun run quality   # architecture, lint/build, size, docs, coverage, real E2E, packed-bin smoke, audit
 ```
+
+The E2E stage starts disposable Bunqueue 2.8.57 processes and exercises the complete FlowProducer,
+Workflow Engine, and Queue SDK operator bridges. Run it alone with `bun run test:e2e`.
 
 CI enforces this on every push and pull request. See [Contributing](#contributing).
 
@@ -286,15 +292,16 @@ CI enforces this on every push and pull request. See [Contributing](#contributin
 ```
 bunqueue-dashboard/
 ├── .github/workflows/   # CI, Pages deploy, Docker publish, Release
-├── agent/               # Bun control agent (process lifecycle), server.ts, manager.ts, index.ts
+├── agent/               # guarded process, Flow, Workflow, Queue, database and backup adapters
 ├── docker/              # Caddyfile for the container image
 ├── docs/                # source-verified reference (architecture, pages, API mapping, known issues)
 ├── scripts/dev.ts       # one-command dev launcher (`bun start`)
 ├── src/
 │   ├── lib/             # api.ts, bq.ts, hooks, formatters, job-action gating
 │   ├── components/      # layout shell, UI kit, Zustand stores
+│   ├── features/        # feature slices with domain, application, infrastructure and UI layers
 │   └── pages/           # view pages + Control ▸ * operator pages
-└── test/                # bun test (format, sse, manager, agent lifecycle, s3 store)
+└── test/                # unit, contract, UI race, agent lifecycle and integration tests
 ```
 
 Full walkthrough in [`docs/README.md`](docs/README.md).
@@ -320,7 +327,7 @@ boundary applies only to `scripts/serve.ts`. Host/Origin checks are not user aut
 
 1. Keep it **additive**, prefer new files + minimal glue over rewriting existing ones
    (see [`CLAUDE.md`](CLAUDE.md)).
-2. Make the [gate](#testing--quality-gate) green: `bun run build && bun run check && bun test`.
+2. Make the [gate](#testing--quality-gate) green: `bun run quality`.
 3. Open a PR, the template walks you through the checklist. CI must pass.
 
 ## License

@@ -1,9 +1,3 @@
-/**
- * Corrected + extended API types for the full-control surface.
- * Kept separate from the original lib/types.ts (additive; nothing existing is
- * modified). Verified against src/infrastructure/server/httpRoute*.ts.
- */
-
 export interface JobFull {
   id: string;
   queue?: string;
@@ -209,6 +203,7 @@ export interface DbStats {
 
 export interface ServerStatus {
   status: ServerRunStatus;
+  generation: number; // Monotonic identity of the managed process generation.
   pid: number | null;
   startedAt: number | null;
   exitCode: number | null;

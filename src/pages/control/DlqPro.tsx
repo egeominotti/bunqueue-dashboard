@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from '@/components/dashboard/stores/toastStore';
-import { Button, IconButton } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
-import { Select } from '@/components/ui/form';
-import { IconDlq, IconDownload, IconRefresh } from '@/components/ui/icons';
+import { IconDlq } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { bq } from '@/lib/bq';
-import { cn } from '@/lib/cn';
 import { downloadCsv } from '@/lib/exportFile';
-import { FLOW_BULK_RETRY_UNAVAILABLE, FLOW_DELETION_UNAVAILABLE } from '@/lib/flowMutationSafety';
-import { formatNumber, formatRelativeTime } from '@/lib/format';
+import { FLOW_BULK_RETRY_UNAVAILABLE } from '@/lib/flowMutationSafety';
 import { usePolledData } from '@/lib/usePolledData';
+import { DlqFilters, DlqQueueGrid, DlqSummary } from './dlq/DlqProControls';
+import { DlqProTable } from './dlq/DlqProTable';
 import { loadAllQueuePages } from './QueueControl';
 
 const PAGE_SIZE = 25;
@@ -196,188 +193,31 @@ export function DlqPro() {
         />
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Card>
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-faint">
-              Total in DLQ
-            </span>
-            <span
-              className={cn(
-                'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                discoveryError
-                  ? 'bg-amber-500/10 text-warning'
-                  : total == null
-                    ? 'bg-surface-2 text-muted'
-                    : healthy
-                      ? 'bg-emerald-500/10 text-success'
-                      : 'bg-red-500/10 text-danger'
-              )}
-            >
-              {discoveryError
-                ? 'Unavailable'
-                : total == null
-                  ? 'Loading'
-                  : healthy
-                    ? 'Healthy'
-                    : 'Attention'}
-            </span>
-          </div>
-          <div
-            className={cn(
-              'mt-2 text-3xl font-bold tnum',
-              total == null || discoveryError
-                ? 'text-muted'
-                : healthy
-                  ? 'text-success'
-                  : 'text-danger'
-            )}
-          >
-            {total == null ? '—' : formatNumber(total)}
-          </div>
-        </Card>
-        <Card>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-faint">
-            Top Reason
-          </div>
-          <div className="mt-2 text-lg font-semibold text-fg">
-            {discoveryError
-              ? 'Unavailable'
-              : data?.statsError
-                ? 'Unavailable'
-                : queue
-                  ? (topReason ?? 'No failures')
-                  : 'Select a queue'}
-          </div>
-        </Card>
-        <Card>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-faint">
-            Pending Retry
-          </div>
-          <div className="mt-2 text-3xl font-bold tnum text-fg">
-            {data?.stats ? formatNumber(data.stats.pendingRetry ?? 0) : '—'}
-          </div>
-          <div className="mt-1 text-xs text-faint">
-            {queue ? 'in this queue' : 'awaiting retry'}
-          </div>
-        </Card>
-        <Card>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-faint">
-            Failure Types
-          </div>
-          <div className="mt-2 text-3xl font-bold tnum text-fg">
-            {data?.stats ? formatNumber(reasons.length) : '—'}
-          </div>
-          <div className="mt-1 text-xs text-faint">distinct reasons</div>
-        </Card>
-      </div>
-
-      {dlqQueues.length > 0 && (
-        <Card className="mb-6">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-faint">
-              DLQ by queue
-            </span>
-            <div className="flex items-center gap-2">
-              <Button size="sm" disabled title={FLOW_BULK_RETRY_UNAVAILABLE}>
-                <IconRefresh className="size-3.5" /> Retry all ({dlqQueues.length} queues)
-              </Button>
-              <Button variant="danger" size="sm" disabled title={FLOW_DELETION_UNAVAILABLE}>
-                Purge all ({dlqQueues.length} queues)
-              </Button>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-5">
-            {dlqQueues.map((q) => (
-              <button
-                key={q.name}
-                type="button"
-                onClick={() => selectQueue(q.name)}
-                className={cn(
-                  'rounded-lg border p-3 text-left transition-colors',
-                  queue === q.name
-                    ? 'border-accent/50 bg-surface-2'
-                    : 'border-line hover:border-line-strong'
-                )}
-              >
-                <div className="truncate font-mono text-xs text-muted">{q.name}</div>
-                <div className="mt-1 text-xl font-bold tnum text-danger">{q.dlq}</div>
-              </button>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="w-48">
-          <Select
-            value={queue}
-            aria-label="Queue"
-            name="dlq-queue"
-            autoComplete="off"
-            onChange={(e) => selectQueue(e.target.value)}
-          >
-            <option value="">Select a queue…</option>
-            {queues.map((q) => (
-              <option key={q.name} value={q.name}>
-                {q.name}
-                {q.dlq ? ` (${q.dlq})` : ''}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="w-40">
-          <Select
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            aria-label="Filter by reason"
-            name="dlq-reason-filter"
-            autoComplete="off"
-          >
-            <option value="all">All Reasons</option>
-            {reasons.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="w-36">
-          <Select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as 'newest' | 'oldest')}
-            aria-label={pageScoped ? 'Sort this page' : 'Sort'}
-            name="dlq-sort"
-            autoComplete="off"
-          >
-            <option value="newest">Newest First{pageScoped ? ' (this page)' : ''}</option>
-            <option value="oldest">Oldest First{pageScoped ? ' (this page)' : ''}</option>
-          </Select>
-        </div>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Filter this page by job ID…"
-          aria-label="Filter this page by job ID"
-          name="dlq-job-filter"
-          autoComplete="off"
-          className="h-9 min-w-40 flex-1 rounded-lg border border-line bg-surface px-3 text-sm text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
-        />
-        <Button size="sm" disabled title={FLOW_BULK_RETRY_UNAVAILABLE}>
-          <IconRefresh className="size-3.5" /> Retry All
-        </Button>
-        <Button variant="danger" size="sm" disabled title={FLOW_DELETION_UNAVAILABLE}>
-          Purge All
-        </Button>
-        <IconButton
-          aria-label="Export this page to CSV"
-          title="Export this page to CSV"
-          disabled={!queue}
-          onClick={exportEntries}
-        >
-          <IconDownload className="size-3.5" />
-        </IconButton>
-      </div>
+      <DlqSummary
+        total={total}
+        discoveryError={!!discoveryError}
+        healthy={healthy}
+        statsError={!!data?.statsError}
+        queue={queue}
+        topReason={topReason}
+        pendingRetry={data?.stats?.pendingRetry}
+        reasonCount={data?.stats ? reasons.length : undefined}
+      />
+      <DlqQueueGrid queues={dlqQueues} queue={queue} onSelect={selectQueue} />
+      <DlqFilters
+        queue={queue}
+        queues={queues}
+        reason={reason}
+        reasons={reasons}
+        sort={sort}
+        search={search}
+        pageScoped={pageScoped}
+        onQueue={selectQueue}
+        onReason={setReason}
+        onSort={setSort}
+        onSearch={setSearch}
+        onExport={exportEntries}
+      />
       <p className="mb-4 text-xs text-warning">{FLOW_BULK_RETRY_UNAVAILABLE}</p>
 
       {error && !data ? (
@@ -409,94 +249,17 @@ export function DlqPro() {
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-                <th scope="col" className="px-5 py-3 font-medium">
-                  Job ID
-                </th>
-                <th scope="col" className="px-5 py-3 font-medium">
-                  Name
-                </th>
-                <th scope="col" className="px-5 py-3 font-medium">
-                  Reason
-                </th>
-                <th scope="col" className="px-5 py-3 font-medium">
-                  Error
-                </th>
-                <th scope="col" className="px-5 py-3 text-right font-medium">
-                  Entered
-                </th>
-                <th scope="col" className="w-16 px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((e) => (
-                <tr
-                  key={`${e.job.id}-${e.enteredAt}`}
-                  className="border-b border-line last:border-0 align-top hover:bg-surface-2/40"
-                >
-                  <td className="px-5 py-3">
-                    <Link
-                      to={`/job?id=${encodeURIComponent(e.job.id)}`}
-                      className="font-mono text-xs text-accent hover:underline"
-                    >
-                      {e.job.id}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3 font-mono text-xs text-muted">
-                    {e.job.name ?? 'default'}
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className="rounded-md bg-red-500/10 px-2 py-0.5 text-xs text-danger">
-                      {e.reason}
-                    </span>
-                  </td>
-                  <td className="max-w-md px-5 py-3 text-xs text-danger/80">
-                    {e.error ? (
-                      // Long errors collapse to two lines; click (or hover for
-                      // the title tooltip) reveals the full text in place.
-                      <button
-                        type="button"
-                        title={e.error}
-                        aria-expanded={expandedErrors.has(`${e.job.id}-${e.enteredAt}`)}
-                        onClick={() =>
-                          setExpandedErrors((s) => {
-                            const n = new Set(s);
-                            const k = `${e.job.id}-${e.enteredAt}`;
-                            n.has(k) ? n.delete(k) : n.add(k);
-                            return n;
-                          })
-                        }
-                        className={cn(
-                          'block w-full break-words text-left',
-                          !expandedErrors.has(`${e.job.id}-${e.enteredAt}`) && 'line-clamp-2'
-                        )}
-                      >
-                        {e.error}
-                      </button>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-right text-faint">
-                    {formatRelativeTime(e.enteredAt)}
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <IconButton
-                      aria-label="Retry unavailable"
-                      disabled
-                      title={FLOW_BULK_RETRY_UNAVAILABLE}
-                    >
-                      <IconRefresh className="size-3.5" />
-                    </IconButton>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DlqProTable
+          entries={entries}
+          expanded={expandedErrors}
+          onToggle={(key) =>
+            setExpandedErrors((current) => {
+              const next = new Set(current);
+              next.has(key) ? next.delete(key) : next.add(key);
+              return next;
+            })
+          }
+        />
       )}
 
       {queue && data && (

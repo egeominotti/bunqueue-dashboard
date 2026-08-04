@@ -42,29 +42,133 @@ const isTTY = !!process.stdout.isTTY;
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 const clock = (d: Date): string => `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+const RESERVED_FIELDS = new Set(['level', 'time', 'msg', 'toJSON', 'logSerializationError']);
+const UNSAFE_FIELDS = '[Unsafe log fields omitted]';
+const UNSERIALIZABLE_FIELDS = '[Unserializable log fields]';
 
-function write(level: LogLevel, a?: unknown, b?: unknown): void {
-  if (LEVELS[level] < threshold) return;
+function json(value: unknown): string | null {
+  const seen = new WeakSet<object>();
+  try {
+    return (
+      JSON.stringify(value, (_key, current: unknown) => {
+        if (typeof current === 'bigint') return current.toString();
+        if (typeof current === 'symbol') return `[${String(current)}]`;
+        if (typeof current === 'function') return `[Function ${current.name || 'anonymous'}]`;
+        if (typeof current === 'object' && current !== null) {
+          if (seen.has(current)) return '[Circular]';
+          seen.add(current);
+        }
+        return current;
+      }) ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
+function safeText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    return value === undefined ? '' : String(value);
+  } catch {
+    return '[Unprintable log message]';
+  }
+}
+
+function safeFields(value: unknown): Record<string, unknown> | undefined {
+  if (value === undefined) return undefined;
+  if ((typeof value !== 'object' || value === null) && typeof value !== 'function') {
+    return { value };
+  }
+  const fields: Record<string, unknown> = Object.create(null);
+  let unsafe = false;
+  let keys: PropertyKey[];
+  try {
+    keys = Reflect.ownKeys(value);
+  } catch {
+    return { logSerializationError: UNSERIALIZABLE_FIELDS };
+  }
+  for (const key of keys) {
+    if (typeof key !== 'string') continue;
+    if (RESERVED_FIELDS.has(key)) {
+      unsafe = true;
+      continue;
+    }
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Reflect.getOwnPropertyDescriptor(value, key);
+    } catch {
+      return { logSerializationError: UNSERIALIZABLE_FIELDS };
+    }
+    if (!descriptor?.enumerable) continue;
+    if ('value' in descriptor) fields[key] = descriptor.value;
+    else {
+      fields[key] = '[Accessor log field omitted]';
+      unsafe = true;
+    }
+  }
+  if (unsafe) fields.logSerializationError = UNSAFE_FIELDS;
+  return fields;
+}
+
+function logLine(level: LogLevel, obj: unknown, msg: unknown): string {
+  const time = Date.now();
+  const record: Record<string, unknown> = Object.create(null);
+  record.level = LEVELS[level];
+  record.time = time;
+  const fields = safeFields(obj);
+  if (fields) {
+    for (const [key, value] of Object.entries(fields)) record[key] = value;
+  }
+  record.msg = safeText(msg);
+  const line = json(record);
+  if (line) return line;
+  return JSON.stringify({
+    level: LEVELS[level],
+    time,
+    logSerializationError: UNSERIALIZABLE_FIELDS,
+    msg: safeText(msg),
+  });
+}
+
+function logArguments(a?: unknown, b?: unknown): { obj: unknown; msg: unknown } {
   // pino signature: (mergeObject, message) or just (message). An Error as the
   // first arg gets its message/stack lifted explicitly — Error props are
   // non-enumerable, so a plain spread would silently log `{}`.
-  const [obj, msg] =
-    typeof a === 'string'
-      ? [undefined, a]
-      : a instanceof Error
-        ? [{ err: { message: a.message, stack: a.stack } }, b as string | undefined]
-        : [a as Record<string, unknown> | undefined, b as string | undefined];
-
-  if (isTTY) {
-    const fields = obj && Object.keys(obj).length ? ` ${DIM}${JSON.stringify(obj)}${RESET}` : '';
-    console.log(
-      `${DIM}${clock(new Date())}${RESET} ${COLORS[level]}${level.toUpperCase().padEnd(5)}${RESET} ${msg ?? ''}${fields}`
-    );
-    return;
+  let obj: unknown;
+  let msg: unknown;
+  if (typeof a === 'string') {
+    msg = a;
+  } else {
+    msg = b;
+    try {
+      obj =
+        a instanceof Error
+          ? { err: { name: a.name, message: a.message, stack: a.stack } }
+          : (a as Record<string, unknown> | undefined);
+    } catch {
+      obj = { err: '[Uninspectable log argument]' };
+    }
   }
-  console.log(
-    JSON.stringify({ level: LEVELS[level], time: Date.now(), ...(obj ?? {}), msg: msg ?? '' })
-  );
+  return { obj, msg };
+}
+
+export function formatLogEntry(level: LogLevel, a?: unknown, b?: unknown, tty = isTTY): string {
+  const { obj, msg } = logArguments(a, b);
+  if (tty) {
+    const fieldsObject = safeFields(obj);
+    const serialized = fieldsObject
+      ? (json(fieldsObject) ?? JSON.stringify({ logSerializationError: UNSERIALIZABLE_FIELDS }))
+      : null;
+    const fields = serialized && serialized !== '{}' ? ` ${DIM}${serialized}${RESET}` : '';
+    return `${DIM}${clock(new Date())}${RESET} ${COLORS[level]}${level.toUpperCase().padEnd(5)}${RESET} ${safeText(msg)}${fields}`;
+  }
+  return logLine(level, obj, msg);
+}
+
+function write(level: LogLevel, a?: unknown, b?: unknown): void {
+  if (LEVELS[level] < threshold) return;
+  console.log(formatLogEntry(level, a, b));
 }
 
 export const logger = {

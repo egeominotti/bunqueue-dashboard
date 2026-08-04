@@ -15,6 +15,82 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.36] - 2026-08-04
+
+### Added
+
+- Completed the Temporal-style Workflow operator console with distinct
+  Overview, Job Flows, Executions, Waiting & Signals, Compensation, and Archive
+  workspaces; live handler discovery; execution start/recovery/signals; saga
+  decisions; bounded archive/cleanup; master-detail history and payload views;
+  operational pagination; and shareable URL state.
+- Exposed all five Bunqueue 2.8.57 `FlowProducer` creation contracts,
+  broker-native `getFlow`, parent results, fourteen safe Flow Job inspections,
+  twelve acknowledged mutations, and bounded `waitUntilFinished` through a
+  target-pinned agent adapter.
+- Added live Queue SDK operations for global rate/concurrency/TTL/saturation,
+  deduplication ownership and removal, terminal metrics, and lifecycle-journal
+  retention.
+- Added operational S3 configuration, status, listing, on-demand backup, and a
+  stopped-server, snapshot-confirmed restore using the exact installed Bunqueue
+  backup implementation.
+- Added real end-to-end validators that start disposable Bunqueue 2.8.57
+  servers and exercise Flow, Workflow, and Queue SDK contracts in the canonical
+  quality gate, plus an installed-tarball smoke that starts the published bin
+  outside the repository and probes the SPA, agent, and same-origin bridge.
+
+### Changed
+
+- Pinned `bunqueue` to the current latest release, 2.8.57, and aligned runtime
+  queue name, concurrency, authentication, progress objects, timeouts, metrics,
+  diagnostics, demo fixtures, API mapping, and operator copy with its contracts.
+- Introduced feature slices with domain, application ports, infrastructure
+  adapters, and injected UI repositories; split production and test modules so
+  every TypeScript/TSX file is at most 300 lines, enforced by CI.
+- Reworked Workflow and Job Flow interaction density, state badges, timelines,
+  DAG inspection, retention controls, and focused master-detail layouts into a
+  cohesive dark operator console.
+
+### Fixed
+
+- Fixed Workflow lists stopping at 25 records, incomplete Overview attention
+  counts, frozen/incorrect waiting duration, ambiguous active-store cleanup,
+  hidden stale-detail errors, missing void-command receipts, and retargeted
+  command results.
+- Fixed Flow results and errors surviving an input, operation, target, or limit
+  change; every panel now clears on start and publishes only to the request
+  identity that created it.
+- Fixed standalone backup recursion by embedding a dedicated worker entrypoint;
+  shared persistent agent runtimes now close once, restore holds an atomic
+  stopped-server lease, and Workflow reads follow the running data path.
+- Fixed maximum Flow waits being cut off by generic transport deadlines and
+  made object progress follow Bunqueue's numeric-progress plus JSON-message
+  wire contract.
+- Fixed the no-network demo so every Queue SDK limit, deduplication, metrics,
+  and event-journal operation uses an isolated stateful backend instead of
+  escaping to the local agent port.
+- Fixed a stop/restart race that could admit a delayed Workflow command after
+  the Engine was closed; process transitions and command admission now share a
+  lifecycle gate and reject requests prepared against an obsolete generation.
+- Fixed connection retargets so pending Flow and Workflow results are scoped to
+  an opaque URL/server-token/agent-token epoch, including A→B→A changes, without
+  exposing credentials.
+- Fixed failed Workflow Engine closes so the owned Engine remains available for
+  an idempotent retry, and reject malformed Bunqueue S3 status/list output at
+  both the agent and presentation boundaries.
+- Fixed the npm publish closure to include every module imported by the
+  standalone entrypoint; the packed 0.0.36 executable is now exercised from a
+  clean temporary consumer before release.
+
+### Security
+
+- Added one DRY streaming JSON reader with pre-parse byte limits, strict
+  `Content-Length`, fatal UTF-8 decoding, and endpoint-specific caps across
+  Flow, Workflow, Queue, backup, config, and database query routes.
+- Agent-side SDK operations now reject stopped servers and any target that does
+  not exactly match the locally managed Bunqueue port, including `/api` proxy
+  misconfiguration; inherited auth tokens are trimmed and consistently scoped.
+
 ## [0.0.35] - 2026-08-04
 
 ### Added
@@ -1021,7 +1097,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.35...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.36...HEAD
+[0.0.36]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.35...v0.0.36
 [0.0.35]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.34...v0.0.35
 [0.0.34]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.33...v0.0.34
 [0.0.33]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.32...v0.0.33

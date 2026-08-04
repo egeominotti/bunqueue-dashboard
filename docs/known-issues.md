@@ -44,17 +44,16 @@ at the point of action:
   the same absent name can still replace one another. The form and confirmation
   call the command an upstream, last-writer-wins upsert and require operators to
   authorize that behavior for a globally unique name.
-- **Rate-limit and concurrency policies are write-only over HTTP.** Bunqueue
-  exposes PUT/DELETE but no GET for their current values or remaining TTL. The
-  dashboard deliberately leaves these inputs blank, requires a complete desired
-  state (including an explicit window and TTL mode), labels replacement/clear
-  as blind writes, requires the queue name for a clear, and reports a timestamped
-  write receipt. It never presents that receipt or a cached value as current
-  server truth.
+- **Rate-limit and concurrency policies are write-only over HTTP.** Bunqueue's
+  HTTP surface still exposes PUT/DELETE without matching reads, so the desired-
+  state forms remain explicit replacements rather than editable cached values.
+  Queue Control now complements them with live, target-pinned Bunqueue 2.8.57
+  Queue SDK readback for the global rate limit, concurrency, remaining TTL, and
+  saturation; write receipts are never presented as server truth.
 
-Resolving these items completely requires generation/state/topology-conditional
-mutation APIs, flow-aware retry reconstruction, create-only cron semantics and
-limiter read endpoints in Bunqueue itself.
+Resolving the remaining mutation items completely requires generation/state/
+topology-conditional APIs, flow-aware retry reconstruction, and create-only
+cron semantics in Bunqueue itself.
 
 ## Adversarial audit pass (v0.0.32)
 
@@ -340,11 +339,12 @@ ship with reproducing tests (`test/agent-server.test.ts`, `test/manager.test.ts`
 
 ## Design limitations (not bugs, how bunqueue OSS works)
 
-- **S3 backup cannot be configured from the dashboard.** Both `/s3` and
-  `/s3-classic` are explicit about this: bunqueue reads `S3_BACKUP_ENABLED`, `S3_BUCKET`, etc. from the **server process's environment**. `S3BackupPro`'s
-  form is a local-only (`localStorage`) convenience for assembling that env
-  config to paste elsewhere, it has no effect on the running server, and
-  "Backup Now" is permanently disabled.
+- **S3 operations require the local control agent.** `/s3` can now apply the
+  whitelisted Bunqueue environment, inspect/list backups, create one on demand,
+  and perform a stop-gated, snapshot-confirmed restore through the exact 2.8.57
+  CLI. `/s3-classic` remains a read-only environment reference. Static hosting
+  and arbitrary remote targets cannot run commands on a machine they do not
+  manage.
 - **Alerts are evaluated client-side, with real limits.** `useAlertEngine` now
   evaluates the rules in the browser (in-app toast + optional desktop
   Notification on each fresh threshold crossing), but: (1) it only runs **while a

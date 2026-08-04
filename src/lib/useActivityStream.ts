@@ -95,13 +95,10 @@ export function useActivityStream(queue?: string) {
   const [counters, setCounters] = useState<ActivityCounters>(EMPTY);
   const [throughput, setThroughput] = useState(0);
   const [connected, setConnected] = useState(false);
-  /** Last connect/stream failure (e.g. `SSE connect failed: HTTP 404`), null while healthy. */
   const [error, setError] = useState<Error | null>(null);
 
   const stamps = useRef<number[]>([]);
-  // Every effect instance owns a unique generation. AbortSignal is cooperative:
-  // a mocked/custom fetch or ReadableStream may ignore abort and deliver bytes
-  // later, so callbacks and queued React updaters must also prove ownership.
+  // Each effect has a generation because custom fetch/streams may ignore abort.
   const streamGeneration = useRef(0);
   const targetKey = JSON.stringify([baseUrl, token, queue ?? null]);
   // A passive effect resets the stored stream state below, but it runs after
@@ -125,14 +122,10 @@ export function useActivityStream(queue?: string) {
     const generation = ++streamGeneration.current;
     let seq = 0;
     let cancelled = false;
-    // Buffers are generation-local. An obsolete callback can therefore never
-    // append into the replacement stream's pending batch even if it ignores
-    // cancellation; the isCurrent guard below also prevents publishing it.
+    // Buffers are generation-local; obsolete callbacks cannot publish into the replacement stream.
     let pendingEvents: ActivityEvent[] = [];
     let pendingCounters: ActivityCounters = { ...EMPTY };
-    // Server event ids are generation-local: retain one across reconnects to
-    // activate v2.8.55's replay buffer, but never carry it to another queue,
-    // origin, or bearer credential.
+    // Retain replay ids across reconnects, but never across queue/origin/token generations.
     let lastEventId: string | undefined;
     const isCurrent = () => !cancelled && streamGeneration.current === generation;
 

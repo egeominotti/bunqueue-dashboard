@@ -12,20 +12,97 @@ against the exact [bunqueue v2.8.57 release](https://github.com/egeominotti/bunq
 ## Workflow Engine
 
 Workflow Engine is a Bunqueue client-library API, not part of the Bunqueue HTTP
-server surface. The local control agent exposes a read-only observability
-adapter over the official SQLite store:
+server surface. The local control agent combines a read-only observability
+adapter over the official SQLite store with a persistent official `Engine`:
 
 | Agent endpoint | Contract |
 | --- | --- |
 | `GET /workflows/stats` | Active/archive totals, active state counts, and workflow names |
 | `GET /workflows?kind=&workflowName=&state=&limit=&offset=` | Deterministic execution summaries, capped at 100 rows |
 | `GET /workflows/:id?kind=active\|archive` | Decoded input, step records, resolved paths, signals, decisions, definition/rollback metadata |
+| `GET /workflows/runtime?target=` | Module/handler readiness and registered workflow names |
+| `POST /workflows/runtime/reload?target=` | Close and recreate the Engine from `BUNQUEUE_WORKFLOW_MODULE` |
+| `POST /workflows/start?target=` | `{ workflowName, input }` → official `Engine.start` |
+| `POST /workflows/:id/signal?target=` | `{ event, payload }` → official durable `Engine.signal` |
+| `POST /workflows/recover?target=` | Official orphan recovery |
+| `POST /workflows/:id/resume-compensation?target=` | Resume a stuck saga unwind |
+| `POST /workflows/:id/abandon-compensation?target=` | Abandon the remaining unwind explicitly |
+| `POST /workflows/archive?target=` | Archive bounded terminal states by age |
+| `POST /workflows/cleanup?target=` | Permanently delete bounded terminal states by age |
 
 The adapter uses the same structured-clone MessagePack codec as Bunqueue
-2.8.57 and opens the configured `dataPath` read-only. It never implements
-`Engine.start`, `signal`, `recover`, `resumeCompensation`, or
-`abandonCompensation`: those operations require the live Engine instance and
-its registered handlers, and Bunqueue exposes no equivalent HTTP control plane.
+2.8.57 and opens the configured `dataPath` read-only. Mutations never edit
+SQLite: they execute on the live Engine loaded from an absolute application
+module. Target pinning, stopped-server checks, bounded payloads, terminal-only
+maintenance, serialization, and the agent auth/origin/host gates protect that
+local control plane.
+
+## FlowProducer and Flow Job methods
+
+The Job Flows page keeps its portable HTTP DAG reader, and uses target-pinned
+agent routes for the TCP-only Bunqueue client contracts:
+
+| Agent endpoint | Contract |
+| --- | --- |
+| `POST /flows/create?target=` | `add`, `addBulk`, `addChain`, `addBulkThen`, or `addTree`; definitions are validated and committed by official `FlowProducer` |
+| `GET /flows/tree?id=&queueName=&depth=&maxChildren=&target=` | Official `FlowProducer.getFlow` snapshot; the UI exposes both bounded traversal controls and tree/raw-JSON views |
+| `POST /flows/results?target=` | One or many official parent results |
+| `GET /flows/jobs/:id/:operation?queueName=&target=` | State predicates, `toJSON`, `asJSON`, dependency/failure reads |
+| `GET /flows/jobs/:id/waitUntilFinished?queueName=&target=&ttl=` | Bounded 1–60,000 ms completion wait; dedicated TCP and browser deadlines use `ttl + 5,000 ms` |
+| `POST /flows/jobs/:id/:operation?queueName=&target=` | Data/progress/log/delay/priority/log retention/deduplication, dependency release/removal, retry, promote, remove |
+
+Every operation first resolves the ID and queue through the official flow
+reader, so a caller cannot retarget a job by changing only the displayed queue.
+Bodies are size/type bounded and unknown options fail before a TCP connection is
+opened. Worker-lease transitions and process-local `discard()` remain inside the
+real Worker process.
+
+For `updateProgress`, numeric values preserve the optional message. Object
+values follow the v2.8.57 Flow Job contract (`progress: 0` plus the serialized
+object as the message) after strict JSON, prototype, depth, value-count, and
+65,536-byte validation.
+
+## Queue SDK operations
+
+The Bunqueue HTTP server can write rate and concurrency policies but does not
+expose the matching read contracts. Queue Control therefore uses a pinned local
+agent bridge over the official Bunqueue 2.8.57 `Queue` client:
+
+| Agent endpoint | Official Queue contracts |
+| --- | --- |
+| `GET /queue-operations/:queue/limits?target=&maxJobs=` | `getGlobalRateLimit`, `getGlobalConcurrency`, `getRateLimitTtl`, `isMaxed` |
+| `GET /queue-operations/:queue/deduplication?target=&deduplicationId=` | `getDeduplicationJobId` |
+| `POST /queue-operations/:queue/deduplication/remove?target=` | `removeDeduplicationKey` |
+| `GET /queue-operations/:queue/metrics?target=&type=&start=&end=` | Paged `getMetrics` for completed or failed buckets |
+| `POST /queue-operations/:queue/events/trim?target=` | Bounded `trimEvents` retention mutation |
+
+The agent accepts only the managed server target, exact query/body fields,
+validated queue names, bounded pagination and retention values. Operations are
+serialized. Deduplication-key removal and journal trimming require explicit UI
+confirmation; trimming lifecycle events does not remove metric buckets.
+
+The remaining client methods are deliberately not operator commands:
+worker-lease transitions (`extendJobLock`, `moveJobTo*`) require the owning
+worker token; `waitUntilReady`, `disconnect`, and `close` are adapter lifecycle;
+`discard` is process-local; and `forward` owns a long-lived arbitrary-destination
+runtime. Generic Drain/Clean/Obliterate and non-atomic retry paths remain
+flow-destructive and fail closed as documented below. Compatibility aliases are
+covered through their acknowledged remote counterparts rather than duplicated
+as fire-and-forget controls.
+
+## S3 backup agent
+
+| Agent endpoint | Contract |
+| --- | --- |
+| `GET /backup/status?target=` | Official Bunqueue 2.8.57 CLI JSON status |
+| `GET /backup/list?target=` | Remote object list |
+| `POST /backup/configure?target=` | Atomically replace only whitelisted `S3_*` config keys |
+| `POST /backup/now?target=` | Create a consistent backup |
+| `POST /backup/restore?target=` | Restore only while stopped and only when the confirmed database snapshot is unchanged |
+
+Commands are serialized, time/output bounded, spawned without a shell, and run
+with the managed database path. The restore body includes the chosen object key
+plus path/existence/size/WAL/SHM/mtime evidence from `/control/status`.
 
 ## Response-shape gotchas (important)
 

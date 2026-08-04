@@ -21,15 +21,12 @@ interface Sort {
 }
 
 export function WorkersPro() {
-  // /workers wraps its payload: { ok, data: { workers } } — unwrap here so the
-  // page renders a plain list.
   const { data, error, loading, refetch } = usePolledData(async () => {
     const r = await bq.workers();
     return r.data;
   }, []);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // null = server order (registration order); clicking a sortable header sorts.
   const [sort, setSort] = useState<Sort | null>(null);
   const actionGuard = useServerActionGuard('workers-pro');
 
@@ -140,7 +137,7 @@ export function WorkersPro() {
         <div role="alert" className="mb-4 rounded-lg border border-danger/30 bg-danger/5 p-4">
           <p className="text-sm font-medium text-danger">
             {quarantinedWorkers.length} worker registration(s) contain values accepted by Bunqueue
-            2.8.55 but unsafe to render. Healthy workers remain available below.
+            2.8.57 but unsafe to render. Healthy workers remain available below.
           </p>
           <p className="mt-1 text-xs text-muted">
             Their status and active-job count are unknown, so this dashboard will not offer the

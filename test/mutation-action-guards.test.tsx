@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { act, createElement, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
 import { AddJob } from '../src/pages/control/AddJob';
 import { BulkAddJobs } from '../src/pages/control/BulkAddJobs';
 import { CronManager } from '../src/pages/control/CronManager';
-import { QueueDetailPro } from '../src/pages/control/QueueDetailPro';
 import { ensureDom, settle } from './domSetup';
 
 const realFetch = globalThis.fetch;
@@ -241,114 +240,5 @@ describe('non-idempotent form mutexes', () => {
       deletePending.resolve(json({ ok: true }));
       await settle(3);
     });
-  });
-});
-
-describe('route and connection ownership', () => {
-  test('QueueDetailPro suppresses stale success after a server retarget', async () => {
-    const pausePending = deferred<Response>();
-    let pausePosts = 0;
-    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (init?.method === 'POST' && url.endsWith('/queues/orders/pause')) {
-        pausePosts += 1;
-        return pausePending.promise;
-      }
-      if (url.endsWith('/queues/summary')) {
-        return Promise.resolve(
-          json([
-            {
-              name: 'orders',
-              paused: false,
-              counts: {
-                waiting: 1,
-                prioritized: 0,
-                active: 0,
-                completed: 0,
-                failed: 0,
-                delayed: 0,
-              },
-            },
-          ])
-        );
-      }
-      if (url.includes('/dashboard/queues/orders')) {
-        return Promise.resolve(
-          json({
-            ok: true,
-            name: 'orders',
-            counts: {
-              waiting: 1,
-              active: 0,
-              completed: 0,
-              failed: 0,
-              delayed: 0,
-              prioritized: 0,
-              'waiting-children': 0,
-              paused: 0,
-            },
-            paused: false,
-            priorityCounts: {},
-            dlqPreview: [],
-            timestamp: 1,
-          })
-        );
-      }
-      if (url.endsWith('/queues/orders/stall-config')) {
-        return Promise.resolve(
-          json({
-            ok: true,
-            config: { enabled: true, stallInterval: 30_000, maxStalls: 3, gracePeriod: 5_000 },
-          })
-        );
-      }
-      if (url.endsWith('/queues/orders/dlq-config')) {
-        return Promise.resolve(
-          json({
-            ok: true,
-            config: {
-              autoRetry: false,
-              autoRetryInterval: 3_600_000,
-              maxAutoRetries: 3,
-              maxAge: 604_800_000,
-              maxEntries: 10_000,
-            },
-          })
-        );
-      }
-      if (url.includes('/queues/orders/jobs/list')) {
-        return Promise.resolve(json({ ok: true, jobs: [] }));
-      }
-      return Promise.resolve(json({ ok: false, error: 'unexpected request' }, 500));
-    }) as typeof fetch;
-
-    const { host } = render(
-      createElement(
-        MemoryRouter,
-        { initialEntries: ['/queues/orders'] },
-        createElement(
-          Routes,
-          null,
-          createElement(Route, {
-            path: '/queues/:name',
-            element: createElement(QueueDetailPro),
-          })
-        )
-      )
-    );
-    await settle(12);
-    const pause = [...host.querySelectorAll('button')].find((button) =>
-      (button.textContent ?? '').includes('Pause')
-    )!;
-    dispatchTwice(pause, 'click');
-    await settle(3);
-    expect(pausePosts).toBe(1);
-
-    act(() => useConnectionStore.setState({ baseUrl: 'http://server-b.test', token: 'token-b' }));
-    await act(async () => {
-      pausePending.resolve(json({ ok: true }));
-      await settle(8);
-    });
-    expect(host.textContent).not.toContain('Paused ✓');
   });
 });

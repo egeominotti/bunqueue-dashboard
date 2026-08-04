@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { createResilientStateStorage } from './resilientStateStorage';
 
 export type ChannelType = 'email' | 'webhook' | 'slack';
 export type Metric = 'error_rate' | 'p99_latency' | 'waiting' | 'failed' | 'dlq';
@@ -190,81 +191,11 @@ export function persistedAlertsState(s: AlertsState): { channels: Channel[]; rul
   return sanitizedPersistedAlertsState({ channels: s.channels, rules: s.rules });
 }
 
-function browserStorage(): Storage | null {
-  try {
-    return (globalThis as { localStorage?: Storage }).localStorage ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function sanitizeStoredEnvelope(raw: string): { hydration: string; canonical: string } | null {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    const envelope = isRecord(parsed) ? parsed : {};
-    const rawState = 'state' in envelope ? envelope.state : envelope;
-    const state = sanitizedPersistedAlertsState(rawState);
-    const version = typeof envelope.version === 'number' ? envelope.version : undefined;
-    return {
-      hydration: JSON.stringify({ state, ...(version === undefined ? {} : { version }) }),
-      canonical: JSON.stringify({ state, version: ALERTS_STORAGE_VERSION }),
-    };
-  } catch {
-    return null;
-  }
-}
-
-/** localStorage is optional durability and must never break an in-memory edit. */
-const resilientAlertsStorage: StateStorage = {
-  getItem(name) {
-    const storage = browserStorage();
-    if (!storage) return null;
-    let raw: string | null;
-    try {
-      raw = storage.getItem(name);
-    } catch {
-      return null;
-    }
-    if (raw === null || name !== ALERTS_STORAGE_KEY) return raw;
-    const sanitized = sanitizeStoredEnvelope(raw);
-    if (!sanitized) {
-      try {
-        storage.removeItem(name);
-      } catch {
-        // Corrupt optional storage can be ignored; defaults remain usable.
-      }
-      return null;
-    }
-    if (raw !== sanitized.canonical) {
-      try {
-        storage.setItem(name, sanitized.canonical);
-      } catch {
-        // Fail closed: if an old secret-bearing blob cannot be overwritten,
-        // discard it rather than leave credentials at rest indefinitely.
-        try {
-          storage.removeItem(name);
-        } catch {
-          // Storage is externally controlled; sanitized hydration is still safe.
-        }
-      }
-    }
-    return sanitized.hydration;
-  },
-  setItem(name, value) {
-    try {
-      browserStorage()?.setItem(name, value);
-    } catch {
-      // The in-memory Zustand transaction has already succeeded.
-    }
-  },
-  removeItem(name) {
-    try {
-      browserStorage()?.removeItem(name);
-    } catch {
-      // Durable cleanup is best-effort.
-    }
-  },
-};
+const resilientAlertsStorage = createResilientStateStorage({
+  key: ALERTS_STORAGE_KEY,
+  version: ALERTS_STORAGE_VERSION,
+  sanitizeState: sanitizedPersistedAlertsState,
+});
 
 /**
  * Alert configuration is stored client-side only. bunqueue OSS has no alerting

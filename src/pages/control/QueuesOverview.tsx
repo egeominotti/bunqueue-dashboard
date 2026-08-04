@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { toast } from '@/components/dashboard/stores/toastStore';
-import { Button, IconButton } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
-import { IconArrowRight, IconPause, IconPlay, IconQueues, IconSearch } from '@/components/ui/icons';
+import { IconPause, IconPlay, IconSearch } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Pagination } from '@/components/ui/Pagination';
 import { StatCard } from '@/components/ui/StatCard';
@@ -14,20 +13,11 @@ import { formatNumber } from '@/lib/format';
 import { settledPool } from '@/lib/promisePool';
 import { usePolledData } from '@/lib/usePolledData';
 import { assertSuccessfulMutationResponse, useServerActionGuard } from '@/lib/useServerActionGuard';
+import { type QueueSortKey, QueuesTable } from './queues/QueuesTable';
 
 const FANOUT_LIMIT = 6;
 
 const PAGE_SIZE = 15;
-
-const SORT_COLS = [
-  ['waiting', 'Waiting'],
-  ['prioritized', 'Prioritized'],
-  ['active', 'Active'],
-  ['completed', 'Completed'],
-  ['failed', 'Failed'],
-  ['delayed', 'Delayed'],
-] as const;
-type SortKey = (typeof SORT_COLS)[number][0];
 
 /**
  * All queues with per-state counts and inline pause/resume. Backed by a single
@@ -41,7 +31,7 @@ export function QueuesOverview() {
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [sortCol, setSortCol] = useState<SortKey | null>(null);
+  const [sortCol, setSortCol] = useState<QueueSortKey | null>(null);
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   // Filters, sorting, and pagination are only different views of the same queue
   // registry. Keep one action scope so changing the view cannot unlock a second
@@ -59,7 +49,7 @@ export function QueuesOverview() {
   const all = data ?? [];
 
   // Header click cycles desc → asc → off (back to the alphabetical default).
-  const cycleSort = (k: SortKey) => {
+  const cycleSort = (k: QueueSortKey) => {
     if (sortCol !== k) {
       setSortCol(k);
       setSortDir('desc');
@@ -263,134 +253,18 @@ export function QueuesOverview() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-              <th scope="col" className="px-5 py-3 font-medium">
-                Queue
-              </th>
-              {SORT_COLS.map(([key, label]) => (
-                <th
-                  key={key}
-                  scope="col"
-                  aria-sort={
-                    sortCol === key ? (sortDir === 'desc' ? 'descending' : 'ascending') : undefined
-                  }
-                  className="px-5 py-3 text-right font-medium"
-                >
-                  <button
-                    type="button"
-                    onClick={() => cycleSort(key)}
-                    className="inline-flex items-center gap-1 rounded uppercase tracking-wider hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-                  >
-                    {label}
-                    {sortCol === key && (
-                      <span aria-hidden="true">{sortDir === 'desc' ? '↓' : '↑'}</span>
-                    )}
-                  </button>
-                </th>
-              ))}
-              <th scope="col" className="px-5 py-3 font-medium">
-                Status
-              </th>
-              <th scope="col" className="w-24 px-5 py-3 text-right font-medium">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {!data && error ? (
-              <tr>
-                <td colSpan={9} className="px-5 py-12 text-center text-sm text-warning">
-                  Could not load queues — {error.message}. Retry above.
-                </td>
-              </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="px-5 py-12 text-center text-sm text-faint">
-                  {search ? 'No queues match your search.' : 'No queues yet.'}
-                </td>
-              </tr>
-            ) : (
-              rows.map((q) => {
-                const rowBusy = bulkBusy || busy.has(q.name);
-                return (
-                  <tr
-                    key={q.name}
-                    className="group border-b border-line last:border-0 transition-colors hover:bg-surface-2/50"
-                  >
-                    <td className="px-5 py-3">
-                      <Link
-                        to={`/queues/${encodeURIComponent(q.name)}`}
-                        className="flex items-center gap-2 rounded font-medium text-fg hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
-                      >
-                        <IconQueues className="size-4 text-faint" />
-                        {q.name}
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3 text-right tnum text-warning">
-                      {formatNumber(q.counts.waiting)}
-                    </td>
-                    <td className="px-5 py-3 text-right tnum text-orange-400">
-                      {formatNumber(q.counts.prioritized)}
-                    </td>
-                    <td className="px-5 py-3 text-right tnum text-blue-400">
-                      {formatNumber(q.counts.active)}
-                    </td>
-                    <td className="px-5 py-3 text-right tnum text-success">
-                      {formatNumber(q.counts.completed)}
-                    </td>
-                    <td
-                      className={cn(
-                        'px-5 py-3 text-right tnum',
-                        q.counts.failed ? 'text-danger' : 'text-muted'
-                      )}
-                    >
-                      {formatNumber(q.counts.failed)}
-                    </td>
-                    <td className="px-5 py-3 text-right tnum text-muted">
-                      {formatNumber(q.counts.delayed)}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
-                          q.paused
-                            ? 'bg-orange-500/10 text-orange-400'
-                            : 'bg-emerald-500/10 text-success'
-                        )}
-                      >
-                        <span className="size-1.5 rounded-full bg-current" />
-                        {q.paused ? 'Paused' : 'Active'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center justify-end gap-1">
-                        <IconButton
-                          aria-label={q.paused ? 'Resume queue' : 'Pause queue'}
-                          disabled={rowBusy}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggle(q);
-                          }}
-                        >
-                          {q.paused ? (
-                            <IconPlay className="size-3.5 text-success" />
-                          ) : (
-                            <IconPause className="size-3.5 text-warning" />
-                          )}
-                        </IconButton>
-                        <IconArrowRight className="size-4 text-faint opacity-0 transition-opacity group-hover:opacity-100" />
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+      <QueuesTable
+        rows={rows}
+        hasData={!!data}
+        error={error}
+        search={search}
+        sortCol={sortCol}
+        sortDir={sortDir}
+        bulkBusy={bulkBusy}
+        busy={busy}
+        onSort={cycleSort}
+        onToggle={(queue) => void toggle(queue)}
+      />
 
       <Pagination
         page={safePage}

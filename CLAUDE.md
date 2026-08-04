@@ -4,9 +4,10 @@ A web dashboard that **fully drives** a bunqueue server: view + control queues,
 jobs, DLQ, cron, webhooks, workers, live activity, and the server **process
 lifecycle** (start / stop / restart).
 
-It talks only to bunqueue's public HTTP API (`:6790`) plus a small local
-**control agent** that manages the server process. It never imports or modifies
-bunqueue source.
+It talks to bunqueue's public HTTP API (`:6790`) plus a small local **control
+agent** that manages the server process. Flow and Workflow operations use the
+exact pinned public Bunqueue client through that agent; the project never
+imports private source paths or modifies Bunqueue internals.
 
 ## Golden rule: additive only
 
@@ -92,16 +93,18 @@ bun dev                     # dashboard only      → http://localhost:5273
 The dashboard reads data from a bunqueue server. Start it from **Control ▸ Server** (the agent runs
 it) or point the dashboard at an existing server via Settings / `VITE_BUNQUEUE_URL`.
 
-## Gate — all three must be green before considering a change done
+## Gate — all checks must be green before considering a change done
 
 ```bash
+bun run architecture # every TypeScript source file stays at or below 300 lines
 bun run build     # tsc --noEmit + vite build
 bun run check     # biome lint + format (production-grade config)
 bun test          # unit + agent lifecycle tests
+bun run test:e2e # real Bunqueue Flow, Workflow, and Queue SDK validation
 ```
 
-CI runs this exact gate on every push and PR (`.github/workflows/ci.yml`), with the test step
-upgraded to `bun run test:coverage`: it runs the suite with coverage and then
+CI runs `bun run quality` on every push and PR (`.github/workflows/ci.yml`), with the test step
+upgraded to `bun run test:coverage` and followed by `bun run test:e2e`: coverage runs the suite and
 `scripts/check-coverage.ts` enforces an **aggregate coverage floor** (sums the lcov report; Bun's
 own `coverageThreshold` is per-file and would be failed by any single low-coverage module).
 Raise the floors as coverage grows; never lower them to make a failing change pass.

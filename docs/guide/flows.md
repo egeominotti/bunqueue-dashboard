@@ -5,15 +5,54 @@ description: Visualize a bunqueue job flow as an interactive DAG in the dashboar
 
 # Flows
 
-The **Flows** page draws a job flow as an interactive graph, so you can see how a
-parent job owns its children and which jobs depend on which. In Bunqueue flows,
-children run before their parent.
+The **Job Flows** page is both an interactive DAG explorer and an operator
+console for Bunqueue 2.8.57's official `FlowProducer` and Flow Job contracts.
 
-## How it works
+The URL preserves the loaded root, selected DAG node, and active Explore/Create/
+Job methods tool. Back/Forward restores that context, while an invalid root or
+node is canonicalized before it can become a transport target.
+For BullMQ-compatible flow trees, children run before their parent; legacy
+`addChain`/`addTree` retain their documented execution direction.
 
-bunqueue has no single "get the whole flow" HTTP endpoint, so the dashboard
-builds the graph on the client from each job's own fields (`childrenIds`,
-`dependsOn`, `parentId`):
+The page has three tools:
+
+- **Explore** draws the current parent/child/dependency topology and diagnoses
+  missing backlinks, partial snapshots, cycles, and traversal caps.
+- **Create** executes `add`, `addBulk`, `addChain`, `addBulkThen`, or `addTree`
+  with editable JSON and shows the atomic broker result.
+- **Job methods** exposes all safe remote methods: state predicates,
+  broker-native `getFlow`, `toJSON`/`asJSON`, dependency/result reads, bounded
+  `waitUntilFinished`, data, progress, log, delay, priority, log retention,
+  deduplication, retry, promote, dependency release, unprocessed-child removal,
+  and job removal.
+
+Creation and Job methods go through the local control agent to the exact TCP
+port of its managed server. A dashboard connected to another target fails
+closed instead of accidentally mutating the local broker.
+
+## Broker-native tree and progress
+
+The **FlowProducer.getFlow** panel accepts a job ID, queue name, depth, and
+maximum children per level. Depth and child limits are explicit integers from
+0 to 500. The result remains labelled with the target and limits captured when
+the request started, even if the form is edited while the request is in flight.
+It renders both a compact state-aware tree and the complete raw agent JSON;
+`flow: null` is shown as an explicit not-found result.
+
+`Job.updateProgress` follows both Bunqueue 2.8.57 forms. Numeric progress is
+bounded to 0-100 and may carry an optional message. Object progress is strict,
+bounded JSON and uses Bunqueue's canonical wire representation: numeric
+progress `0` with the serialized object in the progress-message field. A
+separate message with object progress is rejected because the upstream contract
+uses that same field for the object. Cycles, custom prototypes, unsafe property
+names, sparse arrays, non-finite numbers, non-JSON values, excessive nesting,
+and payloads above 65,536 UTF-8 bytes fail before broker access.
+
+## Visual explorer
+
+The visual explorer deliberately builds its graph from the public HTTP job
+snapshots (`childrenIds`, `dependsOn`, `parentId`). This keeps links opened from
+Jobs/Job Inspector portable even when the local control agent is unavailable:
 
 1. Paste any job ID, or open a job that is part of a flow in the
    [Job Inspector](/guide/job-inspector) and choose **View flow**.
@@ -37,7 +76,7 @@ An absent field is not interpreted as an empty relationship. A partial root or
 seed stops the traversal with an error; a partial referenced node is shown as
 unavailable with the malformed-field reason.
 
-::: warning Mutations outside this page
+::: warning Destructive operations outside Flow Job methods
 Bunqueue v2.8.57 does not expose reverse-dependency inspection or
 topology-aware Cancel, Drain, Clean, Obliterate, DLQ Retry, or DLQ Purge.
 Deleting a referenced job can strand a parent in `waiting-children`, while a
@@ -49,6 +88,15 @@ reconstruct dependency registration or original flow order. Delete/purge paths
 fail closed, `maxAge`/`maxEntries` retention is read-only and omitted from DLQ
 policy saves, and auto-retry can only be disabled.
 :::
+
+## Runtime-only methods
+
+`extendLock`, `moveToCompleted`, `moveToFailed`, `moveToWait`,
+`moveToDelayed`, and `moveToWaitingChildren` belong to the worker that owns the
+active lease token. The dashboard never invents that token or turns those
+processor transitions into generic operator buttons. `discard()` is also
+process-local and non-awaitable. Use these inside the actual Worker processor;
+the page states this boundary beside the methods it can execute safely.
 
 v2.8.57 stores every canonical child in both the parent's `childrenIds` and
 `dependsOn`. The dashboard collapses that symmetric metadata into one solid

@@ -4,10 +4,9 @@ import {
   normalizeBaseUrl,
   useConnectionStore,
 } from '@/components/dashboard/stores/connectionStore';
-import { useThemeStore } from '@/components/dashboard/stores/themeStore';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { Field, Input, Select } from '@/components/ui/form';
+import { Field, Input } from '@/components/ui/form';
 import { IconEye } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 
@@ -15,107 +14,13 @@ import { PageHeader } from '@/components/ui/PageHeader';
 // from Settings. Its single implementation lives at the store trust boundary.
 export { isValidBaseUrl } from '@/components/dashboard/stores/connectionStore';
 
-const REFRESH_OPTIONS = [
-  ['1000', '1 second'],
-  ['2000', '2 seconds'],
-  ['3000', '3 seconds'],
-  ['5000', '5 seconds'],
-  ['10000', '10 seconds'],
-] as const;
+import { AppearanceCard } from './settings/AppearanceCard';
+import { fetchHealthWithTimeout } from './settings/health';
 
-export const SETTINGS_TEST_TIMEOUT_MS = 10_000;
-
-type HealthResponse = {
-  ok: boolean;
-  status: 'healthy' | 'degraded';
-  uptime: number;
-  version: string;
-};
-
-const BUNQUEUE_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
-
-/**
- * Read the complete health response under one deadline. A fetch promise resolves
- * as soon as headers arrive, so timing out only `fetch()` still lets a stalled
- * response body strand the UI in “Testing…”. The race also rejects test doubles
- * that ignore AbortSignal; abort still cancels the real network body.
- */
-export async function fetchHealthWithTimeout(
-  input: RequestInfo | URL,
-  init: RequestInit = {},
-  timeoutMs = SETTINGS_TEST_TIMEOUT_MS
-): Promise<{ response: Response; health: HealthResponse }> {
-  const timeoutController = new AbortController();
-  const callerSignal = init.signal;
-  const signal = callerSignal
-    ? AbortSignal.any([callerSignal, timeoutController.signal])
-    : timeoutController.signal;
-  const timeoutError = new Error(
-    `Connection test timed out after ${Math.ceil(timeoutMs / 1000)} seconds.`
-  );
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let removeCallerAbort: (() => void) | undefined;
-  const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => {
-      timeoutController.abort(timeoutError);
-      reject(timeoutError);
-    }, timeoutMs);
-  });
-  const callerCancellation = callerSignal
-    ? new Promise<never>((_resolve, reject) => {
-        const abort = () => {
-          reject(callerSignal.reason ?? new DOMException('Connection test aborted', 'AbortError'));
-        };
-        if (callerSignal.aborted) abort();
-        else {
-          callerSignal.addEventListener('abort', abort, { once: true });
-          removeCallerAbort = () => callerSignal.removeEventListener('abort', abort);
-        }
-      })
-    : null;
-  try {
-    const request = (async () => {
-      const response = await fetch(input, { ...init, signal });
-      // /health deliberately uses 503 for a reachable-but-degraded server
-      // (for example disk full). Preserve that diagnostic body instead of
-      // misreporting it as a connection failure.
-      if (!response.ok && response.status !== 503) throw new Error(`HTTP ${response.status}`);
-      const value = (await response.json()) as unknown;
-      if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-        throw new Error('Malformed health response');
-      }
-      const candidate = value as Record<string, unknown>;
-      if (
-        typeof candidate.ok !== 'boolean' ||
-        (candidate.status !== 'healthy' && candidate.status !== 'degraded') ||
-        !Number.isSafeInteger(candidate.uptime) ||
-        (candidate.uptime as number) < 0 ||
-        typeof candidate.version !== 'string' ||
-        !BUNQUEUE_VERSION.test(candidate.version) ||
-        candidate.ok !== (candidate.status === 'healthy')
-      ) {
-        throw new Error('Malformed health response');
-      }
-      return { response, health: candidate as HealthResponse };
-    })();
-    return await Promise.race(
-      callerCancellation ? [request, deadline, callerCancellation] : [request, deadline]
-    );
-  } catch (error) {
-    if (timeoutController.signal.aborted && timeoutController.signal.reason === timeoutError) {
-      throw timeoutError;
-    }
-    throw error;
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-    removeCallerAbort?.();
-  }
-}
+export { fetchHealthWithTimeout, SETTINGS_TEST_TIMEOUT_MS } from './settings/health';
 
 export function Settings() {
-  const { baseUrl, token, agentToken, refreshMs, saveConnection, setRefreshMs } =
-    useConnectionStore();
-  const { theme, setTheme } = useThemeStore();
+  const { baseUrl, token, agentToken, saveConnection } = useConnectionStore();
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   // Buffer the connection fields locally: committing to the store on every
@@ -387,36 +292,7 @@ export function Settings() {
           </div>
         </Card>
 
-        <Card>
-          <CardHeader title="Appearance & refresh" />
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Theme">
-              <Select
-                name="theme"
-                autoComplete="off"
-                value={theme}
-                onChange={(e) => setTheme(e.target.value as 'dark' | 'light')}
-              >
-                <option value="dark">Dark</option>
-                <option value="light">Light</option>
-              </Select>
-            </Field>
-            <Field label="Refresh interval">
-              <Select
-                name="refresh-interval"
-                autoComplete="off"
-                value={String(refreshMs)}
-                onChange={(e) => setRefreshMs(Number(e.target.value))}
-              >
-                {REFRESH_OPTIONS.map(([v, label]) => (
-                  <option key={v} value={v}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-        </Card>
+        <AppearanceCard />
       </div>
     </div>
   );

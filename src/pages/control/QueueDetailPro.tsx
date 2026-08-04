@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from '@/components/dashboard/stores/toastStore';
-import { AreaChart } from '@/components/ui/AreaChart';
 import { Button } from '@/components/ui/Button';
-import { Card, CardHeader } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { IconArrowRight, IconChevronLeft } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -11,36 +9,19 @@ import { StatCard } from '@/components/ui/StatCard';
 import { StatusDot } from '@/components/ui/StatusBadge';
 import { bq } from '@/lib/bq';
 import type { JobFull } from '@/lib/bqTypes';
-import { cn } from '@/lib/cn';
 import { FLOW_DELETION_UNAVAILABLE } from '@/lib/flowMutationSafety';
-import { errorRate, formatDuration, formatNumber, formatPercent } from '@/lib/format';
+import { errorRate, formatNumber } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 import { assertSuccessfulMutationResponse, useServerActionGuard } from '@/lib/useServerActionGuard';
-import { depthTrend } from '@/lib/useThroughputSeries';
 import { ConfigLoadError, DlqConfigForm, StallForm } from './queue/ConfigForms';
 import { LifecycleCard, LimitsCards } from './queue/QueueActions';
-
-const COUNT_KEYS = [
-  'waiting',
-  'prioritized',
-  'active',
-  'waiting-children',
-  'delayed',
-  'completed',
-  'failed',
-  'paused',
-] as const;
-const RECENT_STATES = [
-  'active',
-  'waiting',
-  'prioritized',
-  'waiting-children',
-  'completed',
-  'failed',
-  'delayed',
-];
-const MAX_DEPTH_POINTS = 40;
-const DEPTH_SAMPLE_MS = 2000;
+import { QUEUE_DETAIL_COUNT_KEYS, QUEUE_DETAIL_RECENT_STATES } from './queueDetail/model';
+import {
+  BacklogDepthCard,
+  PriorityHistogram,
+  RecentQueueJobs,
+} from './queueDetail/QueueDetailSections';
+import { useQueueDepth } from './queueDetail/useQueueDepth';
 
 /**
  * Pro per-queue operations page, reached by drilling into a queue from the Overview
@@ -62,7 +43,7 @@ export function QueueDetailPro() {
 
   const fetcher = useCallback(async () => {
     if (!name) return null;
-    // v2.8.55 synthesizes an empty detail for any valid queue name. Establish
+    // v2.8.57 synthesizes an empty detail for any valid queue name. Establish
     // membership first so a typo never exposes destructive controls for a
     // queue that does not actually exist.
     const summary = await bq.queuesSummary();
@@ -82,7 +63,7 @@ export function QueueDetailPro() {
       bq.getStallConfig(name).catch(() => null),
       bq.getDlqConfig(name).catch(() => null),
       bq
-        .jobsList(name, RECENT_STATES, 12)
+        .jobsList(name, QUEUE_DETAIL_RECENT_STATES, 12)
         .then((result) => ({ jobs: result.jobs ?? [], error: null as string | null }))
         .catch((error: unknown) => ({
           jobs: [] as JobFull[],
@@ -104,33 +85,7 @@ export function QueueDetailPro() {
   const { data: raw, error, loading, refetch } = usePolledData(fetcher, [name]);
   const data = raw && raw.queue === name ? raw : null;
 
-  // Rolling backlog-depth series, sampled on a fixed timer (no per-queue history
-  // endpoint exists). A timer — rather than accumulating on payload change — means
-  // an idle queue whose counts never move still produces a flat line instead of
-  // sitting on "Sampling…" forever. Reset when the queue changes.
-  const [depth, setDepth] = useState<number[]>([]);
-  const depthRef = useRef<number | null>(null);
-  useEffect(() => {
-    const c = data?.detail?.counts;
-    if (c) {
-      depthRef.current =
-        (c.waiting ?? 0) +
-        (c.prioritized ?? 0) +
-        (c.active ?? 0) +
-        (c.delayed ?? 0) +
-        (c['waiting-children'] ?? 0);
-    }
-  }, [data]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-arm the sampler (and clear the series) only when the queue changes
-  useEffect(() => {
-    depthRef.current = null;
-    setDepth([]);
-    const id = setInterval(() => {
-      const d = depthRef.current;
-      if (d != null) setDepth((s) => [...s, d].slice(-MAX_DEPTH_POINTS));
-    }, DEPTH_SAMPLE_MS);
-    return () => clearInterval(id);
-  }, [name]);
+  const { depth, trend } = useQueueDepth(name, data?.detail?.counts);
 
   const run = async (
     label: string,
@@ -176,7 +131,6 @@ export function QueueDetailPro() {
   // Keep null when nothing has been processed — "0.00%" from zero data is a
   // claim, not a measurement (errorRate's contract; OverviewPro follows it too).
   const rate = c ? errorRate(c.completed ?? 0, c.failed ?? 0) : null;
-  const trend = depthTrend(depth);
 
   return (
     <div>
@@ -268,7 +222,7 @@ export function QueueDetailPro() {
           </div>
 
           <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
-            {COUNT_KEYS.map((k) => (
+            {QUEUE_DETAIL_COUNT_KEYS.map((k) => (
               <StatCard
                 key={k}
                 label={k}
@@ -279,120 +233,9 @@ export function QueueDetailPro() {
             ))}
           </div>
 
-          <Card padded={false} className="mb-6">
-            <div className="flex items-center justify-between px-5 py-3">
-              <h2 className="text-base font-semibold text-fg">Recent jobs</h2>
-              <Link
-                to={`/jobs?queue=${encodeURIComponent(name)}`}
-                className="flex items-center gap-1 text-sm text-muted hover:text-fg"
-              >
-                View all <IconArrowRight className="size-3.5" />
-              </Link>
-            </div>
-            <div className="overflow-x-auto border-t border-line">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-                    <th scope="col" className="px-5 py-3 font-medium">
-                      ID
-                    </th>
-                    <th scope="col" className="px-5 py-3 font-medium">
-                      Name
-                    </th>
-                    <th scope="col" className="px-5 py-3 font-medium">
-                      State
-                    </th>
-                    <th scope="col" className="px-5 py-3 text-right font-medium">
-                      Attempts
-                    </th>
-                    <th scope="col" className="px-5 py-3 text-right font-medium">
-                      Duration
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.recentJobsError ? (
-                    <tr>
-                      <td colSpan={5} className="px-5 py-10 text-center text-sm text-danger">
-                        Could not load recent jobs — {data.recentJobsError}. Retry the page.
-                      </td>
-                    </tr>
-                  ) : data.jobs.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-5 py-10 text-center text-sm text-faint">
-                        No recent jobs.
-                      </td>
-                    </tr>
-                  ) : (
-                    data.jobs.map((j) => (
-                      <tr
-                        key={j.id}
-                        className="border-b border-line last:border-0 hover:bg-surface-2/40"
-                      >
-                        <td className="px-5 py-3">
-                          <Link
-                            to={`/job?id=${encodeURIComponent(j.id)}`}
-                            className="font-mono text-xs text-accent hover:underline"
-                          >
-                            {j.id}
-                          </Link>
-                        </td>
-                        <td className="px-5 py-3 font-mono text-xs text-muted">
-                          {j.name ?? 'default'}
-                        </td>
-                        <td className="px-5 py-3 text-muted">{j.state ?? '—'}</td>
-                        <td className="px-5 py-3 text-right tnum text-muted">
-                          {j.attempts ?? 0} / {j.maxAttempts ?? '?'}
-                        </td>
-                        <td className="px-5 py-3 text-right tnum text-muted">
-                          {formatDuration(
-                            j.startedAt && j.completedAt ? j.completedAt - j.startedAt : undefined
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
+          <RecentQueueJobs name={name} jobs={data.jobs} error={data.recentJobsError} />
           <PriorityHistogram counts={detail.priorityCounts} />
-
-          <Card className="mb-6">
-            <CardHeader
-              title="Backlog depth"
-              action={
-                <span
-                  className={cn(
-                    'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                    trend.draining
-                      ? 'bg-emerald-500/10 text-success'
-                      : trend.label === 'accumulating'
-                        ? 'bg-red-500/10 text-danger'
-                        : 'bg-surface-2 text-muted'
-                  )}
-                >
-                  {trend.label}
-                </span>
-              }
-            />
-            {depth.length < 2 ? (
-              <p className="py-6 text-center text-xs text-faint">
-                Sampling… the backlog trend appears after a few polls.
-              </p>
-            ) : (
-              <AreaChart
-                height={140}
-                ariaLabel={`${name} backlog depth`}
-                series={[{ label: 'depth', color: 'var(--accent)', points: depth, area: true }]}
-              />
-            )}
-            <div className="mt-1 flex items-center justify-between text-xs text-faint">
-              <span>waiting + prioritized + active + delayed + waiting-children</span>
-              <span className="tnum">Error rate {rate == null ? '—' : formatPercent(rate)}</span>
-            </div>
-          </Card>
+          <BacklogDepthCard name={name} depth={depth} trend={trend} rate={rate} />
 
           <LifecycleCard queue={name} paused={detail.paused} busy={busy} run={run} />
           <LimitsCards key={`${name}:limits`} queue={name} busy={busy} run={run} />
@@ -428,40 +271,5 @@ export function QueueDetailPro() {
         </>
       )}
     </div>
-  );
-}
-
-/**
- * Per-priority backlog distribution. The server already ships `priorityCounts`
- * inside the queue-detail payload (priority level → number of waiting jobs); it
- * was fetched and dropped before. A histogram is the most direct read on whether
- * high-priority jobs are starving low-priority ones. Hidden when empty.
- */
-function PriorityHistogram({ counts }: { counts: Record<string, number> }) {
-  const rows = Object.entries(counts ?? {})
-    .map(([p, n]) => [Number(p), n] as const)
-    .filter(([, n]) => n > 0)
-    .sort((a, b) => b[0] - a[0]);
-  if (rows.length === 0) return null;
-  const max = Math.max(...rows.map(([, n]) => n));
-  return (
-    <Card className="mb-6">
-      <CardHeader title="Jobs by priority" />
-      <div className="flex flex-col gap-2">
-        {rows.map(([p, n]) => (
-          <div key={p} className="flex items-center gap-3">
-            <span className="w-16 shrink-0 text-right font-mono text-xs text-muted">p{p}</span>
-            <div className="h-4 flex-1 overflow-hidden rounded bg-surface-2">
-              <div
-                className="h-full rounded bg-accent"
-                style={{ width: `${Math.max(2, (n / max) * 100)}%` }}
-              />
-            </div>
-            <span className="w-14 shrink-0 tnum text-xs text-fg">{formatNumber(n)}</span>
-          </div>
-        ))}
-      </div>
-      <p className="mt-2 text-xs text-faint">Higher p = higher priority. Waiting jobs only.</p>
-    </Card>
   );
 }

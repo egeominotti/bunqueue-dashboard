@@ -1,138 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getBaseUrl, useConnectionStore } from '@/components/dashboard/stores/connectionStore';
-import { Button } from '@/components/ui/Button';
-import { Card, CardHeader } from '@/components/ui/Card';
-import { Input, Select } from '@/components/ui/form';
 import { BqError } from '@/lib/bq';
 import { opaqueHttpPathSegment } from '@/lib/upstreamPaths';
-
-type LogLevel = 'info' | 'warn' | 'error';
-
-interface LogTarget {
-  baseUrl: string;
-  authorization?: string;
-}
-
-const LOG_REQUEST_TIMEOUT_MS = 30_000;
-
-function currentLogTarget(): LogTarget {
-  const { token } = useConnectionStore.getState();
-  return {
-    baseUrl: getBaseUrl(),
-    authorization: token ? `Bearer ${token}` : undefined,
-  };
-}
-
-function sameLogTarget(a: LogTarget, b: LogTarget): boolean {
-  return a.baseUrl === b.baseUrl && a.authorization === b.authorization;
-}
-
-function mapLogRequestError(
-  error: unknown,
-  deadline: AbortSignal,
-  lifecycleSignal: AbortSignal
-): unknown {
-  if (deadline.aborted && !lifecycleSignal.aborted) return new BqError('Request timed out', 0);
-  return error;
-}
-
-async function logRequest<T>(
-  target: LogTarget,
-  path: string,
-  init: RequestInit,
-  lifecycleSignal: AbortSignal
-): Promise<T | undefined> {
-  const deadline = AbortSignal.timeout(LOG_REQUEST_TIMEOUT_MS);
-  const signal = AbortSignal.any([lifecycleSignal, deadline]);
-  const headers = new Headers(init.headers);
-  if (target.authorization) headers.set('Authorization', target.authorization);
-  if (init.body != null && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  let response: Response;
-  try {
-    signal.throwIfAborted();
-    response = await fetch(`${target.baseUrl}${path}`, { ...init, headers, signal });
-    signal.throwIfAborted();
-  } catch (error) {
-    throw mapLogRequestError(error, deadline, lifecycleSignal);
-  }
-
-  if (response.status === 204) return undefined;
-
-  let text: string;
-  try {
-    text = await response.text();
-    signal.throwIfAborted();
-  } catch (error) {
-    throw mapLogRequestError(error, deadline, lifecycleSignal);
-  }
-
-  let data: unknown;
-  let invalidJson = false;
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      invalidJson = true;
-    }
-  }
-
-  if (!response.ok) {
-    const serverMessage =
-      !invalidJson && data && typeof data === 'object'
-        ? (data as { error?: unknown }).error
-        : undefined;
-    if (response.status === 401 && typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new window.CustomEvent('auth:required', {
-          detail: {
-            scope: 'server',
-            auth: target.authorization,
-            target: target.baseUrl,
-          },
-        })
-      );
-    }
-    throw new BqError(
-      typeof serverMessage === 'string' ? serverMessage : `HTTP ${response.status}`,
-      response.status
-    );
-  }
-
-  if (!text) return undefined;
-  if (invalidJson)
-    throw new BqError(`Invalid JSON response (HTTP ${response.status})`, response.status);
-  if (data && typeof data === 'object' && (data as { ok?: unknown }).ok === false) {
-    const serverMessage = (data as { error?: unknown }).error;
-    throw new BqError(
-      typeof serverMessage === 'string' ? serverMessage : 'Operation failed',
-      response.status
-    );
-  }
-  return data as T;
-}
-
-function parseLogSnapshot(value: unknown): { logs: unknown[]; count: number } {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new BqError('Invalid logs response: expected an object envelope', 200);
-  }
-  const envelope = value as { ok?: unknown; data?: unknown };
-  if (envelope.ok !== true || !envelope.data || typeof envelope.data !== 'object') {
-    throw new BqError('Invalid logs response: expected { ok: true, data }', 200);
-  }
-  const data = envelope.data as { logs?: unknown; count?: unknown };
-  if (
-    !Array.isArray(data.logs) ||
-    typeof data.count !== 'number' ||
-    !Number.isSafeInteger(data.count) ||
-    data.count < 0
-  ) {
-    throw new BqError('Invalid logs response: expected logs[] and a non-negative count', 200);
-  }
-  return { logs: data.logs, count: data.count };
-}
+import { JobLogsView } from './JobLogsView';
+import {
+  currentLogTarget,
+  type LogLevel,
+  type LogTarget,
+  logRequest,
+  parseLogSnapshot,
+  sameLogTarget,
+} from './jobLogsTransport';
 
 /**
  * Job logs viewer + writer. Reads `GET /jobs/:id/logs` (bq.jobLogs), appends
@@ -369,85 +247,20 @@ export function JobLogs({ jobId }: { jobId: string }) {
   };
 
   return (
-    <Card>
-      <CardHeader
-        title="Logs"
-        action={
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-faint">{count}</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={loading || busy}
-              onClick={() => void load()}
-            >
-              Refresh
-            </Button>
-            <Button size="sm" variant="danger" disabled={busy || logs.length === 0} onClick={clear}>
-              Clear logs
-            </Button>
-          </div>
-        }
-      />
-      {error && <p className="mb-2 text-xs text-danger">{error}</p>}
-      {logs.length === 0 ? (
-        <p className="text-xs text-faint">No log lines recorded for this job.</p>
-      ) : (
-        <ol className="flex max-h-64 flex-col gap-1 overflow-auto rounded-lg bg-surface-2 p-3">
-          {logs.map((line, i) => (
-            <li
-              // biome-ignore lint/suspicious/noArrayIndexKey: append-only server log, stable order
-              key={i}
-              className="whitespace-pre-wrap break-words font-mono text-xs text-muted"
-            >
-              {typeof line === 'string' ? line : JSON.stringify(line)}
-            </li>
-          ))}
-        </ol>
-      )}
-      <form
-        className="mt-3 flex gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const submitted = event.currentTarget.elements.namedItem(
-            'job-log-message'
-          ) as HTMLInputElement | null;
-          const submittedLevel = event.currentTarget.elements.namedItem(
-            'job-log-level'
-          ) as HTMLSelectElement | null;
-          void add(submitted?.value ?? message, submittedLevel?.value ?? level);
-        }}
-      >
-        <Input
-          aria-label="Log message"
-          name="job-log-message"
-          autoComplete="off"
-          value={message}
-          onInput={(e) => {
-            draftRevision.current += 1;
-            setMessage(e.currentTarget.value);
-          }}
-          placeholder="Add a log line…"
-          className="h-8 flex-1 text-xs"
-        />
-        <Select
-          aria-label="Log level"
-          name="job-log-level"
-          value={level}
-          onChange={(e) => {
-            draftRevision.current += 1;
-            setLevel(e.target.value as LogLevel);
-          }}
-          className="h-8 w-24 text-xs"
-        >
-          <option value="info">info</option>
-          <option value="warn">warn</option>
-          <option value="error">error</option>
-        </Select>
-        <Button type="submit" size="sm" disabled={busy || message.trim() === ''}>
-          Add
-        </Button>
-      </form>
-    </Card>
+    <JobLogsView
+      logs={logs}
+      count={count}
+      loading={loading}
+      busy={busy}
+      error={error}
+      message={message}
+      level={level}
+      draftRevision={draftRevision}
+      setMessage={setMessage}
+      setLevel={setLevel}
+      load={() => void load()}
+      clear={() => void clear()}
+      add={(submittedMessage, submittedLevel) => void add(submittedMessage, submittedLevel)}
+    />
   );
 }

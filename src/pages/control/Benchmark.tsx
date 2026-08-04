@@ -1,251 +1,81 @@
-import { type ChangeEvent, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, useEffect, useState } from 'react';
 import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
-import { AreaChart } from '@/components/ui/AreaChart';
 import { Button } from '@/components/ui/Button';
-import { Card, CardHeader } from '@/components/ui/Card';
-import { Field, Input, SegmentedControl, Toggle } from '@/components/ui/form';
 import { IconPause, IconPlay } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { StatCard } from '@/components/ui/StatCard';
-import { bq, type ServerRequestTarget, type ServerTargetClient } from '@/lib/bq';
-import { cn } from '@/lib/cn';
-import { formatBytes, formatMs, formatNumber } from '@/lib/format';
+import { bq } from '@/lib/bq';
+import { formatMs } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
+import { BenchmarkConfiguration } from './benchmark/BenchmarkConfiguration';
 import {
-  benchmarkQueueError,
-  clampInt,
-  createBenchmarkQueueName,
-  DEFAULT_CONFIG,
-  fmtRate,
-  isDashboardBenchmarkQueue,
-  LIMITS,
-  PRESETS,
-  type RunConfig,
-  type RunMode,
-} from './benchmark/engine';
+  BenchmarkQueueCounts,
+  BenchmarkResults,
+  BenchmarkSummary,
+} from './benchmark/BenchmarkResults';
+import { clampInt, DEFAULT_CONFIG, LIMITS, PRESETS, type RunConfig } from './benchmark/engine';
+import {
+  BENCHMARK_NUM_KEYS,
+  type BenchmarkDraft,
+  type BenchmarkNumKey,
+  type PinnedBenchmarkTarget,
+  sessionBenchmarkQueue,
+  toBenchmarkConfig,
+  toBenchmarkDraft,
+} from './benchmark/pageModel';
 import { RunHistory } from './benchmark/RunHistory';
-import { assertBenchmarkSuccess, benchmarkQueueJobs, useBenchmark } from './benchmark/useBenchmark';
-
-const MODES: readonly RunMode[] = ['count', 'duration'] as const;
-
-// States "Clean queue" deletes — and, therefore, exactly the states the
-// post-clean verification must find empty before it may claim success.
-const CLEAN_STATES: readonly string[] = ['waiting', 'completed', 'failed'] as const;
-let tabBenchmarkQueue: string | null = null;
-
-function sessionBenchmarkQueue(): string {
-  tabBenchmarkQueue ??= createBenchmarkQueueName();
-  return tabBenchmarkQueue;
-}
-
-// Numeric fields are string-backed in the form (so a field can be cleared while
-// typing — a controlled type=number with Number() coercion can never be emptied)
-// and converted to a RunConfig once, at the Run boundary. run() clamps.
-type NumKey =
-  | 'total'
-  | 'durationS'
-  | 'batch'
-  | 'producers'
-  | 'payload'
-  | 'workers'
-  | 'workerBatch'
-  | 'processMs';
-type Draft = Omit<RunConfig, NumKey> & Record<NumKey, string>;
-
-interface PinnedBenchmarkTarget {
-  target: ServerRequestTarget;
-  client: ServerTargetClient;
-}
-
-const NUM_KEYS: readonly NumKey[] = [
-  'total',
-  'durationS',
-  'batch',
-  'producers',
-  'payload',
-  'workers',
-  'workerBatch',
-  'processMs',
-] as const;
-
-const toDraft = (c: RunConfig): Draft => ({
-  ...c,
-  total: String(c.total),
-  durationS: String(c.durationS),
-  batch: String(c.batch),
-  producers: String(c.producers),
-  payload: String(c.payload),
-  workers: String(c.workers),
-  workerBatch: String(c.workerBatch),
-  processMs: String(c.processMs),
-});
-
-const toConfig = (d: Draft): RunConfig => ({
-  ...d,
-  total: Number(d.total),
-  durationS: Number(d.durationS),
-  batch: Number(d.batch),
-  producers: Number(d.producers),
-  payload: Number(d.payload),
-  workers: Number(d.workers),
-  workerBatch: Number(d.workerBatch),
-  processMs: Number(d.processMs),
-});
+import { useBenchmark } from './benchmark/useBenchmark';
+import { useBenchmarkOperations } from './benchmark/useBenchmarkOperations';
 
 export function Benchmark() {
   const [dedicatedQueue] = useState(sessionBenchmarkQueue);
-  const [draft, setDraft] = useState<Draft>(() =>
-    toDraft({ ...DEFAULT_CONFIG, queue: dedicatedQueue })
+  const [draft, setDraft] = useState<BenchmarkDraft>(() =>
+    toBenchmarkDraft({ ...DEFAULT_CONFIG, queue: dedicatedQueue })
   );
-  const bench = useBenchmark();
+  const benchmark = useBenchmark();
   const currentServer = useConnectionStore((state) => state.baseUrl);
-  // Once a run is confirmed, its queue telemetry and cleanup stay on the exact
-  // origin/credential snapshot used by the engine. Settings may retarget the
-  // rest of the dashboard without relabelling server B's counts as this run's.
   const [runTarget, setRunTarget] = useState<PinnedBenchmarkTarget | null>(null);
-  // React state does not update until the next render. This ref is the actual
-  // same-tick mutex between the two destructive multi-request operations.
-  const operationRef = useRef<'run' | 'clean' | null>(null);
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      operationRef.current = null;
-    };
-  }, []);
-  const { phase, live, summary, history } = bench;
-  const active = phase === 'running' || phase === 'draining' || phase === 'stopping';
 
-  const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  const num = (k: NumKey) => (e: ChangeEvent<HTMLInputElement>) => set(k, e.target.value);
-
-  const applyPreset = (p: Partial<RunConfig>) =>
-    setDraft((prev) => {
-      const next: Draft = { ...prev };
-      for (const [k, v] of Object.entries(p)) {
-        (next as Record<string, unknown>)[k] = NUM_KEYS.includes(k as NumKey) ? String(v) : v;
+  const setField = <K extends keyof BenchmarkDraft>(key: K, value: BenchmarkDraft[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+  const numberInput = (key: BenchmarkNumKey) => (event: ChangeEvent<HTMLInputElement>) =>
+    setField(key, event.target.value);
+  const applyPreset = (preset: Partial<RunConfig>) =>
+    setDraft((current) => {
+      const next: BenchmarkDraft = { ...current };
+      for (const [key, value] of Object.entries(preset)) {
+        (next as Record<string, unknown>)[key] = BENCHMARK_NUM_KEYS.includes(key as BenchmarkNumKey)
+          ? String(value)
+          : value;
       }
       return next;
     });
 
-  // Debounce the queue name so typing doesn't fire a counts fetch per keystroke
-  // (and the card header always matches the queue whose counts are shown).
   const [pollQueue, setPollQueue] = useState(dedicatedQueue);
   useEffect(() => {
-    const t = setTimeout(() => setPollQueue(draft.queue.trim() || DEFAULT_CONFIG.queue), 400);
-    return () => clearTimeout(t);
+    const timeout = setTimeout(() => setPollQueue(draft.queue.trim() || DEFAULT_CONFIG.queue), 400);
+    return () => clearTimeout(timeout);
   }, [draft.queue]);
 
-  // Live server-side queue depth — proof the load lands and drains. Errors flow
-  // to usePolledData, which keeps the last good counts (card stays mounted).
   const pollBaseUrl = runTarget?.target.baseUrl ?? currentServer;
   const { data: counts, error: countsError } = usePolledData(
     () => (runTarget ? runTarget.client.counts(pollQueue) : bq.counts(pollQueue)),
     [pollQueue, runTarget],
-    {
-      intervalMs: 1000,
-    }
+    { intervalMs: 1000 }
   );
-  const c = counts?.counts ?? null;
+  const queueCounts = counts?.counts ?? null;
+  const operations = useBenchmarkOperations({
+    benchmark,
+    counts: queueCounts,
+    dedicatedQueue,
+    draft,
+    pollQueue,
+    runTarget,
+    setRunTarget,
+  });
 
-  const [cleaning, setCleaning] = useState(false);
-  const [cleanResult, setCleanResult] = useState<{ remaining: number } | { error: string } | null>(
-    null
-  );
-  const cleanup = async () => {
-    const q = draft.queue.trim();
-    if (operationRef.current || !q) return;
-    if (!isDashboardBenchmarkQueue(q) || q !== dedicatedQueue) {
-      setCleanResult({ error: 'refusing to clean a queue not owned by this dashboard session' });
-      return;
-    }
-    operationRef.current = 'clean';
-    let pinned = runTarget;
-    if (!pinned) {
-      const target = bq.captureServerRequestTarget();
-      pinned = { target, client: bq.createServerTargetClient(target) };
-    }
-    // Echo the live counts so the confirm says what is actually being deleted
-    // (only when the polled counts are for this exact queue).
-    const countsNote =
-      c && pollQueue === q
-        ? ` Currently ${formatNumber(c.waiting ?? 0)} waiting / ${formatNumber(c.completed ?? 0)} completed.`
-        : '';
-    if (
-      !window.confirm(
-        `Clean every cleanable job from the dedicated dashboard benchmark queue "${q}" on ${pinned.target.baseUrl}? This is queue-wide; the cryptographic queue name is owned by this browser session.${countsNote}`
-      )
-    ) {
-      operationRef.current = null;
-      return;
-    }
-    setCleaning(true);
-    setCleanResult(null);
-    try {
-      let lastErr: string | null = null;
-      for (const state of CLEAN_STATES) {
-        if (!mountedRef.current) return;
-        try {
-          const response = await pinned.client.clean(q, { state, limit: LIMITS.total });
-          assertBenchmarkSuccess(response, `Clean ${state} jobs`);
-          if (!Number.isSafeInteger(response.count) || response.count < 0) {
-            throw new Error(`Clean ${state} jobs returned an invalid count.`);
-          }
-        } catch (e) {
-          // A per-state clean can legitimately fail (state not cleanable); the
-          // authoritative signal is the verification count below. Keep the last
-          // message so a genuine failure isn't reported as a spotless clean.
-          lastErr = (e as Error).message;
-        }
-      }
-      // Verify against the live queue. If this fetch fails the server is
-      // unreachable, so we CANNOT claim "0 jobs remain" — surface the error
-      // instead of a false green success.
-      if (!mountedRef.current) return;
-      const after = await pinned.client.counts(q).catch((e) => {
-        lastErr = (e as Error).message;
-        return null;
-      });
-      if (!mountedRef.current) return;
-      if (after == null) {
-        setCleanResult({ error: lastErr ?? 'server unreachable — could not verify' });
-      } else if (
-        after.ok !== true ||
-        !after.counts ||
-        typeof after.counts !== 'object' ||
-        Array.isArray(after.counts)
-      ) {
-        setCleanResult({ error: 'server returned a malformed queue-count response' });
-      } else {
-        // The verification must cover every state the loop tried to clean —
-        // checking only `active` would report a spotless clean while thousands
-        // of waiting/completed jobs are still there after a failed per-state call.
-        const cnt = after.counts;
-        let leftover: number;
-        try {
-          leftover = benchmarkQueueJobs(cnt);
-        } catch {
-          setCleanResult({ error: 'server returned malformed queue counts' });
-          return;
-        }
-        if (lastErr || leftover > 0) {
-          setCleanResult({
-            error: lastErr ?? `${formatNumber(leftover)} job(s) still present`,
-          });
-        } else {
-          setCleanResult({ remaining: 0 });
-        }
-      }
-    } finally {
-      if (mountedRef.current) setCleaning(false);
-      if (operationRef.current === 'clean') operationRef.current = null;
-    }
-  };
-
-  // Progress and result labels derive from the config the RUN was started with,
-  // not the still-editable form (editing fields must not rewrite a shown result).
-  const shown = bench.runCfg ?? toConfig(draft);
+  const { phase, live, summary, history } = benchmark;
+  const active = phase === 'running' || phase === 'draining' || phase === 'stopping';
+  const shown = benchmark.runCfg ?? toBenchmarkConfig(draft);
   const shownTotal = clampInt(shown.total, 1, LIMITS.total);
   const shownWorkers = clampInt(shown.workers, 0, LIMITS.workers);
   const producePct =
@@ -263,32 +93,8 @@ export function Benchmark() {
           (live.elapsedMs / (clampInt(shown.durationS, 1, LIMITS.durationS) * 1000)) * 100
         )
       : 0;
-
-  const heading =
-    phase === 'running'
-      ? shown.mode === 'duration'
-        ? 'Running…'
-        : 'Producing…'
-      : phase === 'draining'
-        ? 'Draining…'
-        : phase === 'stopping'
-          ? 'Stopping…'
-          : phase === 'error'
-            ? 'Error'
-            : summary
-              ? 'Result'
-              : 'Ready';
-
-  const etaText =
-    (phase === 'running' || phase === 'draining') && live.etaMs != null
-      ? live.etaMs > 0
-        ? `ETA ${formatMs(live.etaMs)}`
-        : 'finishing…'
-      : phase === 'stopped'
-        ? 'stopped early'
-        : phase === 'done'
-          ? 'complete'
-          : '';
+  const heading = phaseHeading(phase, shown.mode, Boolean(summary));
+  const etaText = getEtaText(phase, live.etaMs);
 
   return (
     <div>
@@ -301,56 +107,15 @@ export function Benchmark() {
               <IconPause className="size-3.5" /> Stopping…
             </Button>
           ) : active ? (
-            <Button variant="warning" size="sm" onClick={bench.stop}>
+            <Button variant="warning" size="sm" onClick={benchmark.stop}>
               <IconPause className="size-3.5" /> Stop
             </Button>
           ) : (
             <Button
               variant="success"
               size="sm"
-              disabled={cleaning}
-              onClick={() => {
-                // A clean in flight deletes whatever the producers push, so the
-                // two must never overlap, including two clicks in one render.
-                if (operationRef.current) return;
-                operationRef.current = 'run';
-                // One confirm, stating the real target — this enqueues genuine
-                // jobs, not a simulation.
-                const cfg = toConfig(draft);
-                const q = cfg.queue.trim();
-                const target = bq.captureServerRequestTarget();
-                const client = bq.createServerTargetClient(target);
-                if (benchmarkQueueError(q)) {
-                  void bench.run({ ...cfg, queue: q }, client).finally(() => {
-                    if (operationRef.current === 'run') operationRef.current = null;
-                  });
-                  return;
-                }
-                // The engine performs an authoritative all-state empty-queue
-                // preflight; this live snapshot gives an earlier explanation.
-                let pre = 0;
-                if (!runTarget && c && pollQueue === q) {
-                  try {
-                    pre = benchmarkQueueJobs(c);
-                  } catch {
-                    // The authoritative preflight validates a fresh response.
-                  }
-                }
-                const preNote =
-                  pre > 0
-                    ? ` Warning: it already holds ${formatNumber(pre)} job(s) across all states; the safety preflight will refuse the run until the dedicated queue is empty.`
-                    : '';
-                if (
-                  !window.confirm(`Enqueue real jobs into "${q}" on ${target.baseUrl}?${preNote}`)
-                ) {
-                  operationRef.current = null;
-                  return;
-                }
-                setRunTarget({ target, client });
-                void bench.run(cfg, client).finally(() => {
-                  if (operationRef.current === 'run') operationRef.current = null;
-                });
-              }}
+              disabled={operations.cleaning}
+              onClick={operations.start}
             >
               <IconPlay className="size-3.5" /> Run benchmark
             </Button>
@@ -380,375 +145,55 @@ export function Benchmark() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <CardHeader title="Configuration" />
-          <div className="flex flex-col gap-3">
-            <Field
-              label="Dedicated queue"
-              hint="Cryptographically generated for this browser tab; production queue names cannot be entered here."
-            >
-              <Input
-                name="benchmark-queue"
-                autoComplete="off"
-                value={draft.queue}
-                readOnly
-                aria-readonly="true"
-              />
-            </Field>
-
-            <Field
-              label="Mode"
-              hint={
-                draft.mode === 'count'
-                  ? 'Push a fixed number of jobs.'
-                  : 'Run producers + workers for a fixed time.'
-              }
-            >
-              <SegmentedControl
-                options={MODES}
-                value={draft.mode}
-                onChange={(m) => set('mode', m)}
-                disabled={active}
-              />
-            </Field>
-
-            {draft.mode === 'count' ? (
-              <Field label="Total jobs" hint={`max ${formatNumber(LIMITS.total)}`}>
-                <Input
-                  name="benchmark-total"
-                  autoComplete="off"
-                  type="number"
-                  min={1}
-                  max={LIMITS.total}
-                  value={draft.total}
-                  disabled={active}
-                  onChange={num('total')}
-                />
-              </Field>
-            ) : (
-              <Field label="Duration (s)" hint={`max ${LIMITS.durationS}s`}>
-                <Input
-                  name="benchmark-duration-seconds"
-                  autoComplete="off"
-                  type="number"
-                  min={1}
-                  max={LIMITS.durationS}
-                  value={draft.durationS}
-                  disabled={active}
-                  onChange={num('durationS')}
-                />
-              </Field>
-            )}
-
-            <div className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-faint">
-              Producers
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Producers" hint={`parallel, max ${LIMITS.producers}`}>
-                <Input
-                  name="benchmark-producers"
-                  autoComplete="off"
-                  type="number"
-                  min={1}
-                  max={LIMITS.producers}
-                  value={draft.producers}
-                  disabled={active}
-                  onChange={num('producers')}
-                />
-              </Field>
-              <Field label="Push batch" hint={`jobs/req, max ${LIMITS.batch}`}>
-                <Input
-                  name="benchmark-push-batch"
-                  autoComplete="off"
-                  type="number"
-                  min={1}
-                  max={LIMITS.batch}
-                  value={draft.batch}
-                  disabled={active}
-                  onChange={num('batch')}
-                />
-              </Field>
-              <Field label="Payload" hint={`bytes/job, max ${formatNumber(LIMITS.payload)}`}>
-                <Input
-                  name="benchmark-payload-bytes"
-                  autoComplete="off"
-                  type="number"
-                  min={0}
-                  max={LIMITS.payload}
-                  value={draft.payload}
-                  disabled={active}
-                  onChange={num('payload')}
-                />
-              </Field>
-            </div>
-
-            <div className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-faint">
-              Workers (simulated)
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Workers" hint={`0 = produce only, max ${LIMITS.workers}`}>
-                <Input
-                  name="benchmark-workers"
-                  autoComplete="off"
-                  type="number"
-                  min={0}
-                  max={LIMITS.workers}
-                  value={draft.workers}
-                  disabled={active}
-                  onChange={num('workers')}
-                />
-              </Field>
-              <Field label="Pull batch" hint={`jobs/pull, max ${LIMITS.workerBatch}`}>
-                <Input
-                  name="benchmark-pull-batch"
-                  autoComplete="off"
-                  type="number"
-                  min={1}
-                  max={LIMITS.workerBatch}
-                  value={draft.workerBatch}
-                  disabled={active}
-                  onChange={num('workerBatch')}
-                />
-              </Field>
-              <Field label="Process (ms)" hint="simulated work per pull">
-                <Input
-                  name="benchmark-process-ms"
-                  autoComplete="off"
-                  type="number"
-                  min={0}
-                  max={LIMITS.processMs}
-                  value={draft.processMs}
-                  disabled={active}
-                  onChange={num('processMs')}
-                />
-              </Field>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Toggle
-                checked={draft.durable}
-                onChange={(v) => set('durable', v)}
-                disabled={active}
-                label="Durable (fsync each job)"
-              />
-              <span className="text-sm text-muted">Durable (fsync each job)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Toggle
-                checked={draft.removeOnComplete}
-                onChange={(v) => set('removeOnComplete', v)}
-                disabled={active}
-                label="Remove on complete"
-              />
-              <span className="text-sm text-muted">Remove on complete</span>
-            </div>
-
-            <div className="flex items-center gap-3 pt-1">
-              <Button variant="ghost" size="sm" disabled={active || cleaning} onClick={cleanup}>
-                {cleaning ? 'Cleaning…' : 'Clean queue'}
-              </Button>
-              {cleanResult &&
-                ('error' in cleanResult ? (
-                  <span className="text-xs text-danger">
-                    Clean unverified — {cleanResult.error}
-                  </span>
-                ) : (
-                  <span
-                    className={cn(
-                      'text-xs',
-                      cleanResult.remaining > 0 ? 'text-warning' : 'text-success'
-                    )}
-                  >
-                    {cleanResult.remaining > 0
-                      ? `Cleaned — ${formatNumber(cleanResult.remaining)} active job(s) remain (requeued after the stall timeout)`
-                      : 'Cleaned — 0 jobs remain'}
-                  </span>
-                ))}
-            </div>
-          </div>
-        </Card>
-
-        <div className="flex flex-col gap-6 lg:col-span-2">
-          <Card>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-fg">{heading}</h3>
-              <span className="text-right text-xs text-faint">
-                <span className="block">Benchmark target: {pollBaseUrl}</span>
-                {etaText && <span className="block">{etaText}</span>}
-              </span>
-            </div>
-
-            <ProgressBar
-              label={shown.mode === 'duration' ? 'Elapsed' : 'Produced'}
-              pct={shown.mode === 'duration' ? durationPct : producePct}
-              tone="accent"
-            />
-            {shownWorkers > 0 && shown.mode === 'count' && (
-              <ProgressBar label="Completed" pct={drainPct} tone="emerald" />
-            )}
-
-            <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
-              <StatCard label="Pushed" value={formatNumber(live.pushed)} tone="accent" compact />
-              <StatCard
-                label="Completed"
-                value={formatNumber(live.completed)}
-                tone="green"
-                compact
-              />
-              <StatCard label="Push/sec" value={fmtRate(live.pushPerSec)} compact />
-              <StatCard label="Done/sec" value={fmtRate(live.donePerSec)} tone="green" compact />
-              <StatCard label="Elapsed" value={formatMs(live.elapsedMs)} compact />
-              <StatCard
-                label="Active workers"
-                value={`${live.activeWorkers}/${shownWorkers}`}
-                tone="blue"
-                compact
-              />
-              <StatCard label="Data" value={formatBytes(summary?.bytes ?? live.bytes)} compact />
-              <StatCard
-                label="Errors"
-                value={formatNumber(
-                  (summary?.pushFailed ?? live.pushFailed) + (summary?.ackFailed ?? live.ackFailed)
-                )}
-                tone={live.pushFailed + live.ackFailed ? 'red' : 'default'}
-                compact
-              />
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader title="Throughput" />
-            <p className="-mt-3 mb-4 text-xs text-faint">
-              Enqueue (client → server) vs completion (workers) per second
-            </p>
-            <AreaChart
-              series={[
-                { label: 'Push/sec', color: '#38bdf8', points: live.pushSeries, area: true },
-                { label: 'Done/sec', color: '#34d399', points: live.doneSeries, area: true },
-              ]}
-            />
-            <div className="mt-2 flex items-center gap-4 font-mono text-[11px] text-faint">
-              <Legend color="#38bdf8" label="Push/sec" value={live.pushPerSec} />
-              <Legend color="#34d399" label="Done/sec" value={live.donePerSec} />
-            </div>
-          </Card>
-        </div>
+        <BenchmarkConfiguration
+          draft={draft}
+          active={active}
+          cleaning={operations.cleaning}
+          cleanResult={operations.cleanResult}
+          setField={setField}
+          numberInput={numberInput}
+          onClean={() => void operations.cleanup()}
+        />
+        <BenchmarkResults
+          heading={heading}
+          pollBaseUrl={pollBaseUrl}
+          etaText={etaText}
+          shown={shown}
+          shownWorkers={shownWorkers}
+          producePct={producePct}
+          drainPct={drainPct}
+          durationPct={durationPct}
+          live={live}
+          summary={summary}
+        />
       </div>
 
-      {summary && (
-        <Card className="mt-6">
-          <CardHeader title="Summary" />
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
-            <StatCard label="Pushed" value={formatNumber(summary.pushed)} tone="accent" compact />
-            <StatCard
-              label="Completed"
-              value={formatNumber(summary.completed)}
-              tone="green"
-              compact
-            />
-            <StatCard label="Duration" value={formatMs(summary.durationMs)} compact />
-            <StatCard
-              label="Avg push/s"
-              value={fmtRate(summary.pushPerSec)}
-              tone="accent"
-              compact
-            />
-            <StatCard label="Avg done/s" value={fmtRate(summary.donePerSec)} tone="green" compact />
-            <StatCard label="Data rate" value={`${formatBytes(summary.mbPerSec)}/s`} compact />
-            <StatCard label="Push p95" value={formatMs(summary.p95)} compact />
-            <StatCard label="Push p99" value={formatMs(summary.p99)} compact />
-          </div>
-          <p className="mt-3 text-xs text-faint">
-            Push-batch latency avg {formatMs(summary.avg)} · p50 {formatMs(summary.p50)} · p95{' '}
-            {formatMs(summary.p95)} · p99 {formatMs(summary.p99)} · max {formatMs(summary.max)}.
-            {summary.error ? ` First error: ${summary.error}` : ''}
-          </p>
-        </Card>
-      )}
-
-      <Card className="mt-6">
-        <CardHeader
-          title={`Server queue: ${pollQueue}`}
-          action={
-            countsError ? (
-              <span className="text-xs font-medium text-warning">stale — server unreachable</span>
-            ) : undefined
-          }
-        />
-        <p className="-mt-3 mb-4 text-xs text-faint">
-          Live counts from {pollBaseUrl} (poll 1s).
-          {runTarget ? ' Pinned to the current or last benchmark run.' : ''}
-        </p>
-        {c ? (
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-            <StatCard label="Waiting" value={formatNumber(c.waiting ?? 0)} tone="amber" compact />
-            <StatCard label="Active" value={formatNumber(c.active ?? 0)} tone="blue" compact />
-            <StatCard
-              label="Completed"
-              value={formatNumber(c.completed ?? 0)}
-              tone="green"
-              compact
-            />
-            <StatCard
-              label="Failed"
-              value={formatNumber(c.failed ?? 0)}
-              tone={c.failed ? 'red' : 'default'}
-              compact
-            />
-            <StatCard label="Delayed" value={formatNumber(c.delayed ?? 0)} compact />
-          </div>
-        ) : (
-          <p className="text-sm text-faint">
-            No counts yet — waiting for the server to answer for this queue.
-          </p>
-        )}
-      </Card>
-
-      <RunHistory history={history} onClear={bench.clearHistory} />
+      <BenchmarkSummary summary={summary} />
+      <BenchmarkQueueCounts
+        pollQueue={pollQueue}
+        pollBaseUrl={pollBaseUrl}
+        pinned={Boolean(runTarget)}
+        counts={queueCounts}
+        error={countsError}
+      />
+      <RunHistory history={history} onClear={benchmark.clearHistory} />
     </div>
   );
 }
 
-function ProgressBar({
-  label,
-  pct,
-  tone,
-}: {
-  label: string;
-  pct: number;
-  tone: 'accent' | 'emerald';
-}) {
-  return (
-    <div className="mb-2">
-      <div className="mb-1 flex items-center justify-between text-[11px] text-faint">
-        <span>{label}</span>
-        <span className="tnum">{pct.toFixed(0)}%</span>
-      </div>
-      <div
-        className="h-1.5 overflow-hidden rounded-full bg-surface-2"
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(pct)}
-      >
-        <div
-          className={cn(
-            'h-full rounded-full transition-[width] motion-reduce:transition-none',
-            tone === 'accent' ? 'bg-accent' : 'bg-emerald-500'
-          )}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
+function phaseHeading(phase: string, mode: RunConfig['mode'], hasSummary: boolean): string {
+  if (phase === 'running') return mode === 'duration' ? 'Running…' : 'Producing…';
+  if (phase === 'draining') return 'Draining…';
+  if (phase === 'stopping') return 'Stopping…';
+  if (phase === 'error') return 'Error';
+  return hasSummary ? 'Result' : 'Ready';
 }
 
-function Legend({ color, label, value }: { color: string; label: string; value: number }) {
-  return (
-    <span className="flex items-center gap-1.5">
-      <span className="size-2 rounded-full" style={{ background: color }} />
-      {label} <span className="text-fg">{fmtRate(value)}/s</span>
-    </span>
-  );
+function getEtaText(phase: string, etaMs: number | null): string {
+  if ((phase === 'running' || phase === 'draining') && etaMs != null) {
+    return etaMs > 0 ? `ETA ${formatMs(etaMs)}` : 'finishing…';
+  }
+  if (phase === 'stopped') return 'stopped early';
+  if (phase === 'done') return 'complete';
+  return '';
 }

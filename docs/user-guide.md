@@ -39,6 +39,13 @@ component → API-client table, see [Pages & routes](/pages).
 - [**Cron Jobs**](/guide/cron), list and create scheduled jobs (cron expression
   or interval).
 
+## Workflow
+
+- [**Workflow Engine**](/guide/workflows), a dedicated command centre with
+  Overview, Executions, Waiting & Signals, Compensation, and Archive views.
+- [**Job Flows**](/guide/flows), DAG exploration, all five FlowProducer create
+  modes, dependency/result tools, and safe Flow Job methods.
+
 ## Monitoring
 
 - [**Metrics**](/guide/metrics), rolling throughput chart, queue-depth trend, latency percentiles, per-queue counts.
@@ -53,8 +60,9 @@ component → API-client table, see [Pages & routes](/pages).
 - [**Add Job**](/guide/add-job), enqueue a job with payload, options, priority
   and delay.
 - [**Job Inspector**](/guide/job-inspector), a single job's full timeline, payload, result and state-gated actions.
-- [**Queue Control**](/guide/queue-control), per-queue actions plus rate-limit,
-  concurrency and stall/DLQ configuration; DLQ retention is read-only.
+- [**Queue Control**](/guide/queue-control), per-queue actions, live Queue SDK
+  limits/deduplication/metrics/journal tools, and stall/DLQ configuration; DLQ
+  retention is read-only.
 - [**DLQ Control**](/guide/dlq-control), read-only single-queue dead-letter triage.
 - [**Webhooks**](/guide/webhooks), register, test and remove webhook endpoints.
 - [**Diagnostics**](/guide/diagnostics), connectivity and health checks.
@@ -64,8 +72,8 @@ component → API-client table, see [Pages & routes](/pages).
 
 - [**Database**](/guide/database), the read-only SQLite inspector: tables, schema, rows, and query runner.
 - [**Usage**](/guide/usage), cumulative usage totals and runtime/storage facts.
-- [**S3 Backup**](/guide/s3), a config builder and honest storage check for S3
-  snapshot backups.
+- [**S3 Backup**](/guide/s3), live configuration, status, listing, on-demand
+  snapshots, and guarded restore through the local control agent.
 - [**Settings**](/guide/settings), connection target, polling interval, theme, and agent token.
 
 ## Appendix

@@ -2,15 +2,23 @@ import { useRef, useState } from 'react';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { CopyButton } from '@/components/ui/CopyButton';
 import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
+import { api } from '@/lib/api';
 import { bq } from '@/lib/bq';
-import { formatBytes, formatNumber, formatUptime } from '@/lib/format';
+import { formatBytes, formatUptime } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
+import {
+  EndpointDiagnostics,
+  type EndpointSnapshot,
+  HeapPanel,
+  type HeapStats,
+  Mini,
+  PrometheusPanel,
+  TotalsPanel,
+} from './diagnostics/DiagnosticsPanels';
 
-type HeapStats = Awaited<ReturnType<typeof bq.heapStats>>;
 type Health = Awaited<ReturnType<typeof bq.health>>;
 type Storage = Awaited<ReturnType<typeof bq.storage>>;
 type Stats = Awaited<ReturnType<typeof bq.stats>>;
@@ -23,7 +31,7 @@ async function capture<T>(request: Promise<T>): Promise<{ value: T | null; error
   }
 }
 
-type DiagnosticSnapshot = {
+type DiagnosticSnapshot = EndpointSnapshot & {
   health: Health | null;
   storage: Storage | null;
   stats: Stats | null;
@@ -39,10 +47,14 @@ export function Diagnostics() {
     loading,
     refetch,
   } = usePolledData(async () => {
-    const [health, storage, stats] = await Promise.all([
+    const [health, storage, stats, healthz, live, ready, metrics] = await Promise.all([
       capture(bq.health()),
       capture(bq.storage()),
       capture(bq.stats()),
+      capture(api.healthz()),
+      capture(api.live()),
+      capture(api.ready()),
+      capture(api.metrics()),
     ]);
     return {
       health: health.value,
@@ -51,6 +63,14 @@ export function Diagnostics() {
       healthError: health.error,
       storageError: storage.error,
       statsError: stats.error,
+      healthz: healthz.value,
+      live: live.value,
+      ready: ready.value,
+      metrics: metrics.value,
+      healthzError: healthz.error,
+      liveError: live.error,
+      readyError: ready.error,
+      metricsError: metrics.error,
     } satisfies DiagnosticSnapshot;
   }, []);
 
@@ -116,6 +136,14 @@ export function Diagnostics() {
     healthError: null,
     storageError: null,
     statsError: null,
+    healthz: null,
+    live: null,
+    ready: null,
+    metrics: null,
+    healthzError: null,
+    liveError: null,
+    readyError: null,
+    metricsError: null,
   };
   const h = d.health as {
     ok?: boolean;
@@ -130,7 +158,15 @@ export function Diagnostics() {
   const healthKnown = h != null;
   const diskKnown = disk != null;
   const healthy = healthKnown && h.ok === true;
-  const hasPartialError = !!pollError || !!d.healthError || !!d.storageError || !!d.statsError;
+  const hasPartialError =
+    !!pollError ||
+    !!d.healthError ||
+    !!d.storageError ||
+    !!d.statsError ||
+    !!d.healthzError ||
+    !!d.liveError ||
+    !!d.readyError ||
+    !!d.metricsError;
 
   return (
     <div>
@@ -233,77 +269,10 @@ export function Diagnostics() {
         </Card>
       </div>
 
-      <Card className="mt-6">
-        <CardHeader
-          title="Heap statistics"
-          action={
-            <Button size="sm" disabled={heapBusy} onClick={loadHeap}>
-              {heapBusy ? 'Loading…' : heap ? 'Refresh' : 'Load'}
-            </Button>
-          }
-        />
-        {!heap ? (
-          <p className="text-sm text-muted">
-            On-demand <code className="font-mono text-xs">bun:jsc</code> heap breakdown (forces a GC
-            first). Use it to spot which internal object type is growing when chasing a leak.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <div className="grid grid-cols-3 gap-4">
-              <Mini k="Objects" v={formatNumber(heap.heap?.objectCount ?? 0)} />
-              <Mini k="Protected" v={formatNumber(heap.heap?.protectedCount ?? 0)} />
-              <Mini k="Global" v={formatNumber(heap.heap?.globalCount ?? 0)} />
-            </div>
-            <div>
-              <div className="mb-2 text-[11px] uppercase tracking-wider text-faint">
-                Top object types
-              </div>
-              <div className="max-h-52 overflow-y-auto rounded-lg border border-line">
-                <table className="w-full text-xs">
-                  <tbody>
-                    {(heap.topObjectTypes ?? []).map((t) => (
-                      <tr key={t.type} className="border-b border-line last:border-0">
-                        <td className="px-3 py-1.5 font-mono text-muted">{t.type}</td>
-                        <td className="px-3 py-1.5 text-right tnum text-fg">
-                          {formatNumber(t.count)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      <Card className="mt-6">
-        <CardHeader title="Prometheus" />
-        <p className="mb-3 text-sm text-muted">
-          Scrape endpoint (text exposition) for Grafana / Alertmanager. Auth is required only if the
-          server sets <code className="font-mono text-xs">requireAuthForMetrics</code>.
-        </p>
-        <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2">
-          <code className="min-w-0 flex-1 truncate font-mono text-xs text-fg">
-            {bq.prometheusUrl()}
-          </code>
-          <CopyButton value={bq.prometheusUrl()} />
-        </div>
-      </Card>
-
-      {st && (
-        <Card className="mt-6">
-          {/* totalPushed/… are in-memory session counters — they zero on every
-              server restart, so calling them "lifetime" was a lie. */}
-          <CardHeader title="Totals since restart" />
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Mini k="Pushed" v={formatNumber(st.totalPushed)} />
-            <Mini k="Pulled" v={formatNumber(st.totalPulled)} />
-            <Mini k="Completed" v={formatNumber(st.totalCompleted)} />
-            <Mini k="Failed" v={formatNumber(st.totalFailed)} />
-          </div>
-        </Card>
-      )}
+      <EndpointDiagnostics snapshot={d} />
+      <HeapPanel heap={heap} busy={heapBusy} onLoad={loadHeap} />
+      <PrometheusPanel />
+      <TotalsPanel stats={st} />
     </div>
   );
 }
@@ -313,15 +282,6 @@ function Row({ k, v }: { k: string; v: string }) {
     <div className="flex items-center justify-between py-2.5">
       <dt className="text-muted">{k}</dt>
       <dd className="font-medium text-fg">{v}</dd>
-    </div>
-  );
-}
-
-function Mini({ k, v }: { k: string; v: string }) {
-  return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wider text-faint">{k}</div>
-      <div className="mt-1 text-lg font-semibold tnum text-fg">{v}</div>
     </div>
   );
 }

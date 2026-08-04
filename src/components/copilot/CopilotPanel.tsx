@@ -1,28 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  type ChatMessage,
-  type PendingConfirm,
-  type ToolEvent,
-  useCopilotStore,
-} from '@/components/dashboard/stores/copilotStore';
+import { useCopilotStore } from '@/components/dashboard/stores/copilotStore';
 import { Field, Input, Select } from '@/components/ui/form';
-import { cn } from '@/lib/cn';
 import { normalizeCustomProviderBaseURL, PROVIDERS, providerById } from '@/lib/copilot/providers';
 import { abortActive, clearChat, sendMessage } from '@/lib/copilot/runtime';
+import { ConfirmCard, MessageBubble, PanelIconButton } from './CopilotPanelParts';
 
 const SUGGESTIONS = [
   'Which queues are backing up right now?',
   'Show DLQ stats for every queue and what is failing.',
   'Summarize server health and worker status.',
 ];
-
-const STATUS_STYLE: Record<ToolEvent['status'], string> = {
-  awaiting: 'border-warning/40 text-warning',
-  running: 'border-accent/40 text-accent',
-  done: 'border-success/40 text-success',
-  error: 'border-danger/40 text-danger',
-  declined: 'border-line text-faint',
-};
 
 export function CopilotPanel() {
   const { config, setConfig, messages, pending, busy, setOpen, resolveConfirm } = useCopilotStore();
@@ -96,15 +83,15 @@ export function CopilotPanel() {
             experimental
           </span>
           <div className="ml-auto flex items-center gap-1">
-            <IconButton
+            <PanelIconButton
               label="Settings"
               active={showConfig}
               onClick={() => setShowConfig((v) => !v)}
             >
               <path d="M10 4a2 2 0 014 0 6 6 0 012.6 1.5 2 2 0 002.7 2.7 6 6 0 010 3.6 2 2 0 00-2.7 2.7A6 6 0 0114 18a2 2 0 01-4 0 6 6 0 01-2.6-1.5 2 2 0 00-2.7-2.7 6 6 0 010-3.6 2 2 0 002.7-2.7A6 6 0 0110 4z" />
               <circle cx="12" cy="12" r="2.5" />
-            </IconButton>
-            <IconButton
+            </PanelIconButton>
+            <PanelIconButton
               label="Clear chat"
               onClick={() => {
                 if (
@@ -116,10 +103,10 @@ export function CopilotPanel() {
               }}
             >
               <path d="M6 7h12M9 7V5h6v2m-7 0v11a1 1 0 001 1h6a1 1 0 001-1V7" />
-            </IconButton>
-            <IconButton label="Close" onClick={() => setOpen(false)}>
+            </PanelIconButton>
+            <PanelIconButton label="Close" onClick={() => setOpen(false)}>
               <path d="M6 6l12 12M18 6L6 18" />
-            </IconButton>
+            </PanelIconButton>
           </div>
         </header>
 
@@ -304,131 +291,5 @@ export function CopilotPanel() {
         </div>
       </aside>
     </>
-  );
-}
-
-function IconButton({
-  label,
-  active,
-  onClick,
-  children,
-}: {
-  label: string;
-  active?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      aria-pressed={active ?? undefined}
-      onClick={onClick}
-      className={cn(
-        'rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50',
-        active && 'bg-surface-2 text-fg'
-      )}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="size-4"
-        aria-hidden="true"
-      >
-        {children}
-      </svg>
-    </button>
-  );
-}
-
-function MessageBubble({ message }: { message: ChatMessage }) {
-  const isUser = message.role === 'user';
-  return (
-    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
-      <div
-        className={cn(
-          'max-w-[85%] space-y-2',
-          isUser ? 'rounded-2xl rounded-br-sm bg-accent/15 px-3 py-2' : 'w-full'
-        )}
-      >
-        {(message.tools?.length ?? 0) > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {message.tools?.map((t) => (
-              <span
-                key={t.id}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px]',
-                  STATUS_STYLE[t.status]
-                )}
-                title={t.error || (t.mutates ? 'mutating action' : 'read')}
-              >
-                {t.mutates && <span aria-hidden="true">●</span>}
-                {t.label}
-                {t.status === 'declined' && ' (declined)'}
-                {t.status === 'error' && ' (failed)'}
-              </span>
-            ))}
-          </div>
-        )}
-        {message.content && (
-          <div
-            className={cn(
-              'whitespace-pre-wrap break-words text-sm',
-              message.error ? 'text-danger' : 'text-fg'
-            )}
-          >
-            {message.content}
-          </div>
-        )}
-        {!message.content && !isUser && (message.tools?.length ?? 0) === 0 && (
-          <div className="text-sm text-faint">{message.done ? 'Stopped.' : 'Thinking…'}</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ConfirmCard({
-  confirm,
-  onConfirm,
-  onDecline,
-}: {
-  confirm: PendingConfirm;
-  onConfirm: () => void;
-  onDecline: () => void;
-}) {
-  const args = confirm.args as Record<string, unknown> | undefined;
-  return (
-    <div className="rounded-lg border border-warning/50 bg-warning/10 px-3 py-2">
-      <div className="text-sm font-medium text-fg">Confirm: {confirm.label}</div>
-      {args && Object.keys(args).length > 0 && (
-        <div className="mt-1 font-mono text-xs text-muted">
-          {Object.entries(args)
-            .filter(([, v]) => v !== undefined)
-            .map(([k, v]) => `${k}: ${String(v)}`)
-            .join('  ·  ')}
-        </div>
-      )}
-      <div className="mt-2 flex gap-2">
-        <button
-          type="button"
-          onClick={onConfirm}
-          className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-accent-fg hover:opacity-90"
-        >
-          Confirm
-        </button>
-        <button
-          type="button"
-          onClick={onDecline}
-          className="rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-surface-2 hover:text-fg"
-        >
-          Decline
-        </button>
-      </div>
-    </div>
   );
 }

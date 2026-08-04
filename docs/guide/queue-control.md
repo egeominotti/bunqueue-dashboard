@@ -32,8 +32,8 @@ Once a queue is selected, a row of eight count cards summarizes every v2.8.57 jo
 
 Below the counts you get the **Lifecycle** card (pause, promote, and visibly
 unavailable requeue/deletion controls), the **Rate-limit desired state** and
-**Concurrency desired state** cards, and the **Stall detection** and **DLQ
-policy** forms.
+**Concurrency desired state** cards, a live **Queue SDK operations** console,
+and the **Stall detection** and **DLQ policy** forms.
 
 ## What you can do
 
@@ -45,9 +45,22 @@ registration or the ordering guarantees of its original flow.
 
 **Promote delayed**, moves delayed jobs to waiting so they run now. Leave the **Promote** box empty to promote all of them, or enter a number to promote just the first *N*.
 
-**Replace rate-limit policy**, enter a positive integer limit and an explicit positive **Window (ms)**, then choose a permanent policy or **Expires after** with a TTL. Bunqueue v2.8.57 has no GET for the existing policy, so this is explicitly a blind desired-state replacement. Success produces a timestamped write receipt, not a claim about current state.
+**Replace rate-limit policy**, enter a positive integer limit and an explicit
+positive **Window (ms)**, then choose a permanent policy or **Expires after**
+with a TTL. The HTTP mutation remains an explicit desired-state replacement;
+the separate SDK readback below shows the authoritative current policy.
 
-**Replace concurrency policy**, enter a positive integer maximum in-flight count. Clearing either policy is labelled **Ensure no …**, requires typing the exact queue name, and confirms that the previous value is unavailable.
+**Replace concurrency policy**, enter a positive integer maximum in-flight
+count. Clearing either policy is labelled **Ensure no …**, requires typing the
+exact queue name, and refreshes the independent SDK readback after the server
+acknowledges the mutation.
+
+**Inspect Queue SDK state**, refresh the official global rate-limit,
+concurrency, remaining rate-limit TTL, and saturation contracts. The same
+console resolves or explicitly releases a deduplication key, reads paged
+completed/failed one-minute metric buckets, and trims the bounded lifecycle
+event journal after confirmation. Changing queue clears every snapshot and
+receipt immediately; no result is relabelled under the new queue.
 
 To adjust stall detection:
 
@@ -90,7 +103,12 @@ flow dependency registration/order.
 - The last-action message is a single shared line, each new action replaces the previous result.
 
 ::: details Under the hood (for developers)
-This screen uses the `bq` client exclusively. The queue picker polls `GET /dashboard/queues` every 30 s. The selected queue refreshes on the global live cadence (default 3 s, configurable in Settings, floor 500 ms), fetching counts + paused state (`GET /dashboard/queues/<queue>?includeJobs=false`) alongside `GET /queues/<queue>/stall-config` and `.../dlq-config`.
+This screen uses `bq` for HTTP controls and a repository adapter for the pinned
+agent Queue SDK bridge. The queue picker polls `GET /dashboard/queues` every
+30 s. The selected queue refreshes on the global live cadence (default 3 s,
+configurable in Settings, floor 500 ms), fetching counts + paused state
+(`GET /dashboard/queues/<queue>?includeJobs=false`) alongside
+`GET /queues/<queue>/stall-config` and `.../dlq-config`.
 
 Enabled actions map to: `POST .../pause` · `.../resume` ·
 `.../promote-jobs`; `PUT`/`DELETE .../rate-limit` (body
@@ -101,4 +119,9 @@ or `maxEntries`, and only `autoRetry:false` is permitted. The upstream
 retry-completed/drain/clean routes exist but are intentionally never called
 here. The client throws on any HTTP-200 response with `{ ok: false }`, so
 logical failures surface as the red inline error.
+
+SDK reads and mutations use `/agent/queue-operations/:queue/*`, are pinned to
+the process manager's running port, validate exact bounded input, serialize
+access, and close their dedicated Bunqueue `Queue` connection after each
+operation.
 :::

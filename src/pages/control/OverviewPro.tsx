@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
 import { Card } from '@/components/ui/Card';
 import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
-import { IconArrowRight } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { bq } from '@/lib/bq';
@@ -17,90 +16,16 @@ import {
   formatRelativeTime,
   formatUptime,
 } from '@/lib/format';
-import { useActivityStream } from '@/lib/useActivityStream';
 import { usePolledData } from '@/lib/usePolledData';
+import {
+  assertRenderableOverview,
+  EMPTY_OVERVIEW,
+  type QueueHealth,
+  WAITING_AMBER_THRESHOLD,
+} from './overview/model';
+import { QueueMetric, RecentActivity, SectionHeading } from './overview/OverviewSections';
 
-interface QueueHealth {
-  name: string;
-  paused: boolean;
-  counts: {
-    waiting: number;
-    prioritized: number;
-    active: number;
-    completed: number;
-    failed: number;
-  } | null;
-}
-
-// Defensive fallback for the render after a successful poll. Initial failures
-// return an ErrorState above rather than presenting these zeroes as facts.
-const EMPTY = {
-  overview: {
-    stats: {
-      waiting: 0,
-      active: 0,
-      delayed: 0,
-      completed: 0,
-      dlq: 0,
-      totalPushed: 0,
-      totalPulled: 0,
-      totalCompleted: 0,
-      totalFailed: 0,
-      uptime: 0,
-    },
-    throughput: { pushPerSec: 0, pullPerSec: 0, completePerSec: 0, failPerSec: 0 },
-    memory: { heapUsed: 0, heapTotal: 0, rss: 0 },
-    crons: { total: 0 },
-  },
-  queuesTotal: 0,
-  details: [] as QueueHealth[],
-  failedTotal: 0,
-  readyTotal: 0,
-};
-
-// Backlog size above which the Waiting card turns amber — a small standing
-// queue is normal operation, not a warning.
-const WAITING_AMBER_THRESHOLD = 100;
-
-type JsonObject = Record<string, unknown>;
-
-function isJsonObject(value: unknown): value is JsonObject {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function hasFiniteNumbers(value: unknown, keys: readonly string[]): value is JsonObject {
-  return (
-    isJsonObject(value) &&
-    keys.every((key) => typeof value[key] === 'number' && Number.isFinite(value[key]))
-  );
-}
-
-/**
- * Validate only the /dashboard fields this page renders. bunqueue v2.8.55 may
- * omit newer, unrelated sections, so requiring the complete current type here
- * would reject a response the page can safely display.
- */
-export function assertRenderableOverview(value: unknown): void {
-  if (
-    !isJsonObject(value) ||
-    !hasFiniteNumbers(value.stats, [
-      'waiting',
-      'active',
-      'completed',
-      'dlq',
-      'totalPushed',
-      'totalPulled',
-      'uptime',
-    ]) ||
-    !hasFiniteNumbers(value.throughput, ['pushPerSec', 'pullPerSec']) ||
-    !hasFiniteNumbers(value.memory, ['rss']) ||
-    !hasFiniteNumbers(value.crons, ['total'])
-  ) {
-    throw new Error(
-      'Malformed /dashboard response: required overview metrics are missing or non-numeric.'
-    );
-  }
-}
+export { assertRenderableOverview } from './overview/model';
 
 export function OverviewPro() {
   const baseUrl = useConnectionStore((s) => s.baseUrl);
@@ -152,7 +77,7 @@ export function OverviewPro() {
     );
   }
 
-  const d = data ?? EMPTY;
+  const d = data ?? EMPTY_OVERVIEW;
   const { overview, queuesTotal, details, failedTotal, readyTotal } = d;
   const { stats, throughput, memory, crons } = overview;
   // Recorded counts (stats.completed + per-queue failed sums), not the
@@ -313,11 +238,11 @@ export function OverviewPro() {
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-faint">
-                  <Metric label="W" value={qd.counts?.waiting} tone="text-warning" />
-                  <Metric label="P" value={qd.counts?.prioritized} tone="text-orange-400" />
-                  <Metric label="A" value={qd.counts?.active} tone="text-blue-400" />
-                  <Metric label="C" value={qd.counts?.completed} tone="text-success" />
-                  <Metric label="F" value={qd.counts?.failed} tone="text-danger" />
+                  <QueueMetric label="W" value={qd.counts?.waiting} tone="text-warning" />
+                  <QueueMetric label="P" value={qd.counts?.prioritized} tone="text-orange-400" />
+                  <QueueMetric label="A" value={qd.counts?.active} tone="text-blue-400" />
+                  <QueueMetric label="C" value={qd.counts?.completed} tone="text-success" />
+                  <QueueMetric label="F" value={qd.counts?.failed} tone="text-danger" />
                 </div>
               </Link>
             ))}
@@ -330,90 +255,4 @@ export function OverviewPro() {
       <RecentActivity />
     </div>
   );
-}
-
-function RecentActivity() {
-  const { events, connected, error } = useActivityStream();
-  return (
-    <div className="mt-8">
-      <SectionHeading title="Recent Activity" to="/logs" />
-      <Card padded={false}>
-        {error && events.length > 0 && (
-          <p className="border-b border-line px-5 py-2 text-xs text-warning">
-            Event stream unavailable — {error.message}. Reconnecting…
-          </p>
-        )}
-        {events.length === 0 ? (
-          <p
-            role={error ? 'alert' : undefined}
-            className={cn('py-8 text-center text-sm', error ? 'text-warning' : 'text-faint')}
-          >
-            {error
-              ? `Event stream unavailable — ${error.message}. Reconnecting…`
-              : connected
-                ? 'Waiting for live activity…'
-                : 'Connecting to the event stream…'}
-          </p>
-        ) : (
-          <ul className="divide-y divide-line">
-            {events.slice(0, 8).map((e) => (
-              <li key={e.seq} className="flex items-center justify-between px-5 py-3">
-                <div className="flex items-center gap-3">
-                  <span className={cn('size-2 rounded-full', dotFor(e.status))} />
-                  <div className="text-sm">
-                    <span className="font-mono font-medium text-fg">{e.queue || '—'}</span>
-                    <span className="text-faint"> · </span>
-                    <span className="font-mono text-xs text-faint">
-                      {e.jobId ? e.jobId.slice(0, 8) : '—'}
-                    </span>
-                    <span className="text-faint"> · </span>
-                    <span className="capitalize text-muted">{e.status}</span>
-                  </div>
-                </div>
-                <span className="text-xs text-faint">{formatRelativeTime(e.timestamp)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function SectionHeading({ title, to }: { title: string; to: string }) {
-  return (
-    <div className="mb-3 flex items-center justify-between">
-      <h2 className="text-lg font-semibold text-fg">{title}</h2>
-      <Link to={to} className="flex items-center gap-1 text-sm text-muted hover:text-fg">
-        View All <IconArrowRight className="size-3.5" />
-      </Link>
-    </div>
-  );
-}
-
-function Metric({ label, value, tone }: { label: string; value?: number; tone: string }) {
-  return (
-    <span>
-      {label}{' '}
-      <span className={cn('tnum font-semibold', tone)}>
-        {value == null ? '—' : formatNumber(value)}
-      </span>
-    </span>
-  );
-}
-
-function dotFor(status: string): string {
-  switch (status) {
-    case 'completed':
-      return 'bg-emerald-400';
-    case 'failed':
-      return 'bg-red-400';
-    case 'active':
-      return 'bg-blue-400';
-    case 'waiting':
-      // Amber, matching the amber Waiting stat cards.
-      return 'bg-amber-400';
-    default:
-      return 'bg-accent';
-  }
 }

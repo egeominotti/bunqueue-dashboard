@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { createResilientStateStorage } from './resilientStateStorage';
 
 /**
  * Copilot chat state. The API key lives in memory only (never persisted — an
@@ -156,80 +157,11 @@ export function persistedCopilotState(s: Pick<CopilotState, 'config'>) {
   return sanitizedPersistedCopilotState(s);
 }
 
-function browserStorage(): Storage | null {
-  try {
-    return (globalThis as { localStorage?: Storage }).localStorage ?? null;
-  } catch {
-    return null;
-  }
-}
-
-function sanitizeStoredEnvelope(raw: string): { hydration: string; canonical: string } | null {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    const envelope = isRecord(parsed) ? parsed : {};
-    const rawState = 'state' in envelope ? envelope.state : envelope;
-    const state = sanitizedPersistedCopilotState(rawState);
-    const version = typeof envelope.version === 'number' ? envelope.version : undefined;
-    return {
-      hydration: JSON.stringify({ state, ...(version === undefined ? {} : { version }) }),
-      canonical: JSON.stringify({ state, version: COPILOT_STORAGE_VERSION }),
-    };
-  } catch {
-    return null;
-  }
-}
-
-const resilientCopilotStorage: StateStorage = {
-  getItem(name) {
-    const storage = browserStorage();
-    if (!storage) return null;
-    let raw: string | null;
-    try {
-      raw = storage.getItem(name);
-    } catch {
-      return null;
-    }
-    if (raw === null || name !== COPILOT_STORAGE_KEY) return raw;
-    const sanitized = sanitizeStoredEnvelope(raw);
-    if (!sanitized) {
-      try {
-        storage.removeItem(name);
-      } catch {
-        // Corrupt optional storage falls back to the default provider config.
-      }
-      return null;
-    }
-    if (raw !== sanitized.canonical) {
-      try {
-        storage.setItem(name, sanitized.canonical);
-      } catch {
-        // If rewrite is blocked, deleting the legacy API-key blob is safer than
-        // leaving it at rest. The sanitized in-memory setup still hydrates.
-        try {
-          storage.removeItem(name);
-        } catch {
-          // Storage is externally controlled; no exception may escape hydration.
-        }
-      }
-    }
-    return sanitized.hydration;
-  },
-  setItem(name, value) {
-    try {
-      browserStorage()?.setItem(name, value);
-    } catch {
-      // The session config remains usable if storage is blocked/full.
-    }
-  },
-  removeItem(name) {
-    try {
-      browserStorage()?.removeItem(name);
-    } catch {
-      // Durable cleanup is best-effort.
-    }
-  },
-};
+const resilientCopilotStorage = createResilientStateStorage({
+  key: COPILOT_STORAGE_KEY,
+  version: COPILOT_STORAGE_VERSION,
+  sanitizeState: sanitizedPersistedCopilotState,
+});
 
 export const useCopilotStore = create<CopilotState>()(
   persist(

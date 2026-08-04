@@ -14,6 +14,7 @@
 import { logger } from './logger';
 import { ProcessManager } from './manager';
 import { createFetchHandler, resolveAllowedHosts, resolveAllowedOrigins } from './server';
+import { installAgentShutdown } from './shutdown';
 
 const mgr = new ProcessManager();
 const PORT = Number(process.env.AGENT_PORT) || 6800;
@@ -26,28 +27,15 @@ const allowedHosts = resolveAllowedHosts();
 const token = process.env.AGENT_TOKEN || undefined;
 
 const handle = createFetchHandler(mgr, { allowedOrigins, allowedHosts, token });
+const stopAccepting: Array<() => unknown | Promise<unknown>> = [];
+installAgentShutdown(handle, { stopAccepting });
 
-Bun.serve({
+const server = Bun.serve({
   port: PORT,
   hostname: '127.0.0.1',
   fetch: handle,
 });
-
-// Stop the managed server before exiting — without this, Ctrl-C / SIGTERM on
-// the agent orphans the spawned bunqueue child (it reparents to PID 1 and keeps
-// holding the ports and the SQLite db, so the next start fails EADDRINUSE).
-let shuttingDown = false;
-const shutdown = (signal: string) => {
-  if (shuttingDown) return;
-  shuttingDown = true;
-  logger.info({ signal }, 'signal received, stopping managed server');
-  // shutdown() (not stop()) latches the manager closed first: a plain stop()
-  // racing an in-flight restart() returns successfully *because* restart's
-  // start() already spawned a replacement — which process.exit() would orphan.
-  void mgr.shutdown().finally(() => process.exit(0));
-};
-process.on('SIGINT', () => shutdown('SIGINT'));
-process.on('SIGTERM', () => shutdown('SIGTERM'));
+stopAccepting.push(() => server.stop());
 
 logger.info(
   { url: `http://127.0.0.1:${PORT}/control`, allowedOrigins, allowedHosts, tokenAuth: Boolean(token) },

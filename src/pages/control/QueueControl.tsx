@@ -4,192 +4,33 @@ import { Select } from '@/components/ui/form';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { StatusDot } from '@/components/ui/StatusBadge';
+import { QueueOperationsPanel } from '@/features/queue-operations/ui/QueueOperationsPanel';
 import { bq } from '@/lib/bq';
 import { formatNumber } from '@/lib/format';
-import type { QueuesResponse } from '@/lib/types';
 import { usePolledData } from '@/lib/usePolledData';
 import { useServerActionGuard } from '@/lib/useServerActionGuard';
-import {
-  ConfigLoadError,
-  DlqConfigForm,
-  isDlqConfig,
-  isStallConfig,
-  StallForm,
-} from './queue/ConfigForms';
+import { ConfigLoadError, DlqConfigForm, StallForm } from './queue/ConfigForms';
 import { LifecycleCard, LimitsCards } from './queue/QueueActions';
+import {
+  actionResultCount,
+  assertQueueDetail,
+  COUNT_KEYS,
+  loadAllQueuePages,
+  readDlqConfig,
+  readStallConfig,
+  resolveQueueSelection,
+} from './queue/queueDiscovery';
 
-const COUNT_KEYS = [
-  'waiting',
-  'prioritized',
-  'active',
-  'completed',
-  'failed',
-  'delayed',
-  'waiting-children',
-  'paused',
-] as const;
-const QUEUE_PAGE_SIZE = 500;
-const MAX_QUEUE_PAGES = 200;
-const MAX_DISCOVERED_QUEUES = QUEUE_PAGE_SIZE * MAX_QUEUE_PAGES;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isCount(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
-}
-
-function hasRenderedCounts(value: unknown): value is Record<(typeof COUNT_KEYS)[number], number> {
-  return isRecord(value) && COUNT_KEYS.every((key) => isCount(value[key]));
-}
-
-function assertQueuePage(value: unknown, expectedOffset: number): asserts value is QueuesResponse {
-  if (
-    !isRecord(value) ||
-    value.ok !== true ||
-    !Array.isArray(value.queues) ||
-    !isCount(value.total) ||
-    !isCount(value.limit) ||
-    value.limit < 1 ||
-    !isCount(value.offset) ||
-    value.offset !== expectedOffset ||
-    typeof value.timestamp !== 'number' ||
-    !Number.isFinite(value.timestamp) ||
-    !value.queues.every(
-      (entry) =>
-        isRecord(entry) &&
-        typeof entry.name === 'string' &&
-        entry.name.length > 0 &&
-        isCount(entry.waiting) &&
-        isCount(entry.delayed) &&
-        isCount(entry.active) &&
-        isCount(entry.dlq) &&
-        typeof entry.paused === 'boolean'
-    )
-  ) {
-    throw new Error('Malformed /dashboard/queues response.');
-  }
-}
-
-/** Fetch every server page; v2.8.55 caps each /dashboard/queues page at 500. */
-export async function loadAllQueuePages(): Promise<QueuesResponse> {
-  const first = await bq.queues(QUEUE_PAGE_SIZE, 0);
-  assertQueuePage(first, 0);
-  const snapshotTotal = first.total;
-  if (snapshotTotal > MAX_DISCOVERED_QUEUES) {
-    throw new Error(
-      `Queue discovery reported ${snapshotTotal} queues, above the safe dashboard limit of ${MAX_DISCOVERED_QUEUES}.`
-    );
-  }
-  if (first.queues.length !== Math.min(QUEUE_PAGE_SIZE, snapshotTotal)) {
-    throw new Error(
-      `Incomplete /dashboard/queues page at offset 0: expected ${Math.min(QUEUE_PAGE_SIZE, snapshotTotal)} queues, received ${first.queues.length}.`
-    );
-  }
-
-  const byName = new Map<string, QueuesResponse['queues'][number]>();
-  const addPage = (page: QueuesResponse) => {
-    for (const entry of page.queues) {
-      if (byName.has(entry.name)) {
-        throw new Error(
-          `Overlapping /dashboard/queues pages: queue "${entry.name}" appeared more than once.`
-        );
-      }
-      byName.set(entry.name, entry);
-    }
-  };
-  addPage(first);
-  let offset = first.queues.length;
-  let pageCount = 1;
-
-  // v2.8.55 pagination is not a server-side snapshot. Treat a changed total as
-  // a stale read and let the next poll retry from page zero instead of chasing
-  // a moving target forever or silently composing overlapping pages.
-  while (offset < snapshotTotal) {
-    if (pageCount >= MAX_QUEUE_PAGES) {
-      throw new Error(`Queue discovery exceeded the safe limit of ${MAX_QUEUE_PAGES} pages.`);
-    }
-    const page = await bq.queues(QUEUE_PAGE_SIZE, offset);
-    assertQueuePage(page, offset);
-    if (page.total !== snapshotTotal) {
-      throw new Error(
-        `Queue discovery changed during pagination: total moved from ${snapshotTotal} to ${page.total}. Retry the snapshot.`
-      );
-    }
-    const expectedLength = Math.min(QUEUE_PAGE_SIZE, snapshotTotal - offset);
-    if (page.queues.length !== expectedLength) {
-      throw new Error(
-        `Incomplete /dashboard/queues page at offset ${offset}: expected ${expectedLength} queues, received ${page.queues.length}.`
-      );
-    }
-    addPage(page);
-    offset += page.queues.length;
-    pageCount += 1;
-  }
-
-  if (byName.size !== snapshotTotal) {
-    throw new Error(
-      `Incomplete /dashboard/queues snapshot: expected ${snapshotTotal} unique queues, received ${byName.size}.`
-    );
-  }
-
-  return {
-    ...first,
-    queues: [...byName.values()],
-    total: snapshotTotal,
-    limit: QUEUE_PAGE_SIZE,
-    offset: 0,
-  };
-}
-
-function assertQueueDetail(value: unknown, expectedQueue: string): void {
-  if (
-    !isRecord(value) ||
-    value.ok !== true ||
-    value.name !== expectedQueue ||
-    typeof value.paused !== 'boolean' ||
-    !hasRenderedCounts(value.counts)
-  ) {
-    throw new Error(`Malformed queue detail response for "${expectedQueue}".`);
-  }
-}
-
-function readStallConfig(value: unknown) {
-  if (!isRecord(value) || value.ok !== true || !isStallConfig(value.config)) {
-    throw new Error('Malformed /stall-config response.');
-  }
-  return value.config;
-}
-
-function readDlqConfig(value: unknown) {
-  if (!isRecord(value) || value.ok !== true || !isDlqConfig(value.config)) {
-    throw new Error('Malformed /dlq-config response.');
-  }
-  return value.config;
-}
-
-export function actionResultCount(value: unknown): number | undefined {
-  if (!isRecord(value) || value.ok !== true) {
-    throw new Error('Malformed queue action response: expected { ok: true }.');
-  }
-  if (value.count === undefined) return undefined;
-  if (!isCount(value.count)) {
-    throw new Error('Malformed queue action response: count must be a non-negative integer.');
-  }
-  return value.count;
-}
-
-export function resolveQueueSelection(
-  selected: string,
-  queues: ReadonlyArray<{ name: string }>
-): string {
-  return queues.some((entry) => entry.name === selected) ? selected : (queues[0]?.name ?? '');
-}
+export {
+  actionResultCount,
+  loadAllQueuePages,
+  resolveQueueSelection,
+} from './queue/queueDiscovery';
 
 export function QueueControl() {
   const [queue, setQueue] = useState('');
   const [busy, setBusy] = useState(false);
+  const [operationsRevision, setOperationsRevision] = useState(0);
   const [msg, setMsg] = useState<{ queue: string; ok: boolean; text: string } | null>(null);
   const actionGuard = useServerActionGuard(`queue-control:${queue}`);
   // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the queue+connection lifecycle boundary
@@ -261,6 +102,7 @@ export function QueueControl() {
           text: `${label}${count != null ? `: ${count}` : ' ✓'}`,
         });
         onSuccess?.();
+        setOperationsRevision((revision) => revision + 1);
         await refetch();
       } catch (e) {
         if (lease.isCurrent()) {
@@ -355,6 +197,12 @@ export function QueueControl() {
             run={run}
           />
           <LimitsCards key={`${queue}:limits`} queue={queue} busy={busy} run={run} />
+          <QueueOperationsPanel
+            key={`${queue}:sdk-operations`}
+            queue={queue}
+            refreshKey={operationsRevision}
+            onApplied={() => setOperationsRevision((revision) => revision + 1)}
+          />
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {data.stall ? (

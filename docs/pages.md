@@ -40,7 +40,12 @@ rules). Each classic page remains routable at a `-classic` suffix.
 | `/cron` | `control/CronManager` | **Pro** | `bq` |
 | `/cron-manager` | redirect → `/cron` | n/a (legacy alias) | n/a |
 | `/cron-classic` | `Cron` | Classic | `api` |
-| `/flows` | `control/Flows` | Pro | `bq` |
+| `/workflows` | `control/Workflows` | Pro | `bq` + agent Engine/SQLite adapter |
+| `/workflows/executions` | `control/Workflows` | Pro | active execution explorer |
+| `/workflows/waiting` | `control/Workflows` | Pro | durable waiting/signal control |
+| `/workflows/compensation` | `control/Workflows` | Pro | saga compensation control |
+| `/workflows/archive` | `control/Workflows` | Pro | archive audit + maintenance |
+| `/flows` | `control/Flows` | Pro | `bq` + agent FlowProducer adapter |
 | `/metrics` | `control/MetricsPro` | **Pro** | `bq` |
 | `/metrics-classic` | `Metrics` | Classic | `api` |
 | `/workers` | `control/WorkersPro` | **Pro** | `bq` |
@@ -76,7 +81,9 @@ keep working.
 command palette) groups nav items into four sections plus the root Overview:
 
 - **Queues**: Queues (QueuesOverview) · Jobs (JobsPro) · Dead Letter Queue
-  (DlqPro) · Cron Jobs (CronManager) · Flows.
+  (DlqPro) · Cron Jobs (CronManager).
+- **Workflow**: Overview · Job Flows · Executions · Waiting & Signals ·
+  Compensation · Archive.
 - **Monitoring**: Metrics (MetricsPro) · Workers (WorkersPro) · Logs
   (LogsPro) · Alerts.
 - **Control**: Server · Add Job · Bulk Add · Job Inspector · Queue Control ·
@@ -105,7 +112,8 @@ single-queue triage surface.
 | `/webhooks` | `Webhooks` | Create (URL, optional queue scope, optional HMAC secret, event checkboxes from `WEBHOOK_EVENTS`), list with success/failure counts and last-triggered, enable/disable toggle, delete (confirmed). |
 | `/diagnostics` | `Diagnostics` | Health/version/uptime/disk cards, a manual Ping button (round-trip ms), WS/SSE client counts, storage error, memory (heap/RSS), lifetime totals. |
 | `/benchmark` | `Benchmark` | Interactive load benchmark on a random per-tab queue, with empty-queue safety preflight, exact run-id accounting, foreign-job restoration, presets, live throughput chart and run history. |
-| `/flows` | `Flows` | Client-side DAG visualizer for a job flow (parent/children/dependsOn) with its own layout engine (`lib/flowLayout.ts`, no graph library). |
+| `/flows` | `Flows` | Three-part Flow console: HTTP DAG explorer; all five official `FlowProducer` creation methods; safe Flow Job inspections, dependency/result reads, bounded wait, and durable mutations through the managed TCP adapter. |
+| `/workflows` | `Workflows` | Temporal-style command centre over Bunqueue's persisted Workflow Engine state, with live Engine start/recover/reload controls. Dedicated routes provide execution exploration, durable signals, saga compensation, and terminal archive/cleanup. |
 | `/database` | `Database` | Read-only SQLite inspector over the agent: tables, schema/indexes/DDL, sortable + filterable data grid, row detail drawer, and a query runner (SELECT-only allowlist, 500-row cap, history, EXPLAIN, CSV/JSON export). |
 | `/mcp` | `McpServer` | Static setup/reference guide for the `bunqueue-mcp` stdio MCP server: config snippets with copy buttons, not a live monitor. |
 
@@ -120,7 +128,7 @@ single-queue triage surface.
 | `/logs` | `LogsPro` | Paginated, filterable (queue/status/search) view over the same live SSE stream `useActivityStream` drives on `OverviewPro`, a fuller UI over the identical 250-event ring buffer, not a separate data source. |
 | `/workers` | `WorkersPro` | Registered-workers table over `bq.workers()`, with active/stale status and confirmed registry cleanup only for stale workers reporting zero active jobs. The cleanup does not stop the process. Caps at 100 rows with a truncation hint. |
 | `/usage` | `UsagePro` | Cumulative totals, error rate, runtime, and an honest Storage health card from `bq.storage()` (red "Disk full, writes suspended" when `diskFull`). Renders uptime correctly (`stats.uptime` is ms). |
-| `/s3` | `S3BackupPro` | Local-only (`s3Store`) form to assemble S3-compatible backup settings; bunqueue OSS reads these from **server environment variables**, so this page cannot push them to the server. "Test Connection" calls `bq.storage()`; "Backup Now" is permanently disabled (no server endpoint). |
+| `/s3` | `S3BackupPro` | S3-compatible environment builder plus live Bunqueue 2.8.57 CLI status/list/backup operations. The agent applies only whitelisted `S3_*` keys and permits restore only while stopped with typed confirmation and an unchanged database snapshot. |
 
 ## Alerts (client-side)
 

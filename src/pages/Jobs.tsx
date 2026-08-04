@@ -1,122 +1,36 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
 import { SegmentedControl, Select } from '@/components/ui/form';
 import { IconSearch } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
-import { StatusBadge } from '@/components/ui/StatusBadge';
 import { api } from '@/lib/api';
 import { bq } from '@/lib/bq';
-import { FLOW_DELETION_UNAVAILABLE } from '@/lib/flowMutationSafety';
-import {
-  errorRate,
-  formatDuration,
-  formatNumber,
-  formatPercent,
-  formatRelativeTime,
-  jobDuration,
-} from '@/lib/format';
+import { errorRate, formatNumber, formatPercent } from '@/lib/format';
 import { settledPool } from '@/lib/promisePool';
-import type { Job, QueuesResponse } from '@/lib/types';
+import type { Job } from '@/lib/types';
 import { usePolledData } from '@/lib/usePolledData';
+import { ClassicJobsTable } from './jobs/ClassicJobsTable';
+import {
+  ALL_QUEUES,
+  DISPLAY_LIMIT,
+  discoverAllQueues,
+  JOB_STATUS,
+  JOBS_PER_QUEUE,
+  type JobsLoad,
+  jobDataName,
+  MAX_ALL_QUEUE_JOB_FANOUT,
+  type StatusFilter,
+} from './jobs/classicJobsData';
 
-const ALL = '__all__';
-const STATUS = ['all', 'waiting', 'active', 'completed', 'failed'] as const;
-type StatusFilter = (typeof STATUS)[number];
-const QUEUE_PAGE_SIZE = 500;
-const JOBS_PER_QUEUE = 40;
+export { discoverAllQueues, jobDataName, MAX_ALL_QUEUE_JOB_FANOUT } from './jobs/classicJobsData';
+
 const JOB_FANOUT = 8;
-const DISPLAY_LIMIT = 100;
-/**
- * Bunqueue v2.8.55 has no cross-queue job-list endpoint. Refuse an unbounded
- * "All Queues" refresh instead of turning 10k discovered queues into 10k HTTP
- * requests every 15 seconds merely to render 100 rows.
- */
-export const MAX_ALL_QUEUE_JOB_FANOUT = 100;
-const MAX_QUEUE_PAGES = 20;
-const MAX_DISCOVERED_QUEUES = QUEUE_PAGE_SIZE * MAX_QUEUE_PAGES;
-
-type JobsLoad = {
-  scopeKey: string;
-  jobs: Job[];
-  failures: { queue: string; message: string }[];
-  queueCount: number;
-  blockedReason: string | null;
-};
-
-function validateQueuePage(
-  page: QueuesResponse,
-  requestedOffset: number,
-  expectedTotal: number | null
-): void {
-  if (
-    page == null ||
-    typeof page !== 'object' ||
-    page.ok !== true ||
-    !Array.isArray(page.queues) ||
-    !Number.isSafeInteger(page.total) ||
-    page.total < 0 ||
-    page.total > MAX_DISCOVERED_QUEUES ||
-    (expectedTotal !== null && page.total !== expectedTotal) ||
-    page.offset !== requestedOffset ||
-    page.limit !== QUEUE_PAGE_SIZE ||
-    page.queues.length !== Math.min(QUEUE_PAGE_SIZE, page.total - requestedOffset) ||
-    page.queues.length > QUEUE_PAGE_SIZE ||
-    page.queues.some(
-      (row) =>
-        row == null ||
-        typeof row !== 'object' ||
-        typeof row.name !== 'string' ||
-        row.name.length === 0 ||
-        row.name.length > 256 ||
-        !/^[a-zA-Z0-9_\-.:]+$/.test(row.name)
-    )
-  ) {
-    throw new Error('Queue discovery returned a malformed or unsafe page');
-  }
-}
-
-export async function discoverAllQueues(): Promise<QueuesResponse> {
-  const first = await api.queues(QUEUE_PAGE_SIZE, 0);
-  validateQueuePage(first, 0, null);
-  const queues = [...first.queues];
-  const names = new Set<string>();
-  for (const row of queues) {
-    if (names.has(row.name))
-      throw new Error(`Queue discovery returned duplicate queue ${row.name}`);
-    names.add(row.name);
-  }
-  const total = first.total;
-  let pageCount = 1;
-  while (queues.length < total) {
-    if (pageCount >= MAX_QUEUE_PAGES || queues.length >= MAX_DISCOVERED_QUEUES) {
-      throw new Error(`Queue discovery exceeds the safety limit of ${MAX_DISCOVERED_QUEUES}`);
-    }
-    const offset = queues.length;
-    const page = await api.queues(QUEUE_PAGE_SIZE, offset);
-    validateQueuePage(page, offset, total);
-    for (const row of page.queues) {
-      if (names.has(row.name)) {
-        throw new Error(`Queue discovery pages overlap at queue ${row.name}`);
-      }
-      names.add(row.name);
-      queues.push(row);
-    }
-    pageCount += 1;
-  }
-  return { ...first, queues, total, limit: queues.length, offset: 0 };
-}
-
-export function jobDataName(data: unknown): string | null {
-  if (data == null || typeof data !== 'object' || Array.isArray(data)) return null;
-  const name = (data as Record<string, unknown>).name;
-  return typeof name === 'string' && name.length > 0 ? name : null;
-}
 
 export function Jobs() {
   const [params] = useSearchParams();
-  const [queue, setQueue] = useState(params.get('queue') ?? ALL);
+  const [queue, setQueue] = useState(params.get('queue') ?? ALL_QUEUES);
   const [status, setStatus] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
 
@@ -138,9 +52,9 @@ export function Jobs() {
     async (signal: AbortSignal): Promise<JobsLoad | null> => {
       // Do not publish a fake empty result while all-queue discovery is pending.
       // `scopeKey` changes when discovery lands, which immediately re-runs this load.
-      if (queue === ALL && !qs) return null;
-      const names = queue === ALL ? queueNames : [queue];
-      if (queue === ALL && names.length > MAX_ALL_QUEUE_JOB_FANOUT) {
+      if (queue === ALL_QUEUES && !qs) return null;
+      const names = queue === ALL_QUEUES ? queueNames : [queue];
+      if (queue === ALL_QUEUES && names.length > MAX_ALL_QUEUE_JOB_FANOUT) {
         return {
           scopeKey,
           jobs: [],
@@ -221,12 +135,12 @@ export function Jobs() {
     activeLoad.queueCount > 0 &&
     activeLoad.failures.length === activeLoad.queueCount;
   const initialJobsLoading =
-    (queue === ALL && !qs && !queuesError) || (loading && !activeLoad && !jobsError);
+    (queue === ALL_QUEUES && !qs && !queuesError) || (loading && !activeLoad && !jobsError);
 
   let emptyMessage = 'No jobs found.';
   if (activeLoad?.blockedReason) {
     emptyMessage = activeLoad.blockedReason;
-  } else if (queue === ALL && queuesError && !qs) {
+  } else if (queue === ALL_QUEUES && queuesError && !qs) {
     emptyMessage = `Queue discovery unavailable — ${queuesError.message}`;
   } else if (jobsError && !activeLoad) {
     emptyMessage = `Could not load jobs — ${jobsError.message}`;
@@ -321,7 +235,7 @@ export function Jobs() {
             autoComplete="off"
             onChange={(e) => setQueue(e.target.value)}
           >
-            <option value={ALL}>All Queues</option>
+            <option value={ALL_QUEUES}>All Queues</option>
             {(qs?.queues ?? []).map((q) => (
               <option key={q.name} value={q.name}>
                 {q.name}
@@ -329,7 +243,7 @@ export function Jobs() {
             ))}
           </Select>
         </div>
-        <SegmentedControl options={STATUS} value={status} onChange={setStatus} />
+        <SegmentedControl options={JOB_STATUS} value={status} onChange={setStatus} />
         <div className="relative ml-auto min-w-56 flex-1 md:max-w-xs">
           <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
           <input
@@ -346,7 +260,7 @@ export function Jobs() {
 
       {activeLoad && !activeLoad.blockedReason && (
         <p role="status" className="mb-3 text-xs text-faint">
-          {queue === ALL
+          {queue === ALL_QUEUES
             ? `Queried all ${formatNumber(activeLoad.queueCount)} discovered queues`
             : `Queried ${queue}`}{' '}
           · up to {JOBS_PER_QUEUE} recent jobs per queue
@@ -359,69 +273,7 @@ export function Jobs() {
       {initialJobsLoading ? (
         <LoadingState label="Loading jobs…" />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-                <th className="px-5 py-3 font-medium">Job ID</th>
-                <th className="px-5 py-3 font-medium">Name</th>
-                <th className="px-5 py-3 font-medium">Queue</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 text-right font-medium">Priority</th>
-                <th className="px-5 py-3 text-right font-medium">Created</th>
-                <th className="px-5 py-3 text-right font-medium">Duration</th>
-                <th className="w-12 px-5 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-sm text-faint">
-                    {emptyMessage}
-                  </td>
-                </tr>
-              ) : (
-                rows.map((j) => (
-                  <tr
-                    key={`${j.queue}:${j.id}`}
-                    className="border-b border-line last:border-0 hover:bg-surface-2/40"
-                  >
-                    <td className="px-5 py-3 font-mono text-xs">
-                      <Link
-                        to={`/job?id=${encodeURIComponent(j.id)}`}
-                        className="text-accent/90 hover:text-accent hover:underline"
-                        title={`Inspect job ${j.id}`}
-                      >
-                        {j.id}
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3 text-fg">
-                      {j.name ?? jobDataName(j.data) ?? 'default'}
-                    </td>
-                    <td className="px-5 py-3 font-mono text-xs text-muted">{j.queue}</td>
-                    <td className="px-5 py-3">
-                      <StatusBadge status={String(j.state ?? j.status ?? 'waiting')} />
-                    </td>
-                    <td className="px-5 py-3 text-right tnum text-muted">{j.priority ?? 0}</td>
-                    <td className="px-5 py-3 text-right text-faint">
-                      {formatRelativeTime(j.createdAt)}
-                    </td>
-                    <td className="px-5 py-3 text-right tnum text-muted">
-                      {formatDuration(
-                        jobDuration(j.startedAt ?? undefined, j.completedAt ?? undefined)
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-right">
-                      <span className="text-xs text-faint" title={FLOW_DELETION_UNAVAILABLE}>
-                        Delete unavailable
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <ClassicJobsTable rows={rows} emptyMessage={emptyMessage} />
       )}
     </div>
   );

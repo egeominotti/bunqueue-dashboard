@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { createResilientStateStorage } from './resilientStateStorage';
 
 export interface ConnectionSaveResult {
   persisted: boolean;
@@ -187,117 +188,13 @@ function persistenceResult(): ConnectionSaveResult {
   return { persisted: false, error: `${name}${lastPersistenceError.message}` };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-/**
- * Canonicalize the raw Zustand envelope before hydration. Returning a separate
- * hydration value preserves the original version so Zustand can still run its
- * migration path, while the browser blob is immediately rewritten at the
- * current version even for same-version and unversioned legacy entries.
- */
-function sanitizeStoredEnvelope(raw: string): {
-  hydration: string;
-  canonical: string;
-} | null {
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    const envelope = isRecord(parsed) ? parsed : {};
-    const rawState = 'state' in envelope ? envelope.state : envelope;
-    const state = sanitizedPersistedConnectionState(rawState);
-    const version = typeof envelope.version === 'number' ? envelope.version : undefined;
-    return {
-      hydration: JSON.stringify({ state, ...(version === undefined ? {} : { version }) }),
-      canonical: JSON.stringify({ state, version: CONNECTION_STORAGE_VERSION }),
-    };
-  } catch (error) {
-    recordPersistenceError(error);
-    return null;
-  }
-}
-
-function browserStorage(reportUnavailable = false): Storage | null {
-  try {
-    const storage = (globalThis as { localStorage?: Storage }).localStorage;
-    if (!storage && reportUnavailable) {
-      recordPersistenceError(new Error('localStorage is unavailable'));
-    }
-    return storage ?? null;
-  } catch (error) {
-    recordPersistenceError(error);
-    return null;
-  }
-}
-
-/**
- * localStorage is optional durability, never part of the in-memory commit.
- * Every method absorbs SecurityError/QuotaExceededError so Zustand setters
- * cannot throw after mutating state. Reads also rewrite the canonical envelope
- * directly, avoiding a setState/rehydrate loop.
- */
-const resilientStateStorage: StateStorage = {
-  getItem(name) {
-    const storage = browserStorage();
-    if (!storage) return null;
-    let raw: string | null;
-    try {
-      raw = storage.getItem(name);
-    } catch (error) {
-      recordPersistenceError(error);
-      return null;
-    }
-    if (raw === null || name !== CONNECTION_STORAGE_KEY) return raw;
-    const sanitized = sanitizeStoredEnvelope(raw);
-    if (!sanitized) {
-      try {
-        storage.removeItem(name);
-      } catch (error) {
-        recordPersistenceError(error);
-      }
-      return null;
-    }
-    if (raw !== sanitized.canonical) {
-      try {
-        storage.setItem(name, sanitized.canonical);
-      } catch (error) {
-        recordPersistenceError(error);
-        // A quota/policy error must not leave the historical envelope — which
-        // may still contain token/agentToken fields — at rest. Deleting
-        // the legacy blob is a safer fallback than preserving plaintext
-        // credentials. Hydration still receives only the scrubbed projection.
-        try {
-          storage.removeItem(name);
-        } catch (removeError) {
-          // Keep this fail-closed too: no untrusted field is returned to
-          // Zustand even when browser policy prevents both rewrite and delete.
-          recordPersistenceError(removeError);
-        }
-      }
-    }
-    return sanitized.hydration;
-  },
-  setItem(name, value) {
-    // Missing storage is normal during SSR hydration, but a user-initiated
-    // write must report that it only committed to this in-memory session.
-    const storage = browserStorage(true);
-    if (!storage) return;
-    try {
-      storage.setItem(name, value);
-    } catch (error) {
-      recordPersistenceError(error);
-    }
-  },
-  removeItem(name) {
-    const storage = browserStorage();
-    if (!storage) return;
-    try {
-      storage.removeItem(name);
-    } catch (error) {
-      recordPersistenceError(error);
-    }
-  },
-};
+const resilientStateStorage = createResilientStateStorage({
+  key: CONNECTION_STORAGE_KEY,
+  version: CONNECTION_STORAGE_VERSION,
+  sanitizeState: sanitizedPersistedConnectionState,
+  onError: recordPersistenceError,
+  reportMissingWrites: true,
+});
 
 const connectionStorage = createJSONStorage(() => resilientStateStorage);
 

@@ -19,16 +19,42 @@ description: "How the bunqueue dashboard fits together: the React SPA, its polli
 │    useThroughputSeries()   ── 1s tick ───► bq.overview()            │
 │    stores/: theme · connection · alerts · s3 (Zustand + persist)   │
 └───────────┬──────────────────────────────┬────────────────────────┘
-            │ HTTP /api (proxy → :6790)     │ /control (→ :6800)
+            │ HTTP /api (proxy → :6790)     │ /agent (→ :6800)
             ▼                               ▼
    ┌─────────────────┐            ┌───────────────────────┐
    │ bunqueue server │            │ control agent (Bun)   │
    │  HTTP :6790     │◄──spawn────│  ProcessManager       │
-   │  SSE /events    │   /health  │  binds 127.0.0.1:6800 │
+   │  SSE /events    │   /health  │  public client + CLI  │
    └─────────────────┘            └───────────────────────┘
 ```
 
 ## Components
+
+### Feature-slice architecture
+
+New operational surfaces use a small hexagonal (ports-and-adapters) feature
+slice instead of importing transport code inside React components:
+
+```text
+src/features/<capability>/
+├── domain/          # pure state, traversal, validation and selection rules
+├── application/     # repository ports and use-case orchestration
+├── infrastructure/  # Bunqueue HTTP/agent adapters and response validation
+└── ui/              # views and interaction state
+```
+
+Workflow, Job Flow, Queue SDK, and S3 operations follow this boundary. Tests
+inject repository ports into the UI and fake runtime ports into agent routes;
+real E2E scripts exercise the same adapters against a disposable Bunqueue
+2.8.57 process. Non-idempotent commands use synchronous leases, while reads
+carry a target/request generation so a late response cannot cross a server,
+queue, workflow, or form retarget.
+
+The agent also owns one shared lifecycle gate across its local and bridged
+handlers. Workflow commands parse bounded input first, then atomically recheck
+the managed process state and generation before touching the Engine. Stop and
+restart close that Engine inside the same gate, so a slow request cannot revive
+runtime resources after the managed server has transitioned.
 
 - **Router & layout**, `App.tsx` declares every route (see
   [pages.md](pages.md) for the full, verified table, several routes'
@@ -79,23 +105,25 @@ flowchart LR
   S <-->|"stream job events"| E
   W -->|"POST / PUT / DELETE, then refetch"| H
   W -.->|"start / stop / restart"| A
+  W -.->|"Flow / Workflow / backup"| A
+  A -->|"public TCP client"| Proc
   A -->|"spawn / signal"| Proc
   Proc --- H
   Proc --- E
 ```
 
-- **Polling.** `usePolledData(fetcher, deps)` runs the fetcher immediately and
-  every `connectionStore.refreshMs` ms, keeping the last good value while
-  refreshing (no flicker) and never calling `setState` after unmount. It has
-  no per-request sequence guard, see [known-issues.md](known-issues.md) for
-  the resulting (self-healing, non-corrupting) race on rapid filter changes.
+- **Polling.** `usePolledData(fetcher, deps)` runs immediately, then schedules
+  the next tick only after the current request settles. Dependency/server/token
+  generations hide the previous view synchronously, abort obsolete work, and
+  discard late results. The last good snapshot remains visible on a same-scope
+  refresh error, while identical serialized snapshots avoid a React re-render.
 - **Live activity.** `useActivityStream(queue?)` streams SSE from `/events`
   (or `/events/queues/:q`) via a fetch-based reader (`lib/sse.ts`) that
   supports a bearer token, unlike `EventSource`. It keeps a bounded ring
   buffer of recent events (`MAX_EVENTS = 250`), cumulative counters, and a
   rolling 5s throughput. Powers `OverviewPro`'s Recent Activity and both
-  `LogsPro`/`Logs`. See known-issues.md for two verified gaps in its
-  `connected` state and reconnect behaviour.
+  `LogsPro`/`Logs`; any delivered frame proves liveness, and a clean stream end
+  reconnects with bounded backoff.
 - **Throughput sampling.** `useThroughputSeries(windowSize=60)` is
   independent of both of the above, it ticks on its own 1-second
   `setInterval`, calling `bq.overview()` each time and appending

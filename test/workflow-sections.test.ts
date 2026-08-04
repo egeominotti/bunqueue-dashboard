@@ -21,8 +21,8 @@ describe('dedicated Workflow navigation', () => {
     expect(workflowSectionFor('/workflows/executions')).toMatchObject({
       kind: 'active',
       state: '',
-      lockKind: true,
     });
+    expect(workflowSectionFor('/workflows/executions').lockKind).toBeUndefined();
     expect(workflowSectionFor('/workflows/waiting')).toMatchObject({
       kind: 'active',
       state: 'waiting',
