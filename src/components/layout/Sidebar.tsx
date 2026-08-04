@@ -40,7 +40,17 @@ export const NAV: NavGroup[] = [
       { to: '/jobs', label: 'Jobs', icon: IconJobs, end: true },
       { to: '/dlq', label: 'Dead Letter Queue', icon: IconDlq },
       { to: '/cron', label: 'Cron Jobs', icon: IconCron },
-      { to: '/flows', label: 'Flows', icon: IconArrowRight },
+    ],
+  },
+  {
+    section: 'Workflow',
+    items: [
+      { to: '/workflows', label: 'Overview', icon: IconOverview, end: true },
+      { to: '/flows', label: 'Job Flows', icon: IconArrowRight, end: true },
+      { to: '/workflows/executions', label: 'Executions', icon: IconJobs, end: true },
+      { to: '/workflows/waiting', label: 'Waiting & Signals', icon: IconCron, end: true },
+      { to: '/workflows/compensation', label: 'Compensation', icon: IconDlq, end: true },
+      { to: '/workflows/archive', label: 'Archive', icon: IconDatabase, end: true },
     ],
   },
   {

@@ -417,6 +417,9 @@ export function DlqPro() {
                   Job ID
                 </th>
                 <th scope="col" className="px-5 py-3 font-medium">
+                  Name
+                </th>
+                <th scope="col" className="px-5 py-3 font-medium">
                   Reason
                 </th>
                 <th scope="col" className="px-5 py-3 font-medium">
@@ -441,6 +444,9 @@ export function DlqPro() {
                     >
                       {e.job.id}
                     </Link>
+                  </td>
+                  <td className="px-5 py-3 font-mono text-xs text-muted">
+                    {e.job.name ?? 'default'}
                   </td>
                   <td className="px-5 py-3">
                     <span className="rounded-md bg-red-500/10 px-2 py-0.5 text-xs text-danger">

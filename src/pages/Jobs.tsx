@@ -395,7 +395,9 @@ export function Jobs() {
                         {j.id}
                       </Link>
                     </td>
-                    <td className="px-5 py-3 text-fg">{jobDataName(j.data) ?? 'unnamed'}</td>
+                    <td className="px-5 py-3 text-fg">
+                      {j.name ?? jobDataName(j.data) ?? 'default'}
+                    </td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">{j.queue}</td>
                     <td className="px-5 py-3">
                       <StatusBadge status={String(j.state ?? j.status ?? 'waiting')} />

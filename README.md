@@ -90,7 +90,7 @@ The full dashboard running on sample data, no server needed.
 bunqueue exposes a rich HTTP API, but operating it by hand (curl, ad-hoc scripts) is slow and
 error-prone. This dashboard is a production-oriented operator console: it exposes the verified,
 safe subset of the API, fails closed where
-[v2.8.55](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.55) lacks atomic
+[v2.8.57](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.57) lacks atomic
 flow-safety guarantees, and also manages the
 server *process* through a separate guarded agent.
 
@@ -112,7 +112,7 @@ never imports or modifies bunqueue itself, so it tracks any bunqueue server you 
 | **Ops** | Control ▸ Diagnostics | Health, ping, storage, memory, connections, totals |
 | **Browse** | Queues / Jobs / DLQ / Cron / Metrics / Workers / Logs | Read-only browsing with basic actions |
 
-> Job actions are gated by the v2.8.55 flow contract. Every DLQ retry and completed-job requeue is
+> Job actions are gated by the v2.8.57 flow contract. Every DLQ retry and completed-job requeue is
 > unavailable: the DLQ GET + POST sequence has no atomic generation/state/topology precondition and
 > can target a job recreated under the same ID, while `retryCompleted` does not rebuild dependency
 > registration or flow order. Cancel, Discard, Drain, Clean, Obliterate and DLQ Purge also fail

@@ -147,7 +147,7 @@ export const api = {
   // strict:false — `ok` here is a semantic status flag (disk-full → ok:false at
   // HTTP 200 is data, not a request failure), so it must not throw.
   storage: () => request<{ ok: boolean; data: StorageStatus }>('/storage', undefined, false),
-  // Disk-full is a diagnostic state, not a transport failure: bunqueue v2.8.55
+  // Disk-full is a diagnostic state, not a transport failure: bunqueue v2.8.57
   // returns its structured health payload with HTTP 503 in that state.
   health: () => request<Record<string, unknown>>('/health', undefined, false, [503]),
 
@@ -173,7 +173,7 @@ export const api = {
     post(`/queues/${q(queue)}/clean`, { grace, limit }),
   retryCompleted: (_queue: string): never => {
     throw new TypeError(
-      'Completed-job requeue is unavailable in Bunqueue v2.8.55 because flow dependency registration is not rebuilt.'
+      'Completed-job requeue is unavailable in Bunqueue v2.8.57 because flow dependency registration is not rebuilt.'
     );
   },
 
@@ -194,7 +194,7 @@ export const api = {
     request<{ ok: boolean; stats: DlqStats }>(`/queues/${q(queue)}/dlq/stats`),
   retryDlq: (_queue: string): never => {
     throw new TypeError(
-      'DLQ retry is unavailable in Bunqueue v2.8.55 because the endpoint has no atomic flow-safety precondition.'
+      'DLQ retry is unavailable in Bunqueue v2.8.57 because the endpoint has no atomic flow-safety precondition.'
     );
   },
   purgeDlq: (queue: string) => post(`/queues/${q(queue)}/dlq/purge`),

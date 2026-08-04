@@ -15,6 +15,27 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.35] - 2026-08-04
+
+### Added
+
+- Added Bunqueue v2.8.57 first-class job names to single enqueue, clone,
+  scheduler creation, job lists, queue details, DLQ views and the inspector.
+- Added a dedicated Workflow menu area with Overview, Job Flows, Executions,
+  Waiting & Signals, Compensation and Archive sections for durable steps, decisions,
+  nested runs and saga rollback outcomes, backed by a bounded read-only
+  MessagePack/SQLite agent adapter.
+
+### Changed
+
+- Updated the verified server contract and demo fixtures from Bunqueue v2.8.55
+  to v2.8.57, including cron `jobName` and embedded job `returnvalue` /
+  `failedReason` fields.
+- Server Control now starts the verified Bunqueue 2.8.57 release by default via
+  `bunx bunqueue@2.8.57 start`; `BUNQUEUE_START_CMD` still overrides it.
+- Job Inspector now uses the terminal result embedded by v2.8.57 and falls back
+  to the legacy result endpoint only when connected to an older server.
+
 ## [0.0.34] - 2026-08-03
 
 - Fixed the GitHub Pages demo queue-summary fixture to include the v2.8.55
@@ -1000,7 +1021,9 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.33...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.35...HEAD
+[0.0.35]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.34...v0.0.35
+[0.0.34]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.33...v0.0.34
 [0.0.33]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.32...v0.0.33
 [0.0.32]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.31...v0.0.32
 [0.0.31]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.30...v0.0.31

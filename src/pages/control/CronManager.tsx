@@ -144,7 +144,7 @@ export function CronManager() {
         <CronForm
           existingNames={existingNames}
           onCreate={async (body, isCurrent) => {
-            // v2.8.55 POST /crons is an upsert, not create-only. Recheck as
+            // v2.8.57 POST /crons is an upsert, not create-only. Recheck as
             // close as possible to the mutation so a stale poll cannot make
             // this form overwrite an existing definition's hidden fields.
             const latest = await bq.crons();
@@ -179,6 +179,9 @@ export function CronManager() {
                     Queue
                   </th>
                   <th scope="col" className="px-5 py-3 font-medium">
+                    Job name
+                  </th>
+                  <th scope="col" className="px-5 py-3 font-medium">
                     Schedule
                   </th>
                   <th scope="col" className="px-5 py-3 font-medium">
@@ -198,6 +201,9 @@ export function CronManager() {
                   >
                     <td className="px-5 py-3 font-medium text-fg">{c.name}</td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">{c.queue}</td>
+                    <td className="px-5 py-3 font-mono text-xs text-muted">
+                      {c.jobName ?? 'default'}
+                    </td>
                     <td className="px-5 py-3 font-mono text-xs text-muted">
                       {c.schedule ?? (c.repeatEvery ? `every ${c.repeatEvery}ms` : '—')}
                     </td>
@@ -258,7 +264,7 @@ export function assertCronCreateResponse(response: unknown, expected: CreateCron
 }
 
 const cronAlreadyExistsMessage = (name: string) =>
-  `Cron "${name}" already exists. Bunqueue v2.8.55 does not return complete cron definitions, so editing could reset hidden options. Delete it explicitly, wait for the list to refresh, then create the replacement as a separate action.`;
+  `Cron "${name}" already exists. Bunqueue v2.8.57 does not return complete cron definitions, so editing could reset hidden options. Delete it explicitly, wait for the list to refresh, then create the replacement as a separate action.`;
 
 export function existingCronNameError(
   name: string,
@@ -312,6 +318,7 @@ function everyPreview(raw: string): string | null {
 
 export interface CronFormValues {
   name: string;
+  jobName?: string;
   queue: string;
   mode: 'cron' | 'every';
   schedule: string;
@@ -364,6 +371,10 @@ export function buildCronBody(
   if (invalidName) return { ok: false, msg: invalidName };
   const invalidQueue = queueNameError(queue);
   if (invalidQueue) return { ok: false, msg: invalidQueue };
+  const jobName = values.jobName?.trim() || 'default';
+  if (jobName.length > 256) {
+    return { ok: false, msg: 'Spawned job name must be 256 characters or fewer' };
+  }
 
   let data: unknown = {};
   if (values.dataText.trim()) {
@@ -382,6 +393,7 @@ export function buildCronBody(
 
   const body: CreateCronBody = {
     name,
+    jobName,
     queue,
     data,
     preventOverlap: values.preventOverlap,
@@ -393,7 +405,7 @@ export function buildCronBody(
     const schedule = values.schedule.trim();
     if (!schedule) return { ok: false, msg: 'Cron expression required' };
     // The local preview intentionally implements only five-field cron. Croner,
-    // used by v2.8.55, also accepts six fields and shortcuts such as @hourly.
+    // used by v2.8.57, also accepts six fields and shortcuts such as @hourly.
     // Rejecting on preview failure would therefore block valid server input.
     body.schedule = schedule;
   } else {
@@ -523,6 +535,7 @@ function CronForm({
   existingNames: ReadonlySet<string>;
 }) {
   const [name, setName] = useState('');
+  const [jobName, setJobName] = useState('default');
   const [queue, setQueue] = useState('');
   const [mode, setMode] = useState<'cron' | 'every'>('cron');
   const [schedule, setSchedule] = useState('');
@@ -531,7 +544,7 @@ function CronForm({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [timezone, setTimezone] = useState('');
   const [priority, setPriority] = useState('');
-  // Mirrors v2.8.55 defaults; always submit these booleans so the rendered
+  // Mirrors v2.8.57 defaults; always submit these booleans so the rendered
   // switches and the stored schedule cannot disagree.
   const [preventOverlap, setPreventOverlap] = useState(true);
   const [skipIfNoWorker, setSkipIfNoWorker] = useState(false);
@@ -573,6 +586,7 @@ function CronForm({
     resetCreated();
     const built = buildCronBody({
       name,
+      jobName,
       queue,
       mode,
       schedule,
@@ -609,7 +623,7 @@ function CronForm({
     }
     if (
       !window.confirm(
-        `Submit an upsert for cron "${body.name}"? Bunqueue v2.8.55 has no atomic create-only condition. The dashboard will recheck immediately before writing, but another client using the same name at the same time could still be replaced. Continue only if you authorize last-writer-wins behavior for this globally unique name.`
+        `Submit an upsert for cron "${body.name}"? Bunqueue v2.8.57 has no atomic create-only condition. The dashboard will recheck immediately before writing, but another client using the same name at the same time could still be replaced. Continue only if you authorize last-writer-wins behavior for this globally unique name.`
       )
     )
       return;
@@ -661,6 +675,19 @@ function CronForm({
             value={queue}
             onChange={(e) => setQueue(e.target.value)}
             placeholder="reports"
+          />
+        </Field>
+        <Field
+          label="Spawned job name"
+          hint="First-class worker routing name; separate from schedule data."
+        >
+          <Input
+            name="cron-job-name"
+            autoComplete="off"
+            maxLength={256}
+            value={jobName}
+            onChange={(e) => setJobName(e.target.value)}
+            placeholder="default"
           />
         </Field>
       </div>

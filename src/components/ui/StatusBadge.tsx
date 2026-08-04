@@ -12,6 +12,12 @@ const STYLES: Record<string, string> = {
   paused: 'text-orange-400 light:text-orange-700 bg-orange-500/10',
   'waiting-children': 'text-cyan-400 light:text-cyan-700 bg-cyan-500/10',
   stalled: 'text-orange-400 light:text-orange-700 bg-orange-500/10',
+  running: 'text-blue-400 light:text-blue-700 bg-blue-500/10',
+  compensating: 'text-violet-400 light:text-violet-700 bg-violet-500/10',
+  'compensation-stuck': 'text-danger bg-red-500/10',
+  compensated: 'text-success bg-emerald-500/10',
+  'compensation-failed': 'text-danger bg-red-500/10',
+  'compensation-skipped': 'text-warning bg-amber-500/10',
   // Timeline event names (JobTimeline) — distinct, not all-gray.
   enqueued: 'text-zinc-400 light:text-zinc-600 bg-zinc-500/10',
   started: 'text-blue-400 light:text-blue-700 bg-blue-500/10',

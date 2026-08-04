@@ -7,6 +7,7 @@ describe('buildCloneState', () => {
     const job: JobFull = {
       id: 'j1',
       queue: 'emails',
+      name: 'send-welcome',
       data: { to: 'a@example.com' },
       priority: 5,
       maxAttempts: 3,
@@ -17,6 +18,7 @@ describe('buildCloneState', () => {
     };
     const { clone } = buildCloneState(job);
     expect(clone.queue).toBe('emails');
+    expect(clone.name).toBe('send-welcome');
     expect(clone.dataText).toBe(JSON.stringify({ to: 'a@example.com' }, null, 2));
     expect(clone.options).toEqual({
       priority: 5,

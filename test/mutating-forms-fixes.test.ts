@@ -88,7 +88,7 @@ describe('AddJob', () => {
     });
     const pattern = parseRepeat('{"pattern":"0 9 * * *"}');
     expect(pattern.ok).toBe(false);
-    if (!pattern.ok) expect(pattern.msg).toContain('unsafe in bunqueue v2.8.55');
+    if (!pattern.ok) expect(pattern.msg).toContain('unsafe in bunqueue v2.8.57');
     expect(parseRepeat('{"every":60000,"pattern":"0 9 * * *"}').ok).toBe(false);
     expect(parseRepeat('{"every":60000,"startDate":123}').ok).toBe(false);
     expect(parseRepeat('[]').ok).toBe(false);
@@ -423,6 +423,7 @@ describe('CronManager request validation', () => {
     if (parsed.ok) {
       expect(parsed.body).toEqual({
         name: 'daily-report',
+        jobName: 'default',
         queue: 'reports',
         data: { report: true },
         preventOverlap: true,

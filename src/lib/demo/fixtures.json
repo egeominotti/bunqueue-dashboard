@@ -3,7 +3,7 @@
     "ok": true,
     "status": "healthy",
     "uptime": 133,
-    "version": "2.8.55",
+    "version": "2.8.57",
     "queues": { "waiting": 13, "active": 2, "delayed": 6, "completed": 4, "dlq": 2 },
     "connections": { "tcp": 0, "ws": 0, "sse": 0 },
     "memory": { "heapUsed": 3, "heapTotal": 4, "rss": 68 }
@@ -103,6 +103,7 @@
       "list": [
         {
           "name": "nightly-report",
+          "jobName": "generate-report",
           "queue": "reports",
           "schedule": "0 2 * * *",
           "repeatEvery": null,
@@ -111,6 +112,7 @@
         },
         {
           "name": "heartbeat",
+          "jobName": "send-heartbeat",
           "queue": "notifications",
           "schedule": null,
           "repeatEvery": 60000,
@@ -205,6 +207,7 @@
     "crons": [
       {
         "name": "nightly-report",
+        "jobName": "generate-report",
         "queue": "reports",
         "schedule": "0 2 * * *",
         "repeatEvery": null,
@@ -215,6 +218,7 @@
       },
       {
         "name": "heartbeat",
+        "jobName": "send-heartbeat",
         "queue": "notifications",
         "schedule": null,
         "repeatEvery": 60000,

@@ -170,7 +170,7 @@ export function Dlq() {
                 >
                   <td className="px-5 py-3 font-mono text-xs text-muted">{e.job.id}</td>
                   <td className="px-5 py-3 text-fg">
-                    {(e.job.data as { name?: string } | undefined)?.name || 'unnamed'}
+                    {e.job.name ?? (e.job.data as { name?: string } | undefined)?.name ?? 'default'}
                   </td>
                   <td className="max-w-md px-5 py-3 text-xs text-red-400/90">
                     {String(e.reason || e.error || '—')}

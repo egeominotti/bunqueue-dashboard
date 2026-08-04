@@ -7,7 +7,14 @@
 export interface JobFull {
   id: string;
   queue?: string;
+  /** First-class job name (Bunqueue protocol v3 / v2.8.57). */
+  name?: string;
   data?: unknown;
+  /** Terminal value embedded by current job read/list endpoints. */
+  returnvalue?: unknown;
+  /** Most recent terminal failure message embedded by current job reads. */
+  failedReason?: string;
+  /** Legacy dashboard alias; new code should prefer returnvalue. */
   result?: unknown;
   priority?: number;
   createdAt?: number;
@@ -132,6 +139,8 @@ export interface WorkerFull {
 
 export interface CronFull {
   name: string;
+  /** Name assigned to every job spawned by this scheduler. */
+  jobName?: string;
   queue: string;
   schedule: string | null;
   repeatEvery: number | null;
@@ -217,4 +226,79 @@ export interface ServerLogLine {
   ts: number;
   stream: 'stdout' | 'stderr' | 'sys';
   line: string;
+}
+
+// ---- Workflow Engine observability (Bunqueue 2.8.57 persisted contract) ----
+export type WorkflowExecutionState =
+  | 'running'
+  | 'waiting'
+  | 'completed'
+  | 'failed'
+  | 'compensating'
+  | 'compensation-stuck';
+
+export type WorkflowStoreKind = 'active' | 'archive';
+export type WorkflowStateFilter = WorkflowExecutionState | 'compensation';
+
+export interface WorkflowExecutionSummary {
+  id: string;
+  workflowName: string;
+  state: WorkflowExecutionState;
+  currentNodeIndex: number;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt?: number;
+  rollbackStatus?: string;
+  failureReason?: string;
+  parentExecutionId?: string;
+  definitionHash?: string;
+}
+
+export interface WorkflowCompensationOutcome {
+  status: 'compensated' | 'compensation-failed' | 'compensation-skipped';
+  at: number;
+  error?: string;
+}
+
+export interface WorkflowStepRecord {
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result?: unknown;
+  error?: string;
+  startedAt?: number;
+  completedAt?: number;
+  attempts?: number;
+  compensatable?: boolean;
+  loopItem?: unknown;
+  loopIndex?: number;
+  compensation?: WorkflowCompensationOutcome;
+  idempotencyKey?: string;
+  childExecutionId?: string;
+  occurrence?: number;
+}
+
+export interface WorkflowExecutionDetail extends WorkflowExecutionSummary {
+  input: unknown;
+  steps: Record<string, WorkflowStepRecord>;
+  resolvedSteps?: string[];
+  signals: Record<string, unknown>;
+  decisions?: Record<string, unknown>;
+  committedAt?: number;
+}
+
+export interface WorkflowStats {
+  ok: boolean;
+  available: boolean;
+  activeTotal: number;
+  archiveTotal: number;
+  states: Record<WorkflowExecutionState, number>;
+  workflowNames: string[];
+}
+
+export interface WorkflowExecutionsPage {
+  ok: boolean;
+  available: boolean;
+  executions: WorkflowExecutionSummary[];
+  total: number;
+  limit: number;
+  offset: number;
 }

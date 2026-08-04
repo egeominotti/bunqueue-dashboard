@@ -276,7 +276,7 @@ export function LimitsCards({
       <Card>
         <CardHeader title="Rate-limit desired state" />
         <p className="mb-3 text-xs text-warning">
-          Bunqueue v2.8.55 has no read endpoint. This blindly replaces an unknown policy; a receipt
+          Bunqueue v2.8.57 has no read endpoint. This blindly replaces an unknown policy; a receipt
           proves only what this dashboard applied at that time.
         </p>
         <div className="flex flex-wrap items-end gap-2">
@@ -371,7 +371,7 @@ export function LimitsCards({
               run(
                 'No rate limit ensured',
                 () => bq.clearRateLimit(queue),
-                `Ensure queue "${queue}" has no rate-limit policy? Bunqueue v2.8.55 cannot report its previous value.`,
+                `Ensure queue "${queue}" has no rate-limit policy? Bunqueue v2.8.57 cannot report its previous value.`,
                 () =>
                   setRateReceipt(
                     `Applied no rate-limit policy at ${new Date().toISOString()}. Current server state cannot be read.`
@@ -396,7 +396,7 @@ export function LimitsCards({
       <Card>
         <CardHeader title="Concurrency desired state" />
         <p className="mb-3 text-xs text-warning">
-          Bunqueue v2.8.55 has no read endpoint. This blindly replaces an unknown policy; a receipt
+          Bunqueue v2.8.57 has no read endpoint. This blindly replaces an unknown policy; a receipt
           proves only what this dashboard applied at that time.
         </p>
         <div className="flex flex-wrap items-end gap-2">
@@ -450,7 +450,7 @@ export function LimitsCards({
               run(
                 'No concurrency limit ensured',
                 () => bq.clearConcurrency(queue),
-                `Ensure queue "${queue}" has no concurrency policy? Bunqueue v2.8.55 cannot report its previous value.`,
+                `Ensure queue "${queue}" has no concurrency policy? Bunqueue v2.8.57 cannot report its previous value.`,
                 () =>
                   setConcurrencyReceipt(
                     `Applied no concurrency policy at ${new Date().toISOString()}. Current server state cannot be read.`

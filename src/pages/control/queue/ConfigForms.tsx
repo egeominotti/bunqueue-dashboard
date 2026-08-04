@@ -409,7 +409,7 @@ export function DlqConfigForm({
           </span>
         </div>
         <p className="col-span-2 text-xs text-warning">
-          Auto-retry can only be disabled. Bunqueue v2.8.55 cannot prove that a DLQ entry has no
+          Auto-retry can only be disabled. Bunqueue v2.8.57 cannot prove that a DLQ entry has no
           hidden reverse flow dependents before a background retry.
         </p>
         <Field label="Retry interval (ms)">

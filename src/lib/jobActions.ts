@@ -6,16 +6,16 @@
  * Mirrors the location-based gating in src/application/operations/jobManagement.ts
  * only where the upstream operation is safe for an HTTP client. `waiting-children`
  * is NOT in the runnable heap, so priority and delay are unavailable there.
- * Cancel and Discard are deliberately unavailable in every state: v2.8.55 cannot
+ * Cancel and Discard are deliberately unavailable in every state: v2.8.57 cannot
  * inspect reverse dependencies or make either transition conditional on the state
  * that the dashboard read. Discard also bypasses terminal flow-failure resolution
  * and accepts a job that became active after the snapshot, which can strand its
  * parent while the worker continues external side effects. DLQ retry is also
  * unavailable: a read followed by retry is subject to id-reuse TOCTOU, and the
  * endpoint has no atomic generation/topology precondition. Completed requeue is
- * unavailable because v2.8.55 does not rebuild a child's dependency registration.
+ * unavailable because v2.8.57 does not rebuild a child's dependency registration.
  *
- * Active state transitions are deliberately absent. Bunqueue v2.8.55 removes
+ * Active state transitions are deliberately absent. Bunqueue v2.8.57 removes
  * the broker processing record but cannot cancel the already-running worker;
  * retry/discard/fail/move-to-delayed can therefore duplicate external side
  * effects. The dashboard only permits the non-transitioning progress update.

@@ -1,13 +1,13 @@
 ---
 title: Job Inspector
-description: "Look up a job, inspect its data, result, errors, logs and history, and run only the mutations authorized by state and the v2.8.55 atomicity policy."
+description: "Look up a job, inspect its data, result, errors, logs and history, and run only the mutations authorized by state and the v2.8.57 atomicity policy."
 ---
 
 # Job Inspector
 
 Look up any single job from one screen: inspect its data, result, error, logs and
 history, edit eligible fields, and run only the actions authorized by both its
-state and the v2.8.55 atomicity policy.
+state and the v2.8.57 atomicity policy.
 
 **Where:** open `/job` from the sidebar.
 
@@ -60,7 +60,7 @@ Every job ID elsewhere in the dashboard (Jobs, DLQ, Activity) links straight to 
 1. Change the JSON in the **Data** card when **Save data** is available.
 2. Click **Save data**. Valid JSON is saved and the job reloads; invalid JSON shows an inline message and nothing is sent.
 
-Flow members are always read-only. Bunqueue v2.8.55 replaces the entire payload
+Flow members are always read-only. Bunqueue v2.8.57 replaces the entire payload
 on update, while FlowProducer stores parent/child topology in reserved payload
 keys; allowing an ordinary edit would make the flow unreadable. Jobs that have
 started processing or left the runnable queue are read-only as well.
@@ -84,7 +84,7 @@ shows an unavailable-requeue notice; neither state exposes a mutation button.
 ::: warning Unsafe state changes fail closed
 Bunqueue cannot stop worker code already processing an active job, so the
 inspector offers only progress there. Cancel/delete/discard is unavailable in
-every state because v2.8.55 has no reverse-dependency check or
+every state because v2.8.57 has no reverse-dependency check or
 expected-state/flow-atomic Discard operation. DLQ retry is unavailable because
 the separate GET + POST has no atomic generation/state/topology precondition;
 completed requeue is unavailable because `retryCompleted` does not restore

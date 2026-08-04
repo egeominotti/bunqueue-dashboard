@@ -272,6 +272,8 @@ function validateRenderableJob(job: Record<string, unknown>, canonical: boolean)
     invalidJobEnvelope('canonical job.state must be a non-empty string');
   }
   validateOptionalString(job, 'state', { nonEmpty: true });
+  validateOptionalString(job, 'name', { nonEmpty: true });
+  validateOptionalString(job, 'failedReason');
   if (canonical && (typeof job.queue !== 'string' || !job.queue.trim())) {
     invalidJobEnvelope('canonical job.queue must be a non-empty string');
   }
@@ -389,7 +391,7 @@ function resultFromEnvelope(value: unknown, expectedId: string): { result: unkno
 }
 
 /**
- * The v2.8.55 custom-id route returns the stored snapshot without resolving its
+ * The v2.8.57 custom-id route returns the stored snapshot without resolving its
  * live state, unlike GET /jobs/:id. Resolve the internal id through the normal
  * endpoint so every inspector panel receives one authoritative JobFull rather
  * than the header guessing "waiting" while the action rail sees "unknown".
@@ -440,6 +442,7 @@ function lastError(job: JobFull): { message: string; attempt?: number; timestamp
       return { message: e.error, attempt: e.attempt, timestamp: e.timestamp };
     }
   }
+  if (job.failedReason) return { message: job.failedReason };
   return null;
 }
 
@@ -588,10 +591,8 @@ export function JobInspector() {
         setParams({}, { replace: true });
         return;
       }
-      // Result is keyed by the resolved internal id — for a custom-id lookup we
-      // only learn it once the job comes back — so fetch it after, best-effort.
-      // Only completed jobs have a stored result (the Result card renders only for
-      // 'completed'), so skip the request for any other state.
+      // Bunqueue 2.8.57 embeds terminal values in canonical job reads. Retain
+      // the legacy result endpoint fallback for older compatible servers.
       let resultRes: { result: unknown } | null = null;
       let resultErr: string | null = null;
       if (
@@ -601,18 +602,21 @@ export function JobInspector() {
       )
         return;
       if (loaded.state === 'completed') {
-        try {
-          const envelope = await lookupGet<unknown>(
-            target,
-            `/jobs/${opaqueHttpPathSegment(loaded.id)}/result`,
-            controller.signal
-          );
-          resultRes = resultFromEnvelope(envelope, loaded.id);
-        } catch (e) {
-          if (controller.signal.aborted) throw e;
-          // Keep it: rendering "No result stored" for a 502 would be a lie.
-          resultErr = (e as Error).message;
-        }
+        if (Object.hasOwn(loaded, 'returnvalue')) {
+          resultRes = { result: loaded.returnvalue };
+        } else
+          try {
+            const envelope = await lookupGet<unknown>(
+              target,
+              `/jobs/${opaqueHttpPathSegment(loaded.id)}/result`,
+              controller.signal
+            );
+            resultRes = resultFromEnvelope(envelope, loaded.id);
+          } catch (e) {
+            if (controller.signal.aborted) throw e;
+            // Keep it: rendering "No result stored" for a 502 would be a lie.
+            resultErr = (e as Error).message;
+          }
       }
       if (
         my !== lookupGen.current ||
@@ -981,6 +985,7 @@ export function JobInspector() {
               </div>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
                 <Kv k="Priority" v={String(job.priority ?? 0)} />
+                <Kv k="Name" v={job.name ?? 'default'} />
                 <Kv k="Attempts" v={`${job.attempts ?? 0} / ${job.maxAttempts ?? '?'}`} />
                 <Kv k="Progress" v={`${job.progress ?? 0}%`} />
                 <Kv k="Created" v={formatDateTime(job.createdAt)} />

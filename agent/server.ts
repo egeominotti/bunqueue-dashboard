@@ -42,6 +42,14 @@ import {
   queryWithTimeout,
 } from './db';
 import { type ProcessManager, validateConfigPatch } from './manager';
+import {
+  type WorkflowStateFilter,
+  type WorkflowStoreKind,
+  workflowExecution,
+  workflowExecutions,
+  workflowStats,
+  WORKFLOW_STATES,
+} from './workflows';
 
 export interface AgentOptions {
   allowedOrigins: string[];
@@ -239,6 +247,70 @@ export function createFetchHandler(mgr: ProcessManager, opts: AgentOptions) {
       if (pathname === '/control/config' && method === 'PUT') {
         const patch = validateConfigPatch(await req.json());
         return json(mgr.setConfig(patch), 200, origin);
+      }
+
+      // Bunqueue 2.8.57 persists Workflow Engine executions in the same
+      // dataPath. These endpoints are intentionally read-only: control methods
+      // need the live Engine instance and its registered workflow definitions.
+      if (pathname === '/workflows/stats' && method === 'GET') {
+        return json({ ok: true, ...workflowStats(mgr.getConfig().dataPath) }, 200, origin);
+      }
+      if (pathname === '/workflows' && method === 'GET') {
+        const sp = new URL(req.url).searchParams;
+        const allowed = new Set(['kind', 'workflowName', 'state', 'limit', 'offset']);
+        for (const key of sp.keys()) {
+          if (!allowed.has(key)) throw new Error(`Unknown workflow option: ${key}`);
+          if (sp.getAll(key).length !== 1) throw new Error(`Duplicate workflow option: ${key}`);
+        }
+        const kind = sp.get('kind') ?? 'active';
+        if (kind !== 'active' && kind !== 'archive') {
+          throw new Error('Workflow kind must be "active" or "archive"');
+        }
+        const state = sp.get('state') || undefined;
+        if (state && state !== 'compensation' && !(WORKFLOW_STATES as readonly string[]).includes(state)) {
+          throw new Error('Unknown workflow execution state');
+        }
+        const integer = (name: 'limit' | 'offset', fallback: number): number => {
+          const raw = sp.get(name);
+          if (raw === null) return fallback;
+          if (!/^\d+$/.test(raw)) throw new Error(`Workflow ${name} must be an integer`);
+          return Number(raw);
+        };
+        return json(
+          {
+            ok: true,
+            ...workflowExecutions(mgr.getConfig().dataPath, {
+              kind: kind as WorkflowStoreKind,
+              workflowName: sp.get('workflowName') || undefined,
+              state: state as WorkflowStateFilter | undefined,
+              limit: integer('limit', 50),
+              offset: integer('offset', 0),
+            }),
+          },
+          200,
+          origin
+        );
+      }
+      if (pathname.startsWith('/workflows/') && method === 'GET') {
+        const rawId = pathname.slice('/workflows/'.length);
+        if (!rawId || rawId.includes('/')) return json({ ok: false, error: 'Not found' }, 404, origin);
+        const sp = new URL(req.url).searchParams;
+        for (const key of sp.keys()) {
+          if (key !== 'kind') throw new Error(`Unknown workflow detail option: ${key}`);
+          if (sp.getAll(key).length !== 1) throw new Error(`Duplicate workflow detail option: ${key}`);
+        }
+        const kind = sp.get('kind') ?? 'active';
+        if (kind !== 'active' && kind !== 'archive') {
+          throw new Error('Workflow kind must be "active" or "archive"');
+        }
+        const execution = workflowExecution(
+          mgr.getConfig().dataPath,
+          decodeURIComponent(rawId),
+          kind
+        );
+        return execution
+          ? json({ ok: true, execution }, 200, origin)
+          : json({ ok: false, error: 'Workflow execution not found' }, 404, origin);
       }
 
       // Read-only SQLite inspector (agent/db.ts opens every connection

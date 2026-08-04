@@ -67,6 +67,9 @@ const Webhooks = lazy(() =>
 const WorkersPro = lazy(() =>
   import('./pages/control/WorkersPro').then((m) => ({ default: m.WorkersPro }))
 );
+const Workflows = lazy(() =>
+  import('./pages/control/Workflows').then((m) => ({ default: m.Workflows }))
+);
 const Alerts = lazy(() => import('./pages/Alerts').then((m) => ({ default: m.Alerts })));
 const Cron = lazy(() => import('./pages/Cron').then((m) => ({ default: m.Cron })));
 const Dlq = lazy(() => import('./pages/Dlq').then((m) => ({ default: m.Dlq })));
@@ -100,6 +103,11 @@ export function App() {
         <Route path="/cron" element={<CronManager />} />
         <Route path="/cron-classic" element={<Cron />} />
         <Route path="/flows" element={<Flows />} />
+        <Route path="/workflows" element={<Workflows />} />
+        <Route path="/workflows/executions" element={<Workflows />} />
+        <Route path="/workflows/waiting" element={<Workflows />} />
+        <Route path="/workflows/compensation" element={<Workflows />} />
+        <Route path="/workflows/archive" element={<Workflows />} />
         <Route path="/metrics" element={<MetricsPro />} />
         <Route path="/metrics-classic" element={<Metrics />} />
         <Route path="/workers" element={<WorkersPro />} />

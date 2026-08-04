@@ -114,7 +114,7 @@ interface AddJobNumericOptions {
   ttl?: number;
 }
 
-/** Mirror the numeric bounds enforced by bunqueue v2.8.55's PUSH validator. */
+/** Mirror the numeric bounds enforced by bunqueue v2.8.57's PUSH validator. */
 export function parseAddJobNumbers(
   raw: AddJobNumericInput
 ): { ok: true; options: AddJobNumericOptions } | { ok: false; msg: string } {
@@ -152,7 +152,7 @@ export function parseAddJobNumbers(
   return { ok: true, options };
 }
 
-/** Queue names use the same grammar and length enforced by v2.8.55. */
+/** Queue names use the same grammar and length enforced by v2.8.57. */
 export function queueNameError(queue: string): string | null {
   const error = queueHttpPathError(queue);
   return !queue && error ? 'Choose a queue' : error;
@@ -220,7 +220,7 @@ export function acceptedBulkIds(response: unknown, submitted: number): string[] 
 }
 
 /**
- * Parse the optional repeat policy accepted by the v2.8.55 HTTP push route.
+ * Parse the optional repeat policy accepted by the v2.8.57 HTTP push route.
  * Pattern repeats are deliberately refused: that release stores `pattern` but
  * schedules the next job with `every ?? 0`, which can create an immediate hot
  * loop instead of executing the requested cron expression.
@@ -235,7 +235,7 @@ export function parseRepeat(
       return { ok: false, msg: 'Repeat must be a JSON object' };
     }
     const raw = parsed as Record<string, unknown>;
-    // v2.8.55's server-side repeat continuation preserves only `every`,
+    // v2.8.57's server-side repeat continuation preserves only `every`,
     // `limit`, `pattern`, and its internal count. Expose only the two options it
     // executes faithfully; accepting the other public-client fields here would
     // imply behavior the HTTP/server path silently loses after the first run.
@@ -250,7 +250,7 @@ export function parseRepeat(
     if (raw.pattern !== undefined) {
       return {
         ok: false,
-        msg: 'repeat.pattern is unsafe in bunqueue v2.8.55; use repeat.every or a Cron schedule',
+        msg: 'repeat.pattern is unsafe in bunqueue v2.8.57; use repeat.every or a Cron schedule',
       };
     }
     const every = raw.every;
@@ -326,6 +326,7 @@ export function AddJob() {
   const cloneDefaults = addJobCloneDefaults(opts);
 
   const [queue, setQueue] = useState(clone?.queue ?? '');
+  const [name, setName] = useState(clone?.name ?? 'default');
   const [dataText, setDataText] = useState(clone?.dataText ?? '{\n  "hello": "world"\n}');
   const [count, setCount] = useState('1');
 
@@ -371,6 +372,14 @@ export function AddJob() {
     const invalidQueue = queueNameError(target);
     if (invalidQueue) {
       setResult({ ok: false, msg: invalidQueue });
+      return;
+    }
+    const jobName = name.trim();
+    if (!jobName || jobName.length > 256) {
+      setResult({
+        ok: false,
+        msg: 'Job name must be a non-empty string of at most 256 characters',
+      });
       return;
     }
     const parsedData = parseJobData(dataText);
@@ -442,6 +451,7 @@ export function AddJob() {
       return;
     }
     const body: AddJobBody = {
+      name: jobName,
       data: parsed,
       priority: numeric.options.priority,
       delay: effectiveDelay,
@@ -549,6 +559,19 @@ export function AddJob() {
                   <option key={x.name} value={x.name} />
                 ))}
               </datalist>
+            </Field>
+            <Field
+              label="Job name"
+              hint="Worker routing name in Bunqueue 2.8.57; separate from the JSON payload."
+            >
+              <Input
+                name="job-name"
+                autoComplete="off"
+                maxLength={256}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="default"
+              />
             </Field>
             {queueDiscoveryError && (
               <p role="status" className="-mt-2 text-xs text-warning">
@@ -750,7 +773,7 @@ export function AddJob() {
               <div className="col-span-2 md:col-span-3">
                 <Field
                   label="Repeat policy (JSON)"
-                  hint='v2.8.55-safe form: e.g. {"every":60000,"limit":10}. Use Cron Manager for cron patterns.'
+                  hint='v2.8.57-safe form: e.g. {"every":60000,"limit":10}. Use Cron Manager for cron patterns.'
                 >
                   <textarea
                     name="repeat-policy"

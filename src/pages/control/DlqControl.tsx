@@ -311,6 +311,7 @@ export function DlqControl() {
             <thead>
               <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
                 <th className="w-8 py-3 pl-4" />
+                <th className="px-3 py-3 font-medium">Name</th>
                 <th className="px-3 py-3 font-medium">Job ID</th>
                 <th className="px-3 py-3 font-medium">Reason</th>
                 <th className="px-3 py-3 font-medium">Error</th>
@@ -378,6 +379,7 @@ function DlqRow({
             />
           </IconButton>
         </td>
+        <td className="px-3 py-3 font-mono text-xs text-muted">{e.job.name ?? 'default'}</td>
         <td className="px-3 py-3">
           <div className="flex items-center gap-1">
             <Link
@@ -428,7 +430,7 @@ function DlqRow({
       {isOpen && (
         <tr className="border-b border-line bg-surface-2/30 last:border-0">
           <td />
-          <td colSpan={6} className="px-3 pb-4 pt-1">
+          <td colSpan={7} className="px-3 pb-4 pt-1">
             {e.error && (
               <div className="mb-3">
                 <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-faint">

@@ -270,7 +270,7 @@ function ConfigCard({
       >
         <Field
           label="Command"
-          hint="The exact command the agent runs to launch bunqueue. It receives HTTP_PORT, TCP_PORT and BUNQUEUE_DATA_PATH in its environment. The default needs a global 'bunqueue' binary — or point it at a local entry, e.g. bun run /path/to/bunqueue/src/main.ts."
+          hint="The exact command the agent runs to launch bunqueue. It receives HTTP_PORT, TCP_PORT and BUNQUEUE_DATA_PATH in its environment. The default resolves Bunqueue 2.8.57 with bunx; offline installs can point at a local entry."
         >
           <Input
             name="server-command"
@@ -279,7 +279,7 @@ function ConfigCard({
             value={value.command}
             disabled={busy}
             onChange={(e) => set({ command: e.target.value })}
-            placeholder="bunqueue start"
+            placeholder="bunx bunqueue@2.8.57 start"
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">

@@ -139,11 +139,15 @@ export type JobState =
 /** A job as returned by GET /queues/:q/jobs/list and GET /jobs/:id. */
 export interface Job {
   id: string;
+  name?: string;
   queue?: string;
   state?: JobState;
   status?: JobState;
   priority?: number;
   data?: unknown;
+  /** Current Bunqueue job reads expose terminal results inline. */
+  returnvalue?: unknown;
+  /** @deprecated Legacy dashboard alias. */
   result?: unknown;
   attempts?: number;
   maxAttempts?: number;

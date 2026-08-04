@@ -297,6 +297,9 @@ export function QueueDetailPro() {
                       ID
                     </th>
                     <th scope="col" className="px-5 py-3 font-medium">
+                      Name
+                    </th>
+                    <th scope="col" className="px-5 py-3 font-medium">
                       State
                     </th>
                     <th scope="col" className="px-5 py-3 text-right font-medium">
@@ -310,13 +313,13 @@ export function QueueDetailPro() {
                 <tbody>
                   {data.recentJobsError ? (
                     <tr>
-                      <td colSpan={4} className="px-5 py-10 text-center text-sm text-danger">
+                      <td colSpan={5} className="px-5 py-10 text-center text-sm text-danger">
                         Could not load recent jobs — {data.recentJobsError}. Retry the page.
                       </td>
                     </tr>
                   ) : data.jobs.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-5 py-10 text-center text-sm text-faint">
+                      <td colSpan={5} className="px-5 py-10 text-center text-sm text-faint">
                         No recent jobs.
                       </td>
                     </tr>
@@ -333,6 +336,9 @@ export function QueueDetailPro() {
                           >
                             {j.id}
                           </Link>
+                        </td>
+                        <td className="px-5 py-3 font-mono text-xs text-muted">
+                          {j.name ?? 'default'}
                         </td>
                         <td className="px-5 py-3 text-muted">{j.state ?? '—'}</td>
                         <td className="px-5 py-3 text-right tnum text-muted">

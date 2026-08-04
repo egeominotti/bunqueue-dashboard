@@ -70,7 +70,7 @@ export function WorkersPro() {
   const removeStaleRegistration = async (id: string) => {
     if (
       !window.confirm(
-        `Remove the stale registry record for worker "${id}"? This does not stop the worker process. Continue only after confirming that process is stopped; Bunqueue v2.8.55 workers do not automatically re-register after their heartbeat record is removed.`
+        `Remove the stale registry record for worker "${id}"? This does not stop the worker process. Continue only after confirming that process is stopped; Bunqueue v2.8.57 workers do not automatically re-register after their heartbeat record is removed.`
       )
     )
       return;

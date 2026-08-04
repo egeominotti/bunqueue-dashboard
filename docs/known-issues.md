@@ -10,7 +10,7 @@ exact file so you can confirm or fix it. None of these are catastrophic; the
 dashboard is fully usable. They're documented here because "professional docs"
 means being honest about the rough edges, not hiding them.
 
-## [Bunqueue v2.8.55](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.55) server-contract constraints
+## [Bunqueue v2.8.57](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.57) server-contract constraints
 
 These constraints are in the upstream HTTP contract and cannot be made atomic
 by a browser client. The dashboard fails closed where it can and names the risk
@@ -219,7 +219,7 @@ reproduce / impact passes before fixing) resolved the following, gate green, wit
   selection, so Retry/Cancel can't fire against the wrong entity.
 - **JobDataEditor no longer wipes unsaved edits** on every action-driven job
   reload, it re-seeds by content, not object identity. Flow jobs are read-only:
-  v2.8.55 replaces the full payload and would otherwise erase the reserved
+  v2.8.57 replaces the full payload and would otherwise erase the reserved
   parent/children metadata used by FlowReader.
 - **ServerControl shows an amber "agent unreachable" banner** (and disables
   lifecycle buttons, freezes the uptime ticker) when the status poll fails

@@ -1,7 +1,7 @@
 /**
  * Demo backend. Patches `window.fetch` (and, since the SSE reader is fetch-based,
  * the live activity stream too) to answer every bunqueue API call from a bundled
- * representative fixture aligned with bunqueue 2.8.55. No network, no server.
+ * representative fixture aligned with bunqueue 2.8.57. No network, no server.
  *
  * Loaded lazily by `main.tsx` only when {@link isDemo} is true, so neither this
  * module nor its ~21 KB fixture is part of the normal app bundle.
@@ -230,6 +230,216 @@ const DEMO_FLOW: Record<string, Json> = {
   },
 };
 
+const DEMO_WORKFLOWS: Json[] = [
+  {
+    id: 'wf-order-2026-0804',
+    workflowName: 'order-fulfillment',
+    state: 'running',
+    currentNodeIndex: 3,
+    createdAt: 1785838920000,
+    updatedAt: 1785839040000,
+    definitionHash: 'sha256:8a03c8e91db4d8f5',
+    input: { orderId: 'ord_9a3f', customerId: 'cus_417', total: 129.9 },
+    steps: {
+      validate: {
+        status: 'completed',
+        attempts: 1,
+        startedAt: 1785838920100,
+        completedAt: 1785838920210,
+        result: { valid: true },
+      },
+      charge: {
+        status: 'completed',
+        attempts: 1,
+        startedAt: 1785838920300,
+        completedAt: 1785838921120,
+        compensatable: true,
+        idempotencyKey: 'charge:ord_9a3f',
+        result: { paymentId: 'pay_802' },
+      },
+      reserveInventory: {
+        status: 'completed',
+        attempts: 2,
+        startedAt: 1785838921200,
+        completedAt: 1785838930600,
+        compensatable: true,
+        result: { reservationId: 'res_551' },
+      },
+      ship: {
+        status: 'running',
+        attempts: 1,
+        startedAt: 1785839040000,
+        childExecutionId: 'wf-shipping-0804',
+      },
+    },
+    resolvedSteps: ['validate', 'charge', 'reserveInventory', 'ship'],
+    signals: {},
+    decisions: { 'branch:payment': 'card' },
+  },
+  {
+    id: 'wf-refund-2026-0803',
+    workflowName: 'refund-order',
+    state: 'compensation-stuck',
+    currentNodeIndex: 4,
+    createdAt: 1785751200000,
+    updatedAt: 1785751320000,
+    rollbackStatus: 'stuck',
+    failureReason: 'Refund provider unavailable after 3 attempts',
+    definitionHash: 'sha256:cc89ab41c1b2f011',
+    input: { orderId: 'ord_772', reason: 'customer_request' },
+    steps: {
+      loadOrder: { status: 'completed', attempts: 1, result: { paymentId: 'pay_331' } },
+      revokeShipment: {
+        status: 'completed',
+        attempts: 1,
+        compensatable: true,
+        compensation: { status: 'compensated', at: 1785751300100 },
+      },
+      refundPayment: {
+        status: 'failed',
+        attempts: 3,
+        compensatable: true,
+        error: 'Provider timeout',
+        compensation: {
+          status: 'compensation-failed',
+          at: 1785751320000,
+          error: 'Provider unavailable',
+        },
+      },
+    },
+    resolvedSteps: ['loadOrder', 'revokeShipment', 'refundPayment'],
+    signals: { approved: { actor: 'ops@example.com' } },
+    decisions: { 'branch:refund-method': 'original-payment' },
+  },
+  {
+    id: 'wf-signup-2026-0802',
+    workflowName: 'customer-onboarding',
+    state: 'waiting',
+    currentNodeIndex: 2,
+    createdAt: 1785664800000,
+    updatedAt: 1785664920000,
+    input: { customerId: 'cus_881', plan: 'pro' },
+    steps: {
+      createAccount: { status: 'completed', attempts: 1, result: { accountId: 'acc_881' } },
+      sendVerification: { status: 'completed', attempts: 1, result: { messageId: 'msg_194' } },
+    },
+    resolvedSteps: ['createAccount', 'sendVerification'],
+    signals: {},
+  },
+];
+
+const DEMO_ARCHIVED_WORKFLOWS: Json[] = [
+  {
+    id: 'wf-month-close-2026-07',
+    workflowName: 'month-end-close',
+    state: 'completed',
+    currentNodeIndex: 4,
+    createdAt: 1785578400000,
+    updatedAt: 1785578465000,
+    archivedAt: 1785664800000,
+    rollbackStatus: 'not-applicable',
+    definitionHash: 'sha256:78b6fd851d8b32a1',
+    input: { period: '2026-07' },
+    steps: {
+      lockPeriod: { status: 'completed', attempts: 1, result: { locked: true } },
+      aggregate: { status: 'completed', attempts: 1, result: { entries: 1842 } },
+      publish: { status: 'completed', attempts: 1, result: { reportId: 'rep_2026_07' } },
+    },
+    resolvedSteps: ['lockPeriod', 'aggregate', 'publish'],
+    signals: {},
+    decisions: {},
+  },
+  {
+    id: 'wf-import-legacy-441',
+    workflowName: 'legacy-import',
+    state: 'failed',
+    currentNodeIndex: 1,
+    createdAt: 1785492000000,
+    updatedAt: 1785492009000,
+    archivedAt: 1785664800000,
+    rollbackStatus: 'not-applicable',
+    failureReason: 'Input schema rejected row 441',
+    input: { batch: 'legacy-2026-07' },
+    steps: {
+      validate: { status: 'failed', attempts: 1, error: 'Invalid customer reference at row 441' },
+    },
+    resolvedSteps: ['validate'],
+    signals: {},
+    decisions: {},
+  },
+];
+
+function demoWorkflowResponse(seg: string[], search: string): Json {
+  if (seg[1] === 'stats') {
+    const states = {
+      running: 0,
+      waiting: 0,
+      completed: 0,
+      failed: 0,
+      compensating: 0,
+      'compensation-stuck': 0,
+    };
+    for (const execution of DEMO_WORKFLOWS) {
+      const state = execution.state as keyof typeof states;
+      states[state]++;
+    }
+    return {
+      ok: true,
+      available: true,
+      activeTotal: DEMO_WORKFLOWS.length,
+      archiveTotal: DEMO_ARCHIVED_WORKFLOWS.length,
+      states,
+      workflowNames: [
+        ...new Set(
+          [...DEMO_WORKFLOWS, ...DEMO_ARCHIVED_WORKFLOWS].map((execution) =>
+            String(execution.workflowName)
+          )
+        ),
+      ].sort(),
+    };
+  }
+  const sp = new URLSearchParams(search);
+  const source = sp.get('kind') === 'archive' ? DEMO_ARCHIVED_WORKFLOWS : DEMO_WORKFLOWS;
+  if (seg[1]) {
+    const execution = source.find((item) => item.id === decodeURIComponent(seg[1]));
+    return execution
+      ? { ok: true, execution }
+      : { ok: false, error: 'Workflow execution not found' };
+  }
+  const workflowName = sp.get('workflowName');
+  const state = sp.get('state');
+  const offset = Number(sp.get('offset') ?? 0);
+  const limit = Number(sp.get('limit') ?? 50);
+  const filtered = source.filter(
+    (execution) =>
+      (!workflowName || execution.workflowName === workflowName) &&
+      (!state ||
+        execution.state === state ||
+        (state === 'compensation' &&
+          (execution.state === 'compensating' || execution.state === 'compensation-stuck')))
+  );
+  const summaries = filtered
+    .slice(offset, offset + limit)
+    .map(
+      ({
+        input: _input,
+        steps: _steps,
+        resolvedSteps: _resolved,
+        signals: _signals,
+        decisions: _decisions,
+        ...summary
+      }) => summary
+    );
+  return {
+    ok: true,
+    available: true,
+    executions: summaries,
+    total: filtered.length,
+    limit,
+    offset,
+  };
+}
+
 const fixtureJobs = (key: string): Json[] => (F[key] as { jobs?: Json[] })?.jobs ?? [];
 const DEMO_FALLBACK_JOB = (F.oneJob as { job?: Json }).job;
 const DEMO_JOB_POOL: Json[] = [
@@ -240,16 +450,26 @@ const DEMO_JOB_POOL: Json[] = [
 const DEMO_QUEUE_NAMES = ['emails', 'image-processing', 'reports', 'notifications'];
 
 function retagDemoJob(job: Json, queue: string, index: number): Json {
+  const current = {
+    ...job,
+    name: typeof job.name === 'string' ? job.name : `${queue}-job`,
+    ...(job.state === 'completed' && !Object.hasOwn(job, 'returnvalue')
+      ? { returnvalue: { ok: true } }
+      : {}),
+    ...(job.state === 'failed' && !Object.hasOwn(job, 'failedReason')
+      ? { failedReason: 'Demo job exhausted its retries' }
+      : {}),
+  };
   return queue === 'emails'
-    ? job
-    : { ...job, id: `${queue}-${String(job.id).slice(-12)}-${index}`, queue };
+    ? current
+    : { ...current, id: `${queue}-${String(job.id).slice(-12)}-${index}`, queue };
 }
 
 /** Return the same canonical id/state snapshot that a demo list links to. */
 function demoJobForId(id: string): Json {
   if (DEMO_FLOW[id]) return DEMO_FLOW[id];
   const exact = DEMO_JOB_POOL.find((job) => job.id === id);
-  if (exact) return exact;
+  if (exact) return retagDemoJob(exact, 'emails', 0);
   for (const queue of DEMO_QUEUE_NAMES) {
     const retagged = DEMO_JOB_POOL.map((job, index) => retagDemoJob(job, queue, index)).find(
       (job) => job.id === id
@@ -270,7 +490,7 @@ function demoJobForId(id: string): Json {
 // healthy "running" server so ServerControl renders a realistic snapshot rather
 // than the empty/shape-mismatched state a bare { ok: true } would produce.
 const DEMO_CONFIG = {
-  command: 'bunqueue start',
+  command: 'bunx bunqueue@2.8.57 start',
   httpPort: 6790,
   tcpPort: 6791,
   dataPath: './data/bunqueue.db',
@@ -282,7 +502,7 @@ const demoStatus = (): Json => ({
   startedAt: Date.now() - 3_600_000,
   exitCode: null,
   healthy: true,
-  version: '2.8.55',
+  version: '2.8.57',
   config: DEMO_CONFIG,
   runningConfig: DEMO_CONFIG,
   db: {
@@ -368,8 +588,8 @@ const demoControlLogs = (): Json => {
   });
   return {
     lines: [
-      line(1, 8000, 'sys', 'starting: bunqueue start'),
-      line(2, 7800, 'stdout', 'bunqueue v2.8.55 — HTTP :6790, TCP :6791'),
+      line(1, 8000, 'sys', 'starting: bunx bunqueue@2.8.57 start'),
+      line(2, 7800, 'stdout', 'bunqueue v2.8.57 — HTTP :6790, TCP :6791'),
       line(3, 7600, 'stdout', 'SQLite ready (WAL) at ./data/bunqueue.db'),
       line(4, 5000, 'stdout', 'worker registered: image-processing'),
       line(5, 1200, 'stdout', 'health ok — 4 queues, 34 jobs'),
@@ -620,6 +840,7 @@ const API_ROOTS = new Set([
   'dlq',
   'control',
   'db',
+  'workflows',
   'gc',
   'heapstats',
 ]);
@@ -636,6 +857,8 @@ function resolve(path: string, method: string, search: string): Json {
     if (seg[1] === 'config') return DEMO_CONFIG;
     return demoStatus(); // status / start / stop / restart
   }
+
+  if (seg[0] === 'workflows') return demoWorkflowResponse(seg, search);
 
   if (method !== 'GET') {
     // Force-GC returns a plausible before/after so the Diagnostics button shows a

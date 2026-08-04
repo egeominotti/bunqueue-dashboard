@@ -351,9 +351,18 @@ describe('bq request construction', () => {
     );
   });
 
-  test('v2.8.55 cron options are preserved', async () => {
+  test('v2.8.57 job and cron names are preserved separately from data', async () => {
+    await bq.addJob('reports', {
+      name: 'render-report',
+      data: { name: 'customer supplied data' },
+    });
+    expect(lastCall().init?.body).toBe(
+      JSON.stringify({ name: 'render-report', data: { name: 'customer supplied data' } })
+    );
+
     await bq.createCron({
       name: 'nightly',
+      jobName: 'render-report',
       queue: 'reports',
       schedule: '0 2 * * *',
       dedup: { ttl: 60_000, extend: true, replace: false },
@@ -368,6 +377,7 @@ describe('bq request construction', () => {
     expect(lastCall().init?.body).toBe(
       JSON.stringify({
         name: 'nightly',
+        jobName: 'render-report',
         queue: 'reports',
         schedule: '0 2 * * *',
         dedup: { ttl: 60_000, extend: true, replace: false },
@@ -706,6 +716,22 @@ describe('bq request construction', () => {
     expect(lastCall().url).toBe(
       'http://localhost:6800/db/tables/jobs?limit=50&offset=100&orderBy=id&dir=desc&fcol=state&fop=eq&fval=failed'
     );
+  });
+
+  test('Workflow Engine reads use the agent contract and encode execution ids', async () => {
+    await bq.workflows.list({
+      kind: 'archive',
+      workflowName: 'order/fulfillment',
+      state: 'compensation-stuck',
+      limit: 25,
+      offset: 50,
+    });
+    expect(lastCall().url).toBe(
+      `${SAFE_AGENT_BASE}/workflows?kind=archive&workflowName=order%2Ffulfillment&state=compensation-stuck&limit=25&offset=50`
+    );
+
+    await bq.workflows.get('run/2026 #1', 'active');
+    expect(lastCall().url).toBe(`${SAFE_AGENT_BASE}/workflows/run%2F2026%20%231?kind=active`);
   });
 
   test('database CSV export uses one target-pinned request and validates raw metadata', async () => {

@@ -107,7 +107,7 @@ disk for the SQLite main file plus its WAL/SHM sidecars.
 are validated atomically: unknown keys, an empty/non-string command, invalid
 ports, a non-string data path, or a non-string environment map return HTTP 400
 without partially changing the previous configuration. The agent
-launches `command` (default `bunqueue start`, e.g. `bun run ../src/main.ts` when
+launches `command` (default `bunx bunqueue@2.8.57 start`, e.g. `bun run ../src/main.ts` when
 developing) with `HTTP_PORT`, `TCP_PORT`, `BUNQUEUE_DATA_PATH` and `extraEnv`
 injected into the environment. Config is **editable at any time**; a running
 process keeps its launch config (`runningConfig`) and picks up port/data-path

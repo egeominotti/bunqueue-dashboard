@@ -23,6 +23,11 @@ import type {
   ServerStatus,
   StallConfig,
   StorageStatusFlat,
+  WorkflowExecutionDetail,
+  WorkflowExecutionsPage,
+  WorkflowStateFilter,
+  WorkflowStats,
+  WorkflowStoreKind,
 } from './bqTypes';
 import {
   parseQueueSummaryPayload,
@@ -631,7 +636,7 @@ const bulkBody = (method: string, b?: unknown): RequestInit => body(method, b);
 export type Backoff = number | { type: 'fixed' | 'exponential'; delay: number };
 
 /**
- * Repeat policy the dashboard can execute safely against bunqueue v2.8.55.
+ * Repeat policy the dashboard can execute safely against bunqueue v2.8.57.
  *
  * Upstream's wider public type also exposes `pattern` and scheduler metadata,
  * but the HTTP/server continuation path drops that metadata and treats a
@@ -658,7 +663,7 @@ function assertSafeRepeat(repeat: RepeatOptions | undefined): void {
   const unsupported = Object.keys(repeat).filter((key) => key !== 'every' && key !== 'limit');
   if (unsupported.length > 0) {
     throw new TypeError(
-      `Unsupported repeat option(s): ${unsupported.join(', ')}. bunqueue v2.8.55 pattern repeats are unsafe; use the Cron API instead.`
+      `Unsupported repeat option(s): ${unsupported.join(', ')}. bunqueue v2.8.57 pattern repeats are unsafe; use the Cron API instead.`
     );
   }
   if (!Number.isSafeInteger(repeat.every) || repeat.every < 1 || repeat.every > MAX_REPEAT_MS) {
@@ -684,6 +689,8 @@ export interface HeapMB {
 }
 
 export interface AddJobBody {
+  /** First-class worker routing name. Defaults to `default` upstream. */
+  name?: string;
   data: unknown;
   priority?: number;
   delay?: number;
@@ -705,7 +712,7 @@ export interface AddJobBody {
   repeat?: RepeatOptions;
 }
 
-/** Extra PUSHB fields that v2.8.55 executes with reliable runtime semantics. */
+/** Extra PUSHB fields that v2.8.57 executes with reliable runtime semantics. */
 export interface BulkJobBody extends AddJobBody {
   stallTimeout?: number;
   dedup?: DedupOptions;
@@ -722,9 +729,16 @@ function assertManageableJobInput(job: AddJobBody): void {
     const error = opaqueHttpIdError(id);
     if (error) {
       throw new TypeError(
-        `${field}: ${error}. The job would not be manageable through v2.8.55 HTTP.`
+        `${field}: ${error}. The job would not be manageable through v2.8.57 HTTP.`
       );
     }
+  }
+}
+
+function assertValidJobName(value: unknown): void {
+  if (value === undefined) return;
+  if (typeof value !== 'string' || value.length === 0 || value.length > 256) {
+    throw new TypeError('Job name must be a non-empty string of at most 256 characters');
   }
 }
 
@@ -746,7 +760,7 @@ function assertSafeBulkJob(job: BulkJobBody): void {
   const unsafe = UNSAFE_BULK_JOB_FIELDS.filter((field) => raw[field] !== undefined);
   if (unsafe.length > 0) {
     throw new TypeError(
-      `Unsupported Bunqueue v2.8.55 enqueue option(s): ${unsafe.join(', ')}. Flow topology must use the atomic flow API; inert compatibility fields are not sent.`
+      `Unsupported Bunqueue v2.8.57 enqueue option(s): ${unsafe.join(', ')}. Flow topology must use the atomic flow API; inert compatibility fields are not sent.`
     );
   }
 }
@@ -779,6 +793,7 @@ function encodedAddJobRequest(job: AddJobBody): string {
   }
 
   const raw = value as Record<string, unknown>;
+  assertValidJobName(raw.name);
   assertSafeRepeat(raw.repeat as RepeatOptions | undefined);
   assertSafeBulkJob(raw as unknown as BulkJobBody);
   if (
@@ -812,6 +827,8 @@ function assertSafeEncodedBulkJob(encoded: string): void {
     throw new TypeError('serialized jobId is invalid; the bulk transport requires customId');
   }
 
+  assertValidJobName(raw.name);
+
   assertSafeRepeat(raw.repeat as RepeatOptions | undefined);
   assertSafeBulkJob(raw as unknown as BulkJobBody);
 
@@ -820,7 +837,7 @@ function assertSafeEncodedBulkJob(encoded: string): void {
     const error = opaqueHttpIdError(raw.customId);
     if (error) {
       throw new TypeError(
-        `customId: ${error}. The job would not be manageable through v2.8.55 HTTP.`
+        `customId: ${error}. The job would not be manageable through v2.8.57 HTTP.`
       );
     }
   }
@@ -833,7 +850,7 @@ function assertSafeEncodedBulkJob(encoded: string): void {
       const error = opaqueHttpIdError(dependency);
       if (error) {
         throw new TypeError(
-          `dependsOn: ${error}. The job would not be manageable through v2.8.55 HTTP.`
+          `dependsOn: ${error}. The job would not be manageable through v2.8.57 HTTP.`
         );
       }
     }
@@ -842,7 +859,7 @@ function assertSafeEncodedBulkJob(encoded: string): void {
 
 /**
  * Maximum JSON transport envelope accepted from dashboard bulk producers.
- * Bunqueue v2.8.55 limits each job's data but does not cap data x job count,
+ * Bunqueue v2.8.57 limits each job's data but does not cap data x job count,
  * so the client must prevent a valid request from allocating tens of GiB.
  */
 export const MAX_BULK_JOB_PAYLOAD_BYTES = 64 * 1024 * 1024;
@@ -1220,6 +1237,8 @@ export interface CronJobOptions {
 
 export interface CreateCronBody {
   name: string;
+  /** First-class name for jobs spawned by this schedule. */
+  jobName?: string;
   queue: string;
   data?: unknown;
   schedule?: string;
@@ -1420,7 +1439,7 @@ export const bq = {
     ),
   retryCompleted: (_queue: string, _id?: string): never => {
     throw new TypeError(
-      'Completed-job requeue is unavailable in Bunqueue v2.8.55 because flow dependency registration is not rebuilt.'
+      'Completed-job requeue is unavailable in Bunqueue v2.8.57 because flow dependency registration is not rebuilt.'
     );
   },
 
@@ -1451,7 +1470,7 @@ export const bq = {
   setDlqConfig: (queue: string, config: Partial<DlqConfig>) => {
     if (config.autoRetry === true) {
       throw new TypeError(
-        'DLQ auto-retry is unavailable: Bunqueue v2.8.55 does not rebuild flow dependency registration.'
+        'DLQ auto-retry is unavailable: Bunqueue v2.8.57 does not rebuild flow dependency registration.'
       );
     }
     if (config.maxAge !== undefined || config.maxEntries !== undefined) {
@@ -1471,7 +1490,7 @@ export const bq = {
     srv<{ ok: boolean; stats: DlqStatsFull }>(`/queues/${queueHttpPathSegment(queue)}/dlq/stats`),
   retryDlq: (_queue: string, _jobId?: string): never => {
     throw new TypeError(
-      'DLQ retry is unavailable in Bunqueue v2.8.55 because the endpoint has no atomic job-generation, state, or flow-topology precondition.'
+      'DLQ retry is unavailable in Bunqueue v2.8.57 because the endpoint has no atomic job-generation, state, or flow-topology precondition.'
     );
   },
   purgeDlq: (queue: string) =>
@@ -1582,6 +1601,33 @@ export const bq = {
     getConfig: () => agent<ServerConfig>('/control/config'),
     setConfig: (config: Partial<ServerConfig>) =>
       agent<ServerConfig>('/control/config', body('PUT', config)),
+  },
+
+  // ---- Workflow Engine (read-only persisted observability) ----
+  workflows: {
+    stats: () => agent<WorkflowStats>('/workflows/stats'),
+    list: (
+      options: {
+        kind?: WorkflowStoreKind;
+        workflowName?: string;
+        state?: WorkflowStateFilter;
+        limit?: number;
+        offset?: number;
+      } = {}
+    ) => {
+      const params = new URLSearchParams();
+      if (options.kind) params.set('kind', options.kind);
+      if (options.workflowName) params.set('workflowName', options.workflowName);
+      if (options.state) params.set('state', options.state);
+      if (options.limit !== undefined) params.set('limit', String(options.limit));
+      if (options.offset !== undefined) params.set('offset', String(options.offset));
+      const suffix = params.size ? `?${params}` : '';
+      return agent<WorkflowExecutionsPage>(`/workflows${suffix}`);
+    },
+    get: (id: string, kind: WorkflowStoreKind = 'active') =>
+      agent<{ ok: boolean; execution: WorkflowExecutionDetail }>(
+        `/workflows/${decodedHttpPathSegment(id, 'Workflow execution id')}?kind=${kind}`
+      ),
   },
 };
 

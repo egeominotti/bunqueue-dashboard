@@ -183,10 +183,11 @@ Full threat model in `agent/server.ts` and `scripts/serve.ts`; verified limits i
 - `GET /webhooks`, `/workers`, `/storage`, `/ping` wrap payload in **`{ ok, data: {...} }`**.
 - `GET /queues/:q/dlq`, `/dlq/stats`, `/crons`, `/queues/:q/counts` are **flat** (`{ ok, ... }`, no `data`).
 - DLQ entries are **`{ job, enteredAt, reason, error, attempts[] }`** — the job is nested, there is no top-level `id`/`name`.
-- Jobs have **no `name`** field, **no embedded `result`** (fetch separately via `GET /jobs/:id/result`), and use
-  **`startedAt` / `completedAt`** (not `processedOn` / `finishedOn`). `timeline[]` IS persisted (despite an
-  in-source comment saying otherwise), capped at 20 entries.
-- bunqueue v2.8.55 `PUT /queues/:q/rate-limit` takes **`{ limit, duration?, ttl? }`**; concurrency takes `{ concurrency }` (or `{ limit }`).
+- Jobs use **`startedAt` / `completedAt`** (not `processedOn` / `finishedOn`). `timeline[]` is persisted
+  and capped at 20 entries. Since v2.8.57, reads also expose first-class `name`, terminal
+  `returnvalue`, and `failedReason` fields.
+- bunqueue v2.8.57 `PUT /queues/:q/rate-limit` takes **`{ limit, duration?, ttl? }`**; concurrency takes `{ concurrency }` (or `{ limit }`).
+- Cron definitions expose **`jobName`** for spawned jobs, separate from cron definition names.
 - `bq.ts`'s `call()` throws on HTTP-200-with-`{ok:false}` too (many mutating endpoints use this for logical
   failure) — except `health()`, which passes `strict:false` because `/health`'s `ok` is a health flag, not a
   success flag. Follow that pattern for any endpoint where `ok` isn't "did this request succeed".

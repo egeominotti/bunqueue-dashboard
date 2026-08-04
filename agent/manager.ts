@@ -3,13 +3,13 @@
  * can start / stop / restart it. Runs under Bun (uses Bun.spawn).
  *
  * It does NOT import or touch bunqueue source — it just launches a configurable
- * command (default `bunqueue start`) with the ports/data-path passed as env.
+ * command (default `bunx bunqueue@2.8.57 start`) with the ports/data-path passed as env.
  */
 
 export type Status = 'running' | 'stopped' | 'starting' | 'stopping';
 
 export interface ServerConfig {
-  /** Command to launch the server, e.g. "bunqueue start" or "bun run src/main.ts". */
+  /** Command to launch the server, e.g. "bunx bunqueue@2.8.57 start" or "bun run src/main.ts". */
   command: string;
   httpPort: number;
   tcpPort: number;
@@ -62,7 +62,7 @@ interface CancelablePipeReader {
 
 function defaultConfig(): ServerConfig {
   return {
-    command: process.env.BUNQUEUE_START_CMD || 'bunqueue start',
+    command: process.env.BUNQUEUE_START_CMD || 'bunx bunqueue@2.8.57 start',
     httpPort: Number(process.env.HTTP_PORT) || 6790,
     tcpPort: Number(process.env.TCP_PORT) || 6789,
     dataPath: process.env.BUNQUEUE_DATA_PATH || './data/bunq.db',

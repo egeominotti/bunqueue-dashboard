@@ -1,6 +1,6 @@
 {
   "name": "bunqueue-dashboard",
-  "version": "0.0.34",
+  "version": "0.0.35",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun).",
   "bin": {
@@ -101,5 +101,8 @@
     "brace-expansion": "^5.0.9",
     "dompurify": "^3.4.12",
     "postcss": "^8.5.25"
+  },
+  "dependencies": {
+    "msgpackr": "^1.11.8"
   }
 }

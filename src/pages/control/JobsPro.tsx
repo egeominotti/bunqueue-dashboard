@@ -126,7 +126,9 @@ export function JobsPro() {
   const rows = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return jobs ?? [];
-    return (jobs ?? []).filter((j) => j.id.toLowerCase().includes(term));
+    return (jobs ?? []).filter(
+      (j) => j.id.toLowerCase().includes(term) || j.name?.toLowerCase().includes(term)
+    );
   }, [jobs, search]);
 
   const stats = overview?.stats;
@@ -262,6 +264,7 @@ export function JobsPro() {
     }
     const out = rows.map((j) => ({
       id: j.id,
+      name: j.name ?? 'default',
       queue: j.queue ?? queue,
       state: j.state ?? '',
       priority: j.priority ?? 0,
@@ -272,6 +275,7 @@ export function JobsPro() {
     }));
     downloadCsv(`jobs-${queue}-${status}`, out, [
       'id',
+      'name',
       'queue',
       'state',
       'priority',
@@ -412,8 +416,8 @@ export function JobsPro() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter this page by ID…"
-            aria-label="Filter by job ID"
+            placeholder="Filter this page by ID or name…"
+            aria-label="Filter by job ID or name"
             name="jobs-id-filter"
             autoComplete="off"
             className="h-9 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
@@ -500,6 +504,9 @@ export function JobsPro() {
                     Job ID
                   </th>
                   <th scope="col" className="px-5 py-3 font-medium">
+                    Name
+                  </th>
+                  <th scope="col" className="px-5 py-3 font-medium">
                     Status
                   </th>
                   <th scope="col" className="px-5 py-3 font-medium">
@@ -519,9 +526,9 @@ export function JobsPro() {
               <tbody>
                 {rows.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-5 py-12 text-center text-sm text-faint">
+                    <td colSpan={8} className="px-5 py-12 text-center text-sm text-faint">
                       {search.trim()
-                        ? 'No jobs on this page match your ID filter.'
+                        ? 'No jobs on this page match your ID or name filter.'
                         : queue
                           ? 'No jobs found.'
                           : discoveryError
@@ -553,6 +560,9 @@ export function JobsPro() {
                           <span className="block max-w-[16rem] truncate" title={j.id}>
                             {j.id}
                           </span>
+                        </td>
+                        <td className="px-5 py-3 font-mono text-xs text-muted">
+                          {j.name ?? 'default'}
                         </td>
                         <td className="px-5 py-3">
                           <StatusBadge status={String(j.state ?? 'waiting')} />

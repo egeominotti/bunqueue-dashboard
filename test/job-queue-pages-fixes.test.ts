@@ -366,6 +366,32 @@ describe('JobsPro — the selection count matches what the buttons act on', () =
 describe('JobInspector — a fetch failure is never rendered as a fact', () => {
   const job = { id: 'j1', queue: 'q', state: 'completed', maxAttempts: 1 };
 
+  test('uses Bunqueue 2.8.57 embedded returnvalue without a second result request', async () => {
+    let resultGets = 0;
+    globalThis.fetch = ((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/result')) {
+        resultGets += 1;
+        return Promise.resolve(json({ ok: true, id: 'j1', result: 'legacy' }));
+      }
+      if (url.endsWith('/logs')) {
+        return Promise.resolve(json({ ok: true, data: { logs: [], count: 0 } }));
+      }
+      return Promise.resolve(
+        json({ ok: true, job: { ...job, name: 'render-report', returnvalue: { done: true } } })
+      );
+    }) as typeof fetch;
+
+    const { container, unmount } = render(
+      createElement(MemoryRouter, { initialEntries: ['/job?id=j1'] }, createElement(JobInspector))
+    );
+    await settle(10);
+    expect(resultGets).toBe(0);
+    expect(container.textContent).toContain('render-report');
+    expect(container.textContent).toContain('done');
+    unmount();
+  });
+
   test('a failed result fetch says so instead of "No result stored"', async () => {
     globalThis.fetch = ((input: RequestInfo | URL) => {
       const url = String(input);

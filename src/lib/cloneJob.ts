@@ -10,6 +10,8 @@ import type { JobFull } from '@/lib/bqTypes';
 export interface CloneJobState {
   clone: {
     queue: string;
+    /** First-class Bunqueue job name, distinct from user data. */
+    name?: string;
     /** Pretty-printed JSON of the source job's data, ready for the textarea. */
     dataText: string;
     options: Partial<
@@ -56,6 +58,7 @@ export function buildCloneState(job: JobFull): CloneJobState {
   return {
     clone: {
       queue: job.queue ?? '',
+      name: job.name,
       dataText: JSON.stringify(job.data ?? {}, null, 2),
       options,
     },
