@@ -111,7 +111,7 @@
     "postcss": "^8.5.25"
   },
   "dependencies": {
-    "bunqueue": "2.8.57",
+    "bunqueue": "2.8.59",
     "msgpackr": "^1.11.8"
   }
 }
