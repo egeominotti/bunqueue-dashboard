@@ -9,11 +9,17 @@
  *
  * Run:  bun run agent/index.ts        (default port 6800)
  * Env:  AGENT_PORT, AGENT_ALLOWED_ORIGINS, AGENT_TOKEN,
- *       BUNQUEUE_START_CMD, HTTP_PORT, TCP_PORT, BUNQUEUE_DATA_PATH
+ *       BUNQUEUE_START_CMD, BUNQUEUE_MANAGED, BUNQUEUE_URL, BUNQUEUE_TOKEN,
+ *       HTTP_PORT, TCP_PORT, BUNQUEUE_DATA_PATH
  */
 import { logger } from './logger';
 import { ProcessManager } from './manager';
-import { createFetchHandler, resolveAllowedHosts, resolveAllowedOrigins } from './server';
+import {
+  createFetchHandler,
+  resolveAllowedHosts,
+  resolveAllowedOrigins,
+  resolveServerControlTarget,
+} from './server';
 import { installAgentShutdown } from './shutdown';
 
 const mgr = new ProcessManager();
@@ -25,8 +31,9 @@ const allowedOrigins = resolveAllowedOrigins();
 // GETs. Extend via AGENT_ALLOWED_HOSTS when fronted by a proxy on another host.
 const allowedHosts = resolveAllowedHosts();
 const token = process.env.AGENT_TOKEN || undefined;
+const controlTarget = resolveServerControlTarget(process.env);
 
-const handle = createFetchHandler(mgr, { allowedOrigins, allowedHosts, token });
+const handle = createFetchHandler(mgr, { allowedOrigins, allowedHosts, token, controlTarget });
 const stopAccepting: Array<() => unknown | Promise<unknown>> = [];
 installAgentShutdown(handle, { stopAccepting });
 
@@ -38,6 +45,12 @@ const server = Bun.serve({
 stopAccepting.push(() => server.stop());
 
 logger.info(
-  { url: `http://127.0.0.1:${PORT}/control`, allowedOrigins, allowedHosts, tokenAuth: Boolean(token) },
+  {
+    url: `http://127.0.0.1:${PORT}/control`,
+    allowedOrigins,
+    allowedHosts,
+    tokenAuth: Boolean(token),
+    serverManagement: controlTarget.mode,
+  },
   'bunqueue dashboard control agent ready'
 );

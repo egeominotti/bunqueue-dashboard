@@ -3,10 +3,15 @@ import { access, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:f
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
+import {
+  readPackageAgentStatus,
+  validatePrefixedAgentTargets,
+  waitForPackageResponse,
+} from './validate-package-targets';
 
 const repository = resolve(import.meta.dir, '..');
 const commandTimeoutMs = 4 * 60_000;
-const [startupTimeoutMs, shutdownTimeoutMs] = [30_000, 5_000];
+const shutdownTimeoutMs = 5_000;
 
 type Child = ReturnType<typeof Bun.spawn>;
 type CapturedChild = { child: Child; stdout: Promise<string>; stderr: Promise<string> };
@@ -48,7 +53,7 @@ async function main(): Promise<void> {
 
     const packageDirectory = await installedPackageDirectory(consumerDirectory, scratch);
     await assertPublishedRuntimeClosure(packageDirectory);
-    const [dashboardPort, agentPort] = await allocatePorts(2);
+    const [dashboardPort, agentPort, httpPort, tcpPort] = await allocatePorts(4);
     const bin = join(
       consumerDirectory,
       'node_modules',
@@ -56,15 +61,28 @@ async function main(): Promise<void> {
       process.platform === 'win32' ? 'bunqueue-dashboard.cmd' : 'bunqueue-dashboard'
     );
     await access(bin, constants.X_OK);
-    runtime = spawnRuntime(bin, consumerDirectory, scratch, dashboardPort, agentPort);
+    runtime = spawnRuntime(
+      bin,
+      consumerDirectory,
+      scratch,
+      dashboardPort,
+      agentPort,
+      httpPort,
+      tcpPort
+    );
 
     const dashboardUrl = `http://127.0.0.1:${dashboardPort}`;
+    const basePath = '/internal/queue';
     const agentUrl = `http://127.0.0.1:${agentPort}`;
-    const dashboard = await waitForResponse(`${dashboardUrl}/`, runtime.child);
+    const dashboard = await waitForPackageResponse(
+      `${dashboardUrl}${basePath}/`,
+      runtime.child
+    );
     const html = await dashboard.text();
     assert(
       html.includes('<div id="root"></div>') &&
-        html.includes("window.__BUNQUEUE_AGENT_URL__='/agent'"),
+        html.includes(`window.__BUNQUEUE_AGENT_URL__="${basePath}/agent"`) &&
+        html.includes(`src="${basePath}/assets/`),
       'Published dashboard did not serve the embedded application shell'
     );
     assert(
@@ -72,19 +90,24 @@ async function main(): Promise<void> {
       'Published dashboard did not apply runtime security headers'
     );
 
-    const directAgent = await readAgentStatus(`${agentUrl}/control/status`, runtime.child);
-    const bridgedAgent = await readAgentStatus(`${dashboardUrl}/agent/control/status`, runtime.child);
+    const directAgent = await readPackageAgentStatus(`${agentUrl}/control/status`, runtime.child);
+    const bridgedAgent = await readPackageAgentStatus(
+      `${dashboardUrl}${basePath}/agent/control/status`,
+      runtime.child
+    );
     assert(
       directAgent.status === 'stopped' && bridgedAgent.status === 'stopped',
       'Published control agent returned an unexpected initial status'
     );
+    await validatePrefixedAgentTargets({ dashboardUrl, basePath, child: runtime.child });
 
     console.log(JSON.stringify({
       tarball: basename(tarball),
       packageDirectory,
-      dashboard: `${dashboardUrl}/`,
+      dashboard: `${dashboardUrl}${basePath}/`,
       agent: `${agentUrl}/control/status`,
-      bridge: `${dashboardUrl}/agent/control/status`,
+      bridge: `${dashboardUrl}${basePath}/agent/control/status`,
+      targetRoutes: ['Flow', 'Workflow', 'Queue', 'Backup'],
       status: 'ok',
     }, null, 2));
   } catch (error) {
@@ -146,7 +169,9 @@ function spawnRuntime(
   cwd: string,
   scratch: string,
   dashboardPort: number,
-  agentPort: number
+  agentPort: number,
+  httpPort: number,
+  tcpPort: number
 ): CapturedChild {
   const child = Bun.spawn([bin], {
     cwd,
@@ -156,11 +181,14 @@ function spawnRuntime(
       AGENT_ALLOWED_ORIGINS: '',
       AGENT_PORT: String(agentPort),
       AGENT_TOKEN: '',
+      BASE_PATH: '/internal/queue',
       BIND_ADDR: '127.0.0.1',
       BUNQUEUE_DATA_PATH: join(scratch, 'runtime.db'),
       BUNQUEUE_TOKEN: '',
-      BUNQUEUE_URL: 'http://127.0.0.1:1',
+      BUNQUEUE_URL: `http://127.0.0.1:${httpPort}`,
+      HTTP_PORT: String(httpPort),
       PORT: String(dashboardPort),
+      TCP_PORT: String(tcpPort),
       TRUST_PROXY: '0',
     },
     stdin: 'ignore',
@@ -172,36 +200,6 @@ function spawnRuntime(
     stdout: new Response(child.stdout).text(),
     stderr: new Response(child.stderr).text(),
   };
-}
-
-async function readAgentStatus(url: string, child: Child): Promise<Record<string, unknown>> {
-  const response = await waitForResponse(url, child);
-  assert(
-    response.headers.get('content-type')?.includes('application/json'),
-    `Control agent returned a non-JSON response from ${url}`
-  );
-  const body: unknown = await response.json();
-  assert(isRecord(body) && isRecord(body.config), `Control agent returned an invalid status from ${url}`);
-  return body;
-}
-
-async function waitForResponse(url: string, child: Child): Promise<Response> {
-  const deadline = Date.now() + startupTimeoutMs;
-  let lastFailure = 'no response';
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      throw new Error(`Published bin exited early with code ${child.exitCode}`);
-    }
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(1_500) });
-      if (response.ok) return response;
-      lastFailure = `HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`;
-    } catch (error) {
-      lastFailure = messageOf(error);
-    }
-    await Bun.sleep(100);
-  }
-  throw new Error(`Timed out waiting for ${url}: ${lastFailure}`);
 }
 
 async function allocatePorts(count: number): Promise<number[]> {
@@ -272,10 +270,6 @@ async function exitsWithin(child: Child, timeoutMs: number): Promise<boolean> {
       timer = setTimeout(() => resolveTimeout(false), timeoutMs);
     }),
   ]).finally(() => clearTimeout(timer));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function messageOf(error: unknown): string {

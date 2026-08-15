@@ -18,6 +18,7 @@ const CONFLICT_MESSAGES = [
   'BUNQUEUE_WORKFLOW_QUEUE_NAME must',
   'BUNQUEUE_WORKFLOW_CONCURRENCY must',
   'Managed Bunqueue server restarted',
+  'Server lifecycle is disabled in external mode',
 ];
 
 export function errorStatus(error: unknown): number {

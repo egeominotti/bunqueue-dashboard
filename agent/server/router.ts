@@ -1,12 +1,14 @@
 import { routeBackupRequest } from '../backup/routes';
 import type { BackupRunnerPort } from '../backup/runner';
 import { routeFlowRequest } from '../flow/routes';
+import type { ManagedTargetPolicy } from '../managedTarget';
 import type { ProcessManager } from '../manager';
 import { routeQueueOperationsRequest } from '../queue/routes';
 import type { QueueOperationsPort } from '../queue/types';
 import type { WorkflowRuntimePort } from '../workflow/runtime';
 import { routeWorkflowRuntimeRequest } from '../workflow/runtimeRoutes';
-import { routeControlRequest } from './controlRoutes';
+import { assertManagedControl, routeControlRequest } from './controlRoutes';
+import type { ServerControlTarget } from './controlTarget';
 import { routeDatabaseRequest } from './databaseRoutes';
 import type { AgentLifecyclePort } from './lifecycle';
 import { managedRuntimeAdmission } from './managedRuntime';
@@ -23,7 +25,9 @@ export async function routeAgentRequest(
   queueRuntime: QueueOperationsPort,
   lifecycle: AgentLifecyclePort,
   origin: string | null,
-  allowedOrigins: string[]
+  allowedOrigins: string[],
+  controlTarget: ServerControlTarget,
+  managedTargetPolicy?: ManagedTargetPolicy
 ): Promise<RouteResponse | Response | null> {
   if (pathname.startsWith('/control/')) {
     const control = await routeControlRequest(
@@ -32,7 +36,8 @@ export async function routeAgentRequest(
       method,
       manager,
       runtime,
-      lifecycle
+      lifecycle,
+      controlTarget
     );
     if (control) return control;
   }
@@ -47,7 +52,7 @@ export async function routeAgentRequest(
       method,
       managedConfig,
       snapshot.status === 'running',
-      { admission }
+      { admission, targetPolicy: managedTargetPolicy }
     );
     if (flow) return flow;
   }
@@ -62,7 +67,8 @@ export async function routeAgentRequest(
       managedConfig,
       runtime,
       snapshot.status === 'running',
-      admission
+      admission,
+      managedTargetPolicy
     );
     if (workflowRuntime) return workflowRuntime;
   }
@@ -84,13 +90,15 @@ export async function routeAgentRequest(
       managedConfig,
       queueRuntime,
       snapshot.status === 'running',
-      admission
+      admission,
+      managedTargetPolicy
     );
     if (queueOperation) return queueOperation;
   }
 
   if (pathname.startsWith('/backup/')) {
     if (pathname === '/backup/restore' && method === 'POST') {
+      assertManagedControl(controlTarget);
       return manager.withStoppedMaintenance('restoring a backup', async () => {
         const stoppedSnapshot = manager.getStatus();
         const restoreDesired = manager.getConfig();
@@ -105,7 +113,9 @@ export async function routeAgentRequest(
           restoreConfig,
           stoppedSnapshot.status === 'running',
           await manager.dbStats(),
-          backupRunner
+          backupRunner,
+          undefined,
+          managedTargetPolicy
         );
       });
     }
@@ -119,7 +129,8 @@ export async function routeAgentRequest(
       snapshot.status === 'running',
       database,
       backupRunner,
-      (extraEnv) => manager.setConfig({ extraEnv })
+      (extraEnv) => manager.setConfig({ extraEnv }),
+      managedTargetPolicy
     );
     if (backup) return backup;
   }

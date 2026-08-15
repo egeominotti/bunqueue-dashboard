@@ -6,6 +6,16 @@
  * agent/server/; this file preserves the existing public import path.
  */
 export { createFetchHandler } from './server/handler';
+export {
+  MANAGED_CONTROL_TARGET,
+  probeExternalHealth,
+  resolveServerControlTarget,
+} from './server/controlTarget';
+export type {
+  ExternalHealthProbe,
+  ServerControlTarget,
+  ServerManagementMode,
+} from './server/controlTarget';
 export { AgentLifecycleGate } from './server/lifecycle';
 export type { AgentLifecyclePort } from './server/lifecycle';
 export {

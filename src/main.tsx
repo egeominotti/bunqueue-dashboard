@@ -10,6 +10,7 @@ import { App } from './App';
 import { initTheme } from './components/dashboard/stores/themeStore';
 import { bootDashboard } from './lib/demo/boot';
 import { isDemo } from './lib/demo/isDemo';
+import { resolveRouterBasename, runtimeConfigValue } from './lib/runtimeConfig';
 
 initTheme();
 
@@ -19,7 +20,12 @@ if (!rootEl) throw new Error('Root element #root not found');
 function render() {
   createRoot(rootEl as HTMLElement).render(
     <StrictMode>
-      <BrowserRouter basename={import.meta.env.BASE_URL}>
+      <BrowserRouter
+        basename={resolveRouterBasename(
+          runtimeConfigValue('__BUNQUEUE_BASE_PATH__'),
+          import.meta.env.BASE_URL
+        )}
+      >
         <App />
       </BrowserRouter>
     </StrictMode>

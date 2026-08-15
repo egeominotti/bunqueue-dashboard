@@ -73,14 +73,22 @@ export function StatusConsole({
   onRestart,
 }: Props) {
   const state = status?.status ?? 'stopped';
-  const running = state === 'running';
-  const meta = STATE_META[state] ?? STATE_META.stopped;
+  const external = status?.managementMode === 'external';
+  const running = external ? status?.reachable === true : state === 'running';
+  const meta = external
+    ? status?.healthy
+      ? { label: 'External', tone: 'text-success', dot: 'bg-emerald-400' }
+      : status?.reachable
+        ? { label: 'External', tone: 'text-warning', dot: 'bg-amber-400' }
+        : { label: 'External', tone: 'text-danger', dot: 'bg-red-400' }
+    : (STATE_META[state] ?? STATE_META.stopped);
   const healthy = !!status?.healthy && !stale;
-  const crashed = !running && status?.exitCode != null && status.exitCode !== 0;
+  const crashed = !external && !running && status?.exitCode != null && status.exitCode !== 0;
 
   const cfg = status?.runningConfig ?? status?.config ?? null;
   const httpPort = cfg?.httpPort ?? 6790;
-  const serverBase = `http://localhost:${httpPort}`;
+  const serverBase = external ? (status?.externalUrl ?? '—') : `http://localhost:${httpPort}`;
+  const healthEndpoint = serverBase === '—' ? '—' : `${serverBase}/health`;
 
   return (
     <section className="mb-6 overflow-hidden rounded-xl border border-line bg-surface">
@@ -123,6 +131,14 @@ export function StatusConsole({
                 <span className="text-warning">
                   last known: pid {status?.pid ?? '—'} — agent unreachable, state may have changed
                 </span>
+              ) : external ? (
+                <span title={status?.healthError}>
+                  {status?.reachable
+                    ? healthy
+                      ? `healthy via ${healthEndpoint}`
+                      : `reachable but unhealthy via ${healthEndpoint}`
+                    : `unreachable via ${healthEndpoint}`}
+                </span>
               ) : running ? (
                 <>
                   {healthy ? 'healthy' : 'waiting for health…'} · pid {status?.pid ?? '—'} · up{' '}
@@ -136,17 +152,27 @@ export function StatusConsole({
         </div>
 
         {/* Power controls */}
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="success" disabled={running || transitioning || stale} onClick={onStart}>
-            <IconPlay className="size-4" /> Start
-          </Button>
-          <Button variant="warning" disabled={!running || transitioning || stale} onClick={onStop}>
-            <IconPause className="size-4" /> Stop
-          </Button>
-          <Button disabled={transitioning || stale} onClick={onRestart}>
-            <IconRefresh className="size-4" /> Restart
-          </Button>
-        </div>
+        {!external && (
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="success"
+              disabled={running || transitioning || stale}
+              onClick={onStart}
+            >
+              <IconPlay className="size-4" /> Start
+            </Button>
+            <Button
+              variant="warning"
+              disabled={!running || transitioning || stale}
+              onClick={onStop}
+            >
+              <IconPause className="size-4" /> Stop
+            </Button>
+            <Button disabled={transitioning || stale} onClick={onRestart}>
+              <IconRefresh className="size-4" /> Restart
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Instrument cluster */}
@@ -169,11 +195,11 @@ export function StatusConsole({
             <span className="text-faint">—</span>
           )}
         </Vital>
-        <Vital label="API endpoint" title={serverBase}>
-          {running ? (
+        <Vital label={external ? 'Health target' : 'API endpoint'} title={healthEndpoint}>
+          {serverBase !== '—' ? (
             <span className="flex items-center gap-1.5">
               <a
-                href={`${serverBase}/health`}
+                href={healthEndpoint}
                 target="_blank"
                 rel="noreferrer"
                 className="truncate text-accent hover:underline"
@@ -186,15 +212,21 @@ export function StatusConsole({
             <span className="text-faint">{serverBase}</span>
           )}
         </Vital>
-        <Vital label="Ports">{cfg ? `${cfg.httpPort} http · ${cfg.tcpPort} tcp` : '—'}</Vital>
-        <Vital label="Started">
-          {running && status?.startedAt ? formatDateTime(status.startedAt) : '—'}
+        <Vital label={external ? 'Lifecycle' : 'Ports'}>
+          {external ? 'external' : cfg ? `${cfg.httpPort} http · ${cfg.tcpPort} tcp` : '—'}
+        </Vital>
+        <Vital label={external ? 'Health HTTP' : 'Started'}>
+          {external
+            ? (status?.healthStatus ?? '—')
+            : running && status?.startedAt
+              ? formatDateTime(status.startedAt)
+              : '—'}
         </Vital>
         <Vital label="Control agent" title={agentBase}>
           {agentBase.replace(/^https?:\/\//, '')}
         </Vital>
-        <Vital label="Launch command" title={cfg?.command}>
-          {cfg?.command ?? '—'}
+        <Vital label={external ? 'Supervisor' : 'Launch command'} title={cfg?.command}>
+          {external ? 'managed elsewhere' : (cfg?.command ?? '—')}
         </Vital>
       </div>
     </section>

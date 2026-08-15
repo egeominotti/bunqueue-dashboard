@@ -5,13 +5,32 @@ import {
   type WorkflowRuntimePort,
 } from '../workflow/runtime';
 import { readLimitedJsonBody } from './jsonBody';
+import {
+  MANAGED_CONTROL_TARGET,
+  probeExternalHealth,
+  type ServerControlTarget,
+} from './controlTarget';
 import type { AgentLifecyclePort } from './lifecycle';
 import type { RouteResponse } from './types';
 
 const MAX_CONFIG_BODY_BYTES = 64 * 1024;
 
-async function statusWithHealth(manager: ProcessManager) {
+async function statusWithHealth(manager: ProcessManager, controlTarget: ServerControlTarget) {
   const snapshot = manager.getStatus();
+  if (controlTarget.mode === 'external') {
+    const health = await probeExternalHealth(controlTarget);
+    return {
+      ...snapshot,
+      managementMode: 'external' as const,
+      healthy: health.healthy,
+      version: health.version,
+      reachable: health.reachable,
+      externalUrl: controlTarget.url,
+      healthStatus: health.statusCode,
+      healthError: health.error,
+      db: null,
+    };
+  }
   let healthy = false;
   let version: string | undefined;
   if (snapshot.status === 'running') {
@@ -33,7 +52,7 @@ async function statusWithHealth(manager: ProcessManager) {
     }
   }
   const database = await manager.dbStats().catch(() => null);
-  return { ...snapshot, healthy, version, db: database };
+  return { ...snapshot, managementMode: 'managed' as const, healthy, version, db: database };
 }
 
 export async function routeControlRequest(
@@ -42,40 +61,45 @@ export async function routeControlRequest(
   method: string,
   manager: ProcessManager,
   runtime: WorkflowRuntimePort,
-  lifecycle?: AgentLifecyclePort
+  lifecycle?: AgentLifecyclePort,
+  controlTarget: ServerControlTarget = MANAGED_CONTROL_TARGET
 ): Promise<RouteResponse | null> {
   if (pathname === '/control/status') {
-    return { status: 200, body: await statusWithHealth(manager) };
+    return { status: 200, body: await statusWithHealth(manager, controlTarget) };
   }
   if (pathname === '/control/logs') {
     return { status: 200, body: { lines: manager.getLogs() } };
   }
   if (pathname === '/control/start' && method === 'POST') {
+    assertManagedControl(controlTarget);
     return coordinated(lifecycle, async () => {
       await manager.start();
-      return { status: 200, body: await statusWithHealth(manager) };
+      return { status: 200, body: await statusWithHealth(manager, controlTarget) };
     });
   }
   if (pathname === '/control/stop' && method === 'POST') {
+    assertManagedControl(controlTarget);
     return coordinated(lifecycle, async () => {
       await stopWithRuntimeCleanup(manager, runtime);
-      return { status: 200, body: await statusWithHealth(manager) };
+      return { status: 200, body: await statusWithHealth(manager, controlTarget) };
     });
   }
   if (pathname === '/control/restart' && method === 'POST') {
+    assertManagedControl(controlTarget);
     return coordinated(lifecycle, async () => {
       const closeResult = await settle(() => runtime.close());
       if (!closeResult.ok) {
         await stopAfterCloseFailure(manager, workflowCloseError(closeResult.error));
       }
       await manager.restart();
-      return { status: 200, body: await statusWithHealth(manager) };
+      return { status: 200, body: await statusWithHealth(manager, controlTarget) };
     });
   }
   if (pathname === '/control/config' && method === 'GET') {
     return { status: 200, body: manager.getConfig() };
   }
   if (pathname === '/control/config' && method === 'PUT') {
+    assertManagedControl(controlTarget);
     const patch = validateConfigPatch(
       await readLimitedJsonBody(request, {
         scope: 'Agent configuration',
@@ -86,6 +110,14 @@ export async function routeControlRequest(
     return { status: 200, body: manager.setConfig(patch) };
   }
   return null;
+}
+
+export function assertManagedControl(controlTarget: ServerControlTarget): void {
+  if (controlTarget.mode === 'external') {
+    throw new Error(
+      'Server lifecycle is disabled in external mode (BUNQUEUE_MANAGED=0); manage this broker with its external supervisor'
+    );
+  }
 }
 
 async function stopWithRuntimeCleanup(

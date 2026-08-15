@@ -4,6 +4,8 @@ import {
   agentSubUrl,
   apiTokenOk,
   isRemoteBridgeRequest,
+  prefixCssAssetUrls,
+  stripBasePath,
   type ServeHandlerOptions,
   withSecurityHeaders,
 } from './servePolicy';
@@ -24,8 +26,10 @@ export function createServeHandler(opts: ServeHandlerOptions) {
     apiShutdownSignal,
     remoteBridgePolicy = false,
     trustProxy = false,
+    basePath = '',
   } = opts;
   const secure = withSecurityHeaders;
+  const rewrittenCss = new Map<string, Promise<string>>();
   const indexResponse = () =>
     new Response(indexHtml, { headers: { 'content-type': 'text/html; charset=utf-8' } });
 
@@ -34,6 +38,8 @@ export function createServeHandler(opts: ServeHandlerOptions) {
     if (!isHostAllowed(req.headers.get('host'), allowedHosts)) {
       return secure(new Response('Host not allowed', { status: 403 }));
     }
+    const pathname = stripBasePath(url.pathname, basePath);
+    if (pathname === null) return secure(new Response('Not found', { status: 404 }));
 
     const origin = req.headers.get('origin');
     let originHost = '';
@@ -49,7 +55,7 @@ export function createServeHandler(opts: ServeHandlerOptions) {
       originHost !== '' &&
       (originHost === url.host.toLowerCase() || originHost === forwardedHost);
 
-    if (url.pathname === '/agent' || url.pathname.startsWith('/agent/')) {
+    if (pathname === '/agent' || pathname.startsWith('/agent/')) {
       const remoteRequest = isRemoteBridgeRequest(req, remoteBridgePolicy);
       if (!agentBridge || (remoteRequest && !agentTokenConfigured)) {
         return secure(
@@ -63,7 +69,7 @@ export function createServeHandler(opts: ServeHandlerOptions) {
           )
         );
       }
-      const sub = agentSubUrl(url.pathname, url.search);
+      const sub = agentSubUrl(pathname, url.search);
       const headers = new Headers(req.headers);
       if (sameOrigin && origin && !isOriginAllowed(origin, allowedOrigins)) headers.delete('origin');
       const handleAgent = remoteRequest ? remoteAgentHandle : agentHandle;
@@ -79,7 +85,7 @@ export function createServeHandler(opts: ServeHandlerOptions) {
       );
     }
 
-    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+    if (pathname === '/api' || pathname.startsWith('/api/')) {
       if (!sameOrigin && !isOriginAllowed(origin, allowedOrigins)) {
         return secure(
           Response.json({ ok: false, error: 'Origin not allowed' }, { status: 403 })
@@ -107,7 +113,7 @@ export function createServeHandler(opts: ServeHandlerOptions) {
           );
         }
       }
-      const target = api + (url.pathname.slice(4) || '/') + url.search;
+      const target = api + (pathname.slice(4) || '/') + url.search;
       let res: Response;
       const signal = apiShutdownSignal
         ? AbortSignal.any([req.signal, apiShutdownSignal])
@@ -142,11 +148,25 @@ export function createServeHandler(opts: ServeHandlerOptions) {
       );
     }
 
-    const key = url.pathname === '/' ? '/index.html' : url.pathname;
+    const key = pathname === '/' ? '/index.html' : pathname;
     if (key === '/index.html') return secure(indexResponse());
     const asset = assets[key];
-    if (asset) return secure(new Response(Bun.file(asset)));
-    if (url.pathname.startsWith('/assets/')) {
+    if (asset) {
+      if (basePath && key.endsWith('.css')) {
+        let css = rewrittenCss.get(asset);
+        if (!css) {
+          css = Bun.file(asset)
+            .text()
+            .then((contents) => prefixCssAssetUrls(contents, basePath));
+          rewrittenCss.set(asset, css);
+        }
+        return secure(
+          new Response(await css, { headers: { 'content-type': 'text/css; charset=utf-8' } })
+        );
+      }
+      return secure(new Response(Bun.file(asset)));
+    }
+    if (pathname.startsWith('/assets/')) {
       return secure(new Response('Not found', { status: 404 }));
     }
     return secure(indexResponse());

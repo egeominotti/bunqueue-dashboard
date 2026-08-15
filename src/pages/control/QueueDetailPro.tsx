@@ -43,7 +43,7 @@ export function QueueDetailPro() {
 
   const fetcher = useCallback(async () => {
     if (!name) return null;
-    // v2.8.57 synthesizes an empty detail for any valid queue name. Establish
+    // v2.8.59 synthesizes an empty detail for any valid queue name. Establish
     // membership first so a typo never exposes destructive controls for a
     // queue that does not actually exist.
     const summary = await bq.queuesSummary();

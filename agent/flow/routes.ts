@@ -1,5 +1,5 @@
 import type { ServerConfig } from '../manager';
-import { assertManagedTarget } from '../managedTarget';
+import { assertManagedTarget, type ManagedTargetPolicy } from '../managedTarget';
 import type {
   ManagedRuntimeAdmission,
   ManagedRuntimeSnapshot,
@@ -27,6 +27,7 @@ export interface FlowOperationsPort {
 export interface FlowRouteDependencies {
   admission?: ManagedRuntimeAdmission;
   operations?: FlowOperationsPort;
+  targetPolicy?: ManagedTargetPolicy;
 }
 
 const DEFAULT_OPERATIONS: FlowOperationsPort = {
@@ -95,7 +96,7 @@ export async function routeFlowRequest(
   }
   if (pathname === '/flows/create' && method === 'POST') {
     const query = exactQuery(request.url, ['target']);
-    assertManagedTarget(query, config);
+    assertManagedTarget(query, config, dependencies.targetPolicy);
     const body = await readFlowJsonBody(request);
     return success(
       await admitted(query, config, serverRunning, dependencies, ({ config: current }) =>
@@ -105,7 +106,7 @@ export async function routeFlowRequest(
   }
   if (pathname === '/flows/tree' && method === 'GET') {
     const query = exactQuery(request.url, ['id', 'queueName', 'depth', 'maxChildren', 'target']);
-    assertManagedTarget(query, config);
+    assertManagedTarget(query, config, dependencies.targetPolicy);
     const target = {
       id: required(query, 'id'),
       queueName: required(query, 'queueName'),
@@ -120,7 +121,7 @@ export async function routeFlowRequest(
   }
   if (pathname === '/flows/results' && method === 'POST') {
     const query = exactQuery(request.url, ['target']);
-    assertManagedTarget(query, config);
+    assertManagedTarget(query, config, dependencies.targetPolicy);
     const body = await readFlowJsonBody(request);
     return success(
       await admitted(query, config, serverRunning, dependencies, ({ config: current }) =>
@@ -136,7 +137,7 @@ export async function routeFlowRequest(
       ? ['queueName', 'target', 'ttl']
       : ['queueName', 'target']
   );
-  assertManagedTarget(query, config);
+  assertManagedTarget(query, config, dependencies.targetPolicy);
   const target = { id: decodeURIComponent(match[1]), queueName: required(query, 'queueName') };
   const operation = match[2];
   if (method === 'GET' && operation === 'waitUntilFinished') {
@@ -176,7 +177,7 @@ function admitted<T>(
   operation: (snapshot: ManagedRuntimeSnapshot) => Promise<T>
 ): Promise<T> {
   const execute = async (snapshot: ManagedRuntimeSnapshot) => {
-    assertManagedTarget(query, snapshot.config);
+    assertManagedTarget(query, snapshot.config, dependencies.targetPolicy);
     assertRunning(snapshot.running);
     return operation(snapshot);
   };

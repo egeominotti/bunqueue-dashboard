@@ -15,6 +15,30 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.37] - 2026-08-15
+
+### Added
+
+- Added the runtime `BASE_PATH` mount for all-in-one reverse-proxy deployments,
+  including prefixed SPA navigation, assets, API traffic and agent operations.
+- Added explicit `BUNQUEUE_MANAGED=0` attach-only status for brokers supervised
+  by systemd, Docker or Kubernetes.
+
+### Changed
+
+- Aligned the installed client, managed start command, E2E matrix, demo data,
+  operator copy and contract documentation with Bunqueue 2.8.59; the dashboard
+  now requires Bun 1.3.9 or newer to match that release.
+
+### Fixed
+
+- Preserved the anti-SSRF target pin when `/api` is mounted below `BASE_PATH`,
+  so Flow, Workflow, Queue operations and Backup routes remain usable.
+- Migrated the historical persisted `/api` default to the active runtime mount
+  while preserving explicitly saved custom server URLs.
+- External mode now rejects lifecycle/config changes and stopped-only backup
+  restores with HTTP 409 before any process, body or backup side effect.
+
 ## [0.0.36] - 2026-08-04
 
 ### Added
@@ -1097,7 +1121,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.36...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.37...HEAD
+[0.0.37]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.36...v0.0.37
 [0.0.36]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.35...v0.0.36
 [0.0.35]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.34...v0.0.35
 [0.0.34]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.33...v0.0.34

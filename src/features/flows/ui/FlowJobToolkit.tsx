@@ -89,7 +89,7 @@ export function FlowJobToolkit({
             <h2 className="text-sm font-semibold text-fg">Flow Job methods</h2>
             <p className="mt-1 text-xs text-faint">
               State predicates, serialization, bounded waiting, and durable mutations from Bunqueue
-              2.8.57.
+              2.8.59.
             </p>
           </div>
           {busy && <span className="font-mono text-xs text-accent">{busy}…</span>}

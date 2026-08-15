@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { runtimeConfigValue } from '@/lib/runtimeConfig';
 import { createResilientStateStorage } from './resilientStateStorage';
 
 export interface ConnectionSaveResult {
@@ -35,7 +36,7 @@ interface ConnectionState {
 
 export const SAFE_DEFAULT_BASE_URL = '/api';
 export const CONNECTION_STORAGE_KEY = 'bq-dash-connection';
-const CONNECTION_STORAGE_VERSION = 2;
+const CONNECTION_STORAGE_VERSION = 3;
 export const BASE_URL_ERROR =
   "Use an http(s) URL without credentials, query, or fragment, or a non-root path starting with '/'.";
 
@@ -117,12 +118,15 @@ export function isValidBaseUrl(value: unknown): boolean {
   return normalizeBaseUrl(value) !== null;
 }
 
-/** Resolve VITE_BUNQUEUE_URL without allowing an unsafe build-time default. */
-export function resolveDefaultBaseUrl(value: unknown): string {
-  return normalizeBaseUrl(value) ?? SAFE_DEFAULT_BASE_URL;
+/** Resolve build/runtime defaults without allowing an unsafe target. */
+export function resolveDefaultBaseUrl(value: unknown, runtimeValue?: unknown): string {
+  return normalizeBaseUrl(value) ?? normalizeBaseUrl(runtimeValue) ?? SAFE_DEFAULT_BASE_URL;
 }
 
-const DEFAULT_BASE_URL = resolveDefaultBaseUrl(import.meta.env.VITE_BUNQUEUE_URL);
+const DEFAULT_BASE_URL = resolveDefaultBaseUrl(
+  import.meta.env.VITE_BUNQUEUE_URL,
+  runtimeConfigValue('__BUNQUEUE_API_URL__')
+);
 const DEFAULT_REFRESH_MS = 3000;
 const MIN_REFRESH_MS = 500;
 const MAX_REFRESH_MS = 60_000;
@@ -167,6 +171,22 @@ export function sanitizedPersistedConnectionState(value: unknown): {
     baseUrl: safeBaseUrl(stored.baseUrl),
     refreshMs: safeRefreshMs(stored.refreshMs),
   };
+}
+
+/** Move the historical implicit `/api` default to this deployment's runtime mount. */
+export function migratePersistedConnectionState(
+  value: unknown,
+  storedVersion: number,
+  deploymentDefault: unknown = DEFAULT_BASE_URL
+): { baseUrl: string; refreshMs: number } {
+  const state = sanitizedPersistedConnectionState(value);
+  if (storedVersion < CONNECTION_STORAGE_VERSION && state.baseUrl === SAFE_DEFAULT_BASE_URL) {
+    return {
+      ...state,
+      baseUrl: resolveDefaultBaseUrl(undefined, deploymentDefault),
+    };
+  }
+  return state;
 }
 
 let lastPersistenceError: Error | null = null;
@@ -231,7 +251,7 @@ export const useConnectionStore = create<ConnectionState>()(
       // already persisted by older builds (partialize alone only stops new writes).
       version: CONNECTION_STORAGE_VERSION,
       partialize: persistedConnectionState,
-      migrate: sanitizedPersistedConnectionState,
+      migrate: migratePersistedConnectionState,
       // `merge` runs for same-version data too. localStorage is user-controlled
       // and older/corrupt blobs must not inject NaN/strings into setTimeout or
       // resurrect bearer-token fields from a historical schema.

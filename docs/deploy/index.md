@@ -72,6 +72,48 @@ uses `AUTH_TOKENS`, configure that value upstream too because Authorization is
 forwarded. This gate belongs to the all-in-one server; static hosting still
 depends on Bunqueue or the front proxy for authentication.
 
+### Existing externally supervised server
+
+The all-in-one process normally owns the Bunqueue child lifecycle. If systemd,
+Docker or Kubernetes already owns that process, make the relationship explicit:
+
+```bash
+BUNQUEUE_MANAGED=0 \
+BUNQUEUE_URL=http://127.0.0.1:6790 \
+BUNQUEUE_TOKEN="$SERVER_TOKEN" \
+bunx bunqueue-dashboard
+```
+
+In this attach-only mode, **Control ▸ Server** probes `BUNQUEUE_URL/health`,
+labels the server **External**, and exposes no Start, Stop, Restart or launch
+configuration controls. The agent rejects those lifecycle/config mutations with
+HTTP 409 as a second line of defense. Stopped-only backup restore receives the
+same fail-closed response because external process state cannot be proven.
+
+### All-in-one server below a URL prefix
+
+`BASE_PATH` is the runtime equivalent of a static build's `VITE_BASE`. It moves
+the SPA router, embedded assets, same-origin API proxy and agent bridge together:
+
+```bash
+BASE_PATH=/internal/queue bunx bunqueue-dashboard
+```
+
+Preserve the prefix when forwarding to the all-in-one listener:
+
+```nginx
+location /internal/queue/ {
+  proxy_pass http://127.0.0.1:8080;
+}
+```
+
+The browser then uses `/internal/queue/assets/*`, `/internal/queue/api/*` and
+`/internal/queue/agent/*`; deep-link refreshes stay inside the mount. Requests
+outside the configured mount return 404. `BASE_PATH` accepts a leading-slash,
+URL-safe path and normalizes its trailing slash. Target-pinned Flow, Workflow,
+Queue and Backup requests accept only that exact prefixed API alias and still
+resolve it through the local anti-SSRF check.
+
 ## Pick your target
 
 | You want to | Go to |

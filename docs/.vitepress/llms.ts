@@ -22,7 +22,7 @@ export function createLlmsPlugin() {
       '',
       '- `GET /webhooks`, `/workers`, `/storage`, `/ping` wrap the payload in `{ ok, data: {...} }`; `/queues/:q/dlq`, `/dlq/stats`, `/crons`, `/queues/:q/counts` are flat.',
       '- DLQ entries are nested `{ job, enteredAt, reason, error, attempts[] }`, with no top-level `id`/`name`.',
-      '- Bunqueue 2.8.57 jobs expose first-class `name`, terminal `returnvalue`, and `failedReason`; they use `startedAt`/`completedAt` (not `processedOn`/`finishedOn`).',
+      '- Bunqueue 2.8.59 jobs expose first-class `name`, terminal `returnvalue`, and `failedReason`; they use `startedAt`/`completedAt` (not `processedOn`/`finishedOn`).',
       '',
       'For the full per-section walkthrough see the User guide pages; for endpoint shapes see API mapping; for honest current limits see Known issues.',
     ].join('\n'),

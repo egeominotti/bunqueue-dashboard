@@ -90,7 +90,7 @@ describe('S3 backup operations', () => {
     const host = render(createElement(BackupOperationsPanel, { repository }));
     await settle(3);
     expect(host.querySelector('[role="alert"]')?.textContent).toContain(
-      'invalid Bunqueue 2.8.57 contract'
+      'invalid Bunqueue 2.8.59 contract'
     );
     expect(host.textContent).toContain('No backup objects returned');
   });

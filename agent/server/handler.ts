@@ -3,7 +3,9 @@ import type { ProcessManager } from '../manager';
 import { QueueOperationsRuntime } from '../queue/runtime';
 import type { QueueOperationsPort } from '../queue/types';
 import { WorkflowRuntime, type WorkflowRuntimePort } from '../workflow/runtime';
+import { resolveManagedTargetPolicy } from '../managedTarget';
 import { errorMessage, errorStatus } from './errors';
+import { MANAGED_CONTROL_TARGET } from './controlTarget';
 import { AgentLifecycleGate, type AgentLifecyclePort } from './lifecycle';
 import { corsHeaders, isHostAllowed, isOriginAllowed, tokenOk } from './policy';
 import { routeAgentRequest } from './router';
@@ -39,7 +41,12 @@ export function createFetchHandler(
     allowedHosts,
     token,
     requireTokenForAll = false,
+    controlTarget = MANAGED_CONTROL_TARGET,
   } = options;
+  const managedTargetPolicy = resolveManagedTargetPolicy(
+    options.managedProxyPath,
+    options.managedProxyUrl
+  );
   const json = (body: unknown, status: number, origin: string | null) =>
     responseOf({ body, status }, origin, allowedOrigins);
 
@@ -74,7 +81,9 @@ export function createFetchHandler(
         queueRuntime,
         lifecycle,
         origin,
-        allowedOrigins
+        allowedOrigins,
+        controlTarget,
+        managedTargetPolicy
       );
       return responseOf(result, origin, allowedOrigins);
     } catch (error) {

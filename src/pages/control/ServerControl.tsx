@@ -23,7 +23,8 @@ export function ServerControl() {
 
   // RAM + connections come from the server's own /health, not the agent —
   // only poll it while the process is running (it can't answer otherwise).
-  const serverUp = data?.status === 'running';
+  const external = data?.managementMode === 'external';
+  const serverUp = external ? data?.reachable === true : data?.status === 'running';
   const { data: health } = usePolledData(
     () => (serverUp ? bq.health() : Promise.resolve(null)),
     [serverUp]
@@ -89,7 +90,11 @@ export function ServerControl() {
     <div>
       <PageHeader
         title="Server"
-        description="Supervise the bunqueue server process — lifecycle, configuration, storage and logs."
+        description={
+          external
+            ? 'Observe the Bunqueue server managed by an external supervisor.'
+            : 'Supervise the bunqueue server process — lifecycle, configuration, storage and logs.'
+        }
       />
 
       {actionError && (
@@ -128,18 +133,33 @@ export function ServerControl() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ConfigCard
-          status={data}
-          onSaved={refetch}
-          running={running}
-          transitioning={transitioning}
-        />
-        <div className="flex flex-col gap-6">
-          {data?.db && <StoragePanel db={data.db} />}
-          <ProcessLogs />
+      {external ? (
+        <Card>
+          <CardHeader title="Managed externally" />
+          <p className="text-sm text-muted">
+            This dashboard is attached to{' '}
+            <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs">
+              {data?.externalUrl ?? 'BUNQUEUE_URL'}
+            </code>
+            . Start, stop, restart and launch configuration are intentionally unavailable while{' '}
+            <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs">BUNQUEUE_MANAGED=0</code>.
+            Use systemd, Docker, Kubernetes or the broker's external supervisor instead.
+          </p>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <ConfigCard
+            status={data}
+            onSaved={refetch}
+            running={running}
+            transitioning={transitioning}
+          />
+          <div className="flex flex-col gap-6">
+            {data?.db && <StoragePanel db={data.db} />}
+            <ProcessLogs />
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="mt-6">
         <AgentInfoCard agentBase={bq.agentBase} />

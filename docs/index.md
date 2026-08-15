@@ -19,7 +19,7 @@ import { withBase } from 'vitepress'
 
 <h1 class="lp-h1">The only queue dashboard that also<br>runs the server</h1>
 
-<p class="lp-sub">A free, open source web UI that <strong>safely operates</strong> a bunqueue server (a fast, Redis-free, Bun-native background-job queue): queues, jobs, dead-letter queue, cron, webhooks, workers and live activity, plus start / stop / restart of the server process itself. Built for Bun developers and AI-agent builders who want to <em>operate</em> their queue, not just watch it. It uses Bunqueue's public HTTP API plus its pinned public client/CLI behind a tiny loopback control agent, and fails closed when the v2.8.57 contract cannot make a mutation atomic.</p>
+<p class="lp-sub">A free, open source web UI that <strong>safely operates</strong> a bunqueue server (a fast, Redis-free, Bun-native background-job queue): queues, jobs, dead-letter queue, cron, webhooks, workers and live activity, plus start / stop / restart of the server process itself. Built for Bun developers and AI-agent builders who want to <em>operate</em> their queue, not just watch it. It uses Bunqueue's public HTTP API plus its pinned public client/CLI behind a tiny loopback control agent, and fails closed when the v2.8.59 contract cannot make a mutation atomic.</p>
 
 <p class="lp-ctas">
 <a class="lp-btn lp-btn-primary" href="https://egeominotti.github.io/bunqueue-dashboard/" target="_blank" rel="noreferrer">Open the live demo</a>
@@ -58,7 +58,7 @@ import { withBase } from 'vitepress'
 
 ### State-gated job actions
 
-Add and inspect jobs, promote delayed work, and update eligible job data, priority, delay or progress. DLQ retry, completed-job requeue and destructive Cancel fail closed under the v2.8.57 contract. <a href="./guide/job-inspector">Job Inspector →</a>
+Add and inspect jobs, promote delayed work, and update eligible job data, priority, delay or progress. DLQ retry, completed-job requeue and destructive Cancel fail closed under the v2.8.59 contract. <a href="./guide/job-inspector">Job Inspector →</a>
 
 </article>
 
@@ -361,7 +361,7 @@ Four ways: the prebuilt npm package (`bunx bunqueue-dashboard`), a standalone bi
 
 ### What doesn't it do?
 
-Alerts are evaluated in the browser while a tab is open, so it's not away-from-desk paging. S3 credentials remain session-only even though configuration and operations are available in the UI. Mutations that v2.8.57 cannot make atomic are intentionally disabled, including every DLQ retry and completed-job requeue. DLQ <code>maxAge</code>/<code>maxEntries</code> are shown read-only and omitted from saves; auto-retry can only be disabled. Every verified contract gap is listed on the <a href="./known-issues">known issues</a> page.
+Alerts are evaluated in the browser while a tab is open, so it's not away-from-desk paging. S3 credentials remain session-only even though configuration and operations are available in the UI. Mutations that v2.8.59 cannot make atomic are intentionally disabled, including every DLQ retry and completed-job requeue. DLQ <code>maxAge</code>/<code>maxEntries</code> are shown read-only and omitted from saves; auto-retry can only be disabled. Every verified contract gap is listed on the <a href="./known-issues">known issues</a> page.
 
 </article>
 

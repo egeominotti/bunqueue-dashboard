@@ -42,7 +42,7 @@ describe('BulkAddJobs', () => {
     expect(coerceBody({ data: {}, jobId: 1001 }, {}, 'spec').jobId).toBe('1001');
   });
 
-  test('spec mode preserves Bunqueue 2.8.57 first-class job names', () => {
+  test('spec mode preserves Bunqueue 2.8.59 first-class job names', () => {
     expect(coerceBody({ name: 'send-email', data: { userId: 7 } }, {}, 'spec')).toMatchObject({
       name: 'send-email',
       data: { userId: 7 },

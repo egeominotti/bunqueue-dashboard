@@ -1,5 +1,5 @@
 import type { ExecutionState } from 'bunqueue/workflow';
-import { assertManagedTarget } from '../managedTarget';
+import { assertManagedTarget, type ManagedTargetPolicy } from '../managedTarget';
 import type { ServerConfig } from '../manager';
 import { readLimitedJsonBody } from '../server/jsonBody';
 import type {
@@ -24,17 +24,18 @@ export async function routeWorkflowRuntimeRequest(
   config: ServerConfig,
   runtime: WorkflowRuntimePort,
   serverRunning: boolean,
-  admission?: ManagedRuntimeAdmission
+  admission?: ManagedRuntimeAdmission,
+  targetPolicy?: ManagedTargetPolicy
 ): Promise<WorkflowRuntimeRouteResponse | null> {
   if (!isRuntimePath(pathname, method)) return null;
   const query = exactTargetQuery(request.url);
-  assertManagedTarget(query, config);
+  assertManagedTarget(query, config, targetPolicy);
   const admitted = <T>(
     requiresRunning: boolean,
     operation: (snapshot: ManagedRuntimeSnapshot) => Promise<T>
   ): Promise<T> => {
     const execute = async (snapshot: ManagedRuntimeSnapshot) => {
-      assertManagedTarget(query, snapshot.config);
+      assertManagedTarget(query, snapshot.config, targetPolicy);
       if (requiresRunning && !snapshot.running) {
         throw new Error('Start the managed Bunqueue server before workflow control.');
       }

@@ -44,7 +44,7 @@ try {
   console.log(
     JSON.stringify(
       {
-        bunqueue: '2.8.57',
+        bunqueue: '2.8.59',
         queue: queueName,
         verified: [
           'getGlobalRateLimit',

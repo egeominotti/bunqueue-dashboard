@@ -32,9 +32,10 @@ start / stop / restart bunqueue for you.
 
 Configure with env vars: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` · `AGENT_PORT` ·
 `AGENT_ALLOWED_ORIGINS` · `AGENT_ALLOWED_HOSTS` · `AGENT_TOKEN` · `BUNQUEUE_TOKEN` ·
-`TRUST_PROXY` · `BUNQUEUE_START_CMD`. LAN and reverse-proxy deployments require
-an explicit Host/origin allowlist plus `AGENT_TOKEN` for `/agent` and
-`BUNQUEUE_TOKEN` for `/api`; see [PM2 deployment](/deploy/pm2).
+`TRUST_PROXY` · `BASE_PATH` · `BUNQUEUE_MANAGED` · `BUNQUEUE_START_CMD`. LAN and
+reverse-proxy deployments require an explicit Host/origin allowlist plus
+`AGENT_TOKEN` for `/agent` and `BUNQUEUE_TOKEN` for `/api`; see
+[PM2 deployment](/deploy/pm2).
 To install it permanently instead of running via `bunx`:
 
 ```bash
@@ -81,6 +82,12 @@ Two ways, pick either:
 - **Point at an existing server.** Open **[Settings](/guide/settings)** and set the
   server URL (and a bearer token if it runs with `AUTH_TOKENS`), or bake it in at
   build time with `VITE_BUNQUEUE_URL`.
+
+When the all-in-one dashboard connects to a broker owned by systemd, Docker or
+Kubernetes, launch it with `BUNQUEUE_MANAGED=0 BUNQUEUE_URL=http://127.0.0.1:6790`.
+The Server page becomes an attach-only health view and all child-process controls
+are removed. Backup restore also fails closed because only the external supervisor
+can prove that the broker has released its database.
 
 ## Next steps
 

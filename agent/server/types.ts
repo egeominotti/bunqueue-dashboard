@@ -1,4 +1,5 @@
 import type { WorkflowRuntimePort } from '../workflow/runtime';
+import type { ServerControlTarget } from './controlTarget';
 
 export interface AgentOptions {
   allowedOrigins: string[];
@@ -8,6 +9,12 @@ export interface AgentOptions {
   token?: string;
   /** Network exposure: require token on every non-OPTIONS request. */
   requireTokenForAll?: boolean;
+  /** Managed child by default; external mode makes lifecycle routes attach-only. */
+  controlTarget?: ServerControlTarget;
+  /** Exact browser-visible `/api` alias accepted by target-pinned agent routes. */
+  managedProxyPath?: string;
+  /** Upstream URL the alias must resolve to; it still passes the local-target gate. */
+  managedProxyUrl?: string;
 }
 
 export interface AgentFetchHandler {

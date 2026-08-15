@@ -1,4 +1,4 @@
-/** Queue grammar accepted by Bunqueue v2.8.57. */
+/** Queue grammar accepted by Bunqueue v2.8.59. */
 const QUEUE_NAME_RE = /^[a-zA-Z0-9_\-.:]+$/;
 
 /**
@@ -64,11 +64,11 @@ export function decodedHttpPathSegment(
 }
 
 /**
- * v2.8.57 reads several resource ids from `URL.pathname` without decoding the
+ * v2.8.59 reads several resource ids from `URL.pathname` without decoding the
  * captured segment. Only characters that survive WHATWG URL parsing verbatim
  * and do not introduce a slash can therefore round-trip. Percent, square
  * brackets, and pipe are deliberately included: Bun's URL implementation
- * preserves them byte-for-byte in pathname and the v2.8.57 router treats them
+ * preserves them byte-for-byte in pathname and the v2.8.59 router treats them
  * as ordinary opaque id bytes.
  */
 const OPAQUE_HTTP_ID_RE = /^[A-Za-z0-9._~!$&'()*+,;=:@%[\]|-]+$/;
@@ -78,7 +78,7 @@ export function opaqueHttpIdError(id: string): string | null {
   if (typeof id !== 'string' || !id) return 'ID must not be empty';
   if (id.length > 1024) return 'ID must be 1024 characters or fewer';
   if (!OPAQUE_HTTP_ID_RE.test(id)) {
-    return "Bunqueue v2.8.57 HTTP can address only opaque path-safe IDs (letters, numbers, and . _ ~ ! $ & ' ( ) * + , ; = : @ % [ ] | -); spaces, slash, backslash, ? and # are unsupported";
+    return "Bunqueue v2.8.59 HTTP can address only opaque path-safe IDs (letters, numbers, and . _ ~ ! $ & ' ( ) * + , ; = : @ % [ ] | -); spaces, slash, backslash, ? and # are unsupported";
   }
   if (WHATWG_DOT_SEGMENT_RE.test(id)) {
     return 'ID must not resolve to "." or ".." because URL parsers treat it as a path traversal segment';

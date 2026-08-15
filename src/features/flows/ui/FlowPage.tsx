@@ -15,7 +15,7 @@ export function FlowPage() {
     <div>
       <PageHeader
         title="Job Flows"
-        description="Inspect Bunqueue 2.8.57 parent, child, and dependency topology as an operational DAG."
+        description="Inspect Bunqueue 2.8.59 parent, child, and dependency topology as an operational DAG."
         actions={
           explorer.graph && (
             <button

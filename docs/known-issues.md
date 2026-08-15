@@ -10,7 +10,7 @@ exact file so you can confirm or fix it. None of these are catastrophic; the
 dashboard is fully usable. They're documented here because "professional docs"
 means being honest about the rough edges, not hiding them.
 
-## [Bunqueue v2.8.57](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.57) server-contract constraints
+## [Bunqueue v2.8.59](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.59) server-contract constraints
 
 These constraints are in the upstream HTTP contract and cannot be made atomic
 by a browser client. The dashboard fails closed where it can and names the risk
@@ -47,7 +47,7 @@ at the point of action:
 - **Rate-limit and concurrency policies are write-only over HTTP.** Bunqueue's
   HTTP surface still exposes PUT/DELETE without matching reads, so the desired-
   state forms remain explicit replacements rather than editable cached values.
-  Queue Control now complements them with live, target-pinned Bunqueue 2.8.57
+  Queue Control now complements them with live, target-pinned Bunqueue 2.8.59
   Queue SDK readback for the global rate limit, concurrency, remaining TTL, and
   saturation; write receipts are never presented as server truth.
 
@@ -218,7 +218,7 @@ reproduce / impact passes before fixing) resolved the following, gate green, wit
   selection, so Retry/Cancel can't fire against the wrong entity.
 - **JobDataEditor no longer wipes unsaved edits** on every action-driven job
   reload, it re-seeds by content, not object identity. Flow jobs are read-only:
-  v2.8.57 replaces the full payload and would otherwise erase the reserved
+  v2.8.59 replaces the full payload and would otherwise erase the reserved
   parent/children metadata used by FlowReader.
 - **ServerControl shows an amber "agent unreachable" banner** (and disables
   lifecycle buttons, freezes the uptime ticker) when the status poll fails
@@ -341,7 +341,7 @@ ship with reproducing tests (`test/agent-server.test.ts`, `test/manager.test.ts`
 
 - **S3 operations require the local control agent.** `/s3` can now apply the
   whitelisted Bunqueue environment, inspect/list backups, create one on demand,
-  and perform a stop-gated, snapshot-confirmed restore through the exact 2.8.57
+  and perform a stop-gated, snapshot-confirmed restore through the exact 2.8.59
   CLI. `/s3-classic` remains a read-only environment reference. Static hosting
   and arbitrary remote targets cannot run commands on a machine they do not
   manage.

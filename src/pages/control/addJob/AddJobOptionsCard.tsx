@@ -181,7 +181,7 @@ function AdvancedOptions({
         <div className="col-span-2 md:col-span-3">
           <Field
             label="Repeat policy (JSON)"
-            hint='v2.8.57-safe form: e.g. {"every":60000,"limit":10}. Use Cron Manager for cron patterns.'
+            hint='v2.8.59-safe form: e.g. {"every":60000,"limit":10}. Use Cron Manager for cron patterns.'
           >
             <textarea
               name="repeat-policy"

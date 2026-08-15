@@ -11,7 +11,7 @@ A browser cannot start or stop an OS process, and bunqueue's HTTP API has no
 process-lifecycle endpoint (and we don't modify bunqueue). So the dashboard ships
 a tiny **local agent**, a Bun process that supervises a bunqueue server child.
 It also hosts target-pinned Flow, Workflow, and Queue operations through
-Bunqueue's public 2.8.57 client, runs the pinned backup implementation, and
+Bunqueue's public 2.8.59 client, runs the pinned backup implementation, and
 exposes read-only SQLite observability that the browser cannot perform directly.
 
 ## Files
@@ -77,6 +77,10 @@ Env: `AGENT_ALLOWED_ORIGINS` (comma-separated; merged with dev defaults
 `http://localhost:5273`, `http://127.0.0.1:5273`), `AGENT_ALLOWED_HOSTS` and
 `AGENT_TOKEN`; the all-in-one server also reads `TRUST_PROXY` and the separate
 `BUNQUEUE_TOKEN`, which gates every remote/proxied `/api/*` request.
+`BUNQUEUE_MANAGED=0` selects attach-only mode: the agent probes the configured
+`BUNQUEUE_URL` with that server token and rejects lifecycle/config mutations.
+It also rejects backup restore because a local child manager cannot prove that
+an externally supervised broker has stopped using the database.
 
 > **Reverse proxy / custom hostname on a loopback bind.** The Host allowlist is
 > loopback names plus `AGENT_ALLOWED_HOSTS`; the all-in-one binary also includes
@@ -105,7 +109,7 @@ Env: `AGENT_ALLOWED_ORIGINS` (comma-separated; merged with dev defaults
 
 | Method · Path | Action |
 | --- | --- |
-| `GET /control/status` | `{ status, generation, pid, startedAt, exitCode, healthy, version, config, runningConfig, db }` (`generation` changes on every process launch; probes `/health` on `runningConfig.httpPort`; `db` = on-disk SQLite size) |
+| `GET /control/status` | `{ managementMode, status, generation, pid, startedAt, exitCode, healthy, version, config, runningConfig, db, ... }` (`managed` probes the child; `external` adds `reachable`, `externalUrl`, `healthStatus` and `healthError`) |
 | `POST /control/start` | Spawn the server, return status |
 | `POST /control/stop` | SIGTERM → SIGKILL, return status |
 | `POST /control/restart` | Stop then start |
@@ -135,7 +139,7 @@ disk for the SQLite main file plus its WAL/SHM sidecars.
 are validated atomically: unknown keys, an empty/non-string command, invalid
 ports, a non-string data path, or a non-string environment map return HTTP 400
 without partially changing the previous configuration. The agent
-launches `command` (default `bunx bunqueue@2.8.57 start`, e.g. `bun run ../src/main.ts` when
+launches `command` (default `bunx bunqueue@2.8.59 start`, e.g. `bun run ../src/main.ts` when
 developing) with `HTTP_PORT`, `TCP_PORT`, `BUNQUEUE_DATA_PATH` and `extraEnv`
 injected into the environment. Config is **editable at any time**; a running
 process keeps its launch config (`runningConfig`) and picks up port/data-path
@@ -164,7 +168,7 @@ stop-then-start race** no longer orphans the newly-started process.
 (the CSRF-to-RCE vector), same-origin + non-browser requests succeeding, OPTIONS
 preflight ACAO, loopback mutation auth, and all-route auth for network exposure.
 
-`bun run test:e2e` additionally starts disposable Bunqueue 2.8.57 servers and
+`bun run test:e2e` additionally starts disposable Bunqueue 2.8.59 servers and
 executes every FlowProducer creation mode, every exposed safe Flow Job group,
 Workflow handler discovery/control/compensation/archive, and all eight Queue SDK
 operations. Backup worker and compiled-binary behavior are covered by the

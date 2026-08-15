@@ -42,7 +42,7 @@ export function AddJobCard({
         </Field>
         <Field
           label="Job name"
-          hint="Worker routing name in Bunqueue 2.8.57; separate from the JSON payload."
+          hint="Worker routing name in Bunqueue 2.8.59; separate from the JSON payload."
         >
           <Input
             name="job-name"

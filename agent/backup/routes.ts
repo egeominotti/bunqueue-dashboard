@@ -1,4 +1,4 @@
-import { assertManagedTarget } from '../managedTarget';
+import { assertManagedTarget, type ManagedTargetPolicy } from '../managedTarget';
 import type { DbStats, ServerConfig } from '../manager';
 import { readLimitedJsonBody } from '../server/jsonBody';
 import type { BackupRunnerPort } from './runner';
@@ -18,12 +18,13 @@ export async function routeBackupRequest(
   serverRunning: boolean,
   database: DbStats,
   runner: BackupRunnerPort,
-  configure?: (extraEnv: Record<string, string>) => void
+  configure?: (extraEnv: Record<string, string>) => void,
+  targetPolicy?: ManagedTargetPolicy
 ): Promise<BackupRouteResponse | null> {
   const operation = routeOperation(pathname, method);
   if (!operation) return null;
   const query = exactTargetQuery(request.url);
-  assertManagedTarget(query, config);
+  assertManagedTarget(query, config, targetPolicy);
   if (operation === 'configure') {
     if (!configure) throw new Error('Backup configuration is unavailable');
     const body = await boundedRecord(request, ['environment']);

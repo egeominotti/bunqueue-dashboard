@@ -1,14 +1,53 @@
 import type { ServerConfig } from './manager';
 
+const MANAGED_PROXY_PATH_PATTERN = /^\/(?:[A-Za-z0-9._~-]+\/)*api$/;
+
+export interface ManagedTargetPolicy {
+  /** Exact browser-visible proxy alias accepted in addition to legacy `/api`. */
+  proxyPath: string;
+  /** Local upstream represented by the alias; it still passes the anti-SSRF gate. */
+  proxyUrl?: string;
+}
+
+/** Validate the one browser-visible proxy path that aliases the local managed server. */
+export function resolveManagedProxyPath(value: string | undefined): string {
+  const path = value?.trim() || '/api';
+  if (
+    !MANAGED_PROXY_PATH_PATTERN.test(path) ||
+    path.split('/').some((segment) => segment === '.' || segment === '..')
+  ) {
+    throw new Error('Managed proxy path must be /api or a safe root-relative path ending in /api');
+  }
+  return path;
+}
+
+/** Resolve the alias once without cloning a request or touching its body stream. */
+export function resolveManagedTargetPolicy(
+  proxyPath: string | undefined,
+  proxyUrl?: string
+): ManagedTargetPolicy {
+  return {
+    proxyPath: resolveManagedProxyPath(proxyPath),
+    proxyUrl: proxyUrl?.trim() || undefined,
+  };
+}
+
 /** Refuse agent-side SDK operations for a server the agent does not manage. */
 export function assertManagedTarget(
   query: URLSearchParams,
   config: ServerConfig,
-  proxyTarget = process.env.BUNQUEUE_URL?.trim() || 'http://localhost:6790'
+  policy: ManagedTargetPolicy | string =
+    process.env.BUNQUEUE_URL?.trim() || 'http://localhost:6790'
 ): void {
   const target = query.get('target');
   if (!target) throw new Error('Managed Bunqueue target is required');
-  if (target === '/api') {
+  const proxyPath =
+    typeof policy === 'string' ? '/api' : resolveManagedProxyPath(policy.proxyPath);
+  const proxyTarget =
+    (typeof policy === 'string' ? policy : policy.proxyUrl?.trim()) ||
+    process.env.BUNQUEUE_URL?.trim() ||
+    'http://localhost:6790';
+  if (target === '/api' || target === proxyPath) {
     assertLocalTarget(proxyTarget, config, 'Dashboard /api proxy');
     return;
   }

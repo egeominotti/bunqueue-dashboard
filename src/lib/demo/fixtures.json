@@ -3,7 +3,7 @@
     "ok": true,
     "status": "healthy",
     "uptime": 133,
-    "version": "2.8.57",
+    "version": "2.8.59",
     "queues": { "waiting": 13, "active": 2, "delayed": 6, "completed": 4, "dlq": 2 },
     "connections": { "tcp": 0, "ws": 0, "sse": 0 },
     "memory": { "heapUsed": 3, "heapTotal": 4, "rss": 68 }

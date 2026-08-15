@@ -34,7 +34,7 @@ The **Configuration** card holds the settings the server will launch with next t
 
 | Element | What it tells you |
 | --- | --- |
-| **Command** | The command the agent runs to launch bunqueue (default `bunx bunqueue@2.8.57 start`). |
+| **Command** | The command the agent runs to launch bunqueue (default `bunx bunqueue@2.8.59 start`). |
 | **HTTP port** | The dashboard API and live-update port (1 to 65535). |
 | **TCP port** | The binary-protocol port. Must differ from the HTTP port. |
 | **Data path** | Where the SQLite database file lives. |
@@ -45,6 +45,19 @@ The **Storage** panel shows the SQLite database's footprint on disk as one propo
 **Process logs** is a live tail of the server's output. Error lines show in red, agent messages in blue, normal output in muted gray. A footer shows the line count and whether the view is following the tail or paused.
 
 ## What you can do
+
+### Attach-only mode
+
+Set `BUNQUEUE_MANAGED=0` when another supervisor owns the Bunqueue process. The
+status console is then labeled **External** and reflects the agent's authenticated
+`BUNQUEUE_URL/health` probe. A reachable degraded response is distinguished from
+an unreachable endpoint. Start, Stop, Restart, launch configuration, local
+storage statistics and child-process logs are hidden because they do not describe
+the external process; direct lifecycle/config requests also fail with HTTP 409.
+Backup restore is likewise unavailable: it requires proof that the database
+owner is stopped, which the attach-only agent cannot obtain from the supervisor.
+
+Unset the variable or set it to `1` to use the managed controls documented below.
 
 **Start the server.** Click **Start** and the agent launches bunqueue with your saved configuration.
 
@@ -73,7 +86,7 @@ Both **Save config** and **Save & restart** validate your ports first: each must
 ## Good to know
 
 - **Configuration never applies in place.** Changes to the command, ports, or data path only take effect on the **next start or restart**, the running server keeps what it launched with. Use **Save & restart** to apply immediately. When your saved config is ahead of the running one, a "Restart to apply changes" hint appears next to the buttons.
-- **The default command resolves Bunqueue 2.8.57 through `bunx`.** For offline or source-checkout workflows, point **Command** at a local entry instead, for example `bun run /path/to/bunqueue/src/main.ts`.
+- **The default command resolves Bunqueue 2.8.59 through `bunx`.** For offline or source-checkout workflows, point **Command** at a local entry instead, for example `bun run /path/to/bunqueue/src/main.ts`.
 - **The data path's folder must already exist.** The server creates the database *file* but not its parent *folder*. A start that fails with a "cannot open" error usually means the directory isn't there yet, create it, or pick a path whose folder already exists.
 - **Logs don't keep forever.** Only the most recent ~800 lines are held, so older output scrolls off. Use **Download** to save a copy you want to keep.
 - **When the agent can't be reached**, the page tells you plainly. If it was never reachable, you'll see how to start it. If it stops responding after working, an amber banner shows the last known state and the Start/Stop/Restart buttons are disabled until it answers again, this is intentional, so the page never claims a dead server is "healthy." It reconnects on its own once the agent is back; no reload needed. See [Known issues](/known-issues).

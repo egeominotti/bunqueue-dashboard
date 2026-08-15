@@ -43,7 +43,7 @@ Each row also has a trash icon at the end for deleting that schedule.
 The button is disabled while it's working, so a fast double-click can't create the same schedule twice. Creation also re-fetches the cron list immediately before POST and fails closed if the name now exists.
 
 ::: warning Upstream creation is not atomic
-`POST /crons` is an upsert in Bunqueue v2.8.57 and has no create-only or version precondition. The dashboard refuses a name already observed and rechecks immediately before POST, but a simultaneous client can still race between that GET and POST. The UI never claims atomic creation; use a globally unique name and continue only when last-writer-wins is acceptable.
+`POST /crons` is an upsert in Bunqueue v2.8.59 and has no create-only or version precondition. The dashboard refuses a name already observed and rechecks immediately before POST, but a simultaneous client can still race between that GET and POST. The UI never claims atomic creation; use a globally unique name and continue only when last-writer-wins is acceptable.
 :::
 
 **Delete a schedule**, click the trash icon on its row.
@@ -58,7 +58,7 @@ Deleting asks you to confirm first, then removes the schedule permanently. If a 
 - **Intervals are in milliseconds.** `every 300000ms` is 5 minutes, it's easy to type seconds by mistake. The field only checks that the number is a positive whole number, not that the size is sensible.
 - **Cron expressions have a best-effort local preview and are checked authoritatively by the server.** Shortcuts and six-field expressions can be valid even when the local preview cannot calculate their next runs.
 - **Switches mirror the submitted value.** Overlap and missed-run defaults are
-  initialized to the v2.8.57 defaults and every switch is sent explicitly, so
+  initialized to the v2.8.59 defaults and every switch is sent explicitly, so
   an off switch cannot silently fall back to an on server default.
 - **You may reach this screen from more than one link.** An older, list-and-delete-only version of this page also exists. The sidebar's **Cron Jobs** entry always opens this full version. See [Known issues](/known-issues) for details.
 

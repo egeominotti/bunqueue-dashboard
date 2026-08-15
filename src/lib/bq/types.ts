@@ -40,7 +40,7 @@ export interface DbCsvExportResult {
 
 export type Backoff = number | { type: 'fixed' | 'exponential'; delay: number };
 
-/** Safe repeat subset; pattern repeats belong to the Cron API in Bunqueue 2.8.57. */
+/** Safe repeat subset; pattern repeats belong to the Cron API in Bunqueue 2.8.59. */
 export interface RepeatOptions {
   every: number;
   limit?: number;

@@ -90,13 +90,13 @@ The full dashboard running on sample data, no server needed.
 bunqueue exposes a rich HTTP API, but operating it by hand (curl, ad-hoc scripts) is slow and
 error-prone. This dashboard is a production-oriented operator console: it exposes the verified,
 safe subset of the API, fails closed where
-[v2.8.57](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.57) lacks atomic
+[v2.8.59](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.59) lacks atomic
 flow-safety guarantees, and also manages the
 server *process* through a separate guarded agent.
 
 It uses Bunqueue's public HTTP API (`:6790`) for ordinary remote observability and a small local
 **control agent** for process, FlowProducer, Workflow Engine, database, and backup operations. The
-agent is pinned to the server it manages and uses the exact installed Bunqueue 2.8.57 client
+agent is pinned to the server it manages and uses the exact installed Bunqueue 2.8.59 client
 contracts; it never patches Bunqueue internals.
 
 ## Features
@@ -117,7 +117,7 @@ contracts; it never patches Bunqueue internals.
 | **S3 backup** | Management ▸ S3 Backup | Configure, inspect, list, create and guarded-restore official snapshots |
 | **Browse** | Queues / Jobs / DLQ / Cron / Metrics / Workers / Logs | Read-only browsing with basic actions |
 
-> Job actions are gated by the v2.8.57 flow contract. Every DLQ retry and completed-job requeue is
+> Job actions are gated by the v2.8.59 flow contract. Every DLQ retry and completed-job requeue is
 > unavailable: the DLQ GET + POST sequence has no atomic generation/state/topology precondition and
 > can target a job recreated under the same ID, while `retryCompleted` does not rebuild dependency
 > registration or flow order. Cancel, Discard, Drain, Clean, Obliterate and DLQ Purge also fail
@@ -140,7 +140,7 @@ http://127.0.0.1:8080, proxies `/api/*` to your bunqueue server (`BUNQUEUE_URL`,
 `http://localhost:6790`), and runs the control agent on `127.0.0.1:6800`. Same env knobs as the
 standalone binaries: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` · `AGENT_PORT` ·
 `AGENT_ALLOWED_ORIGINS` · `AGENT_ALLOWED_HOSTS` · `AGENT_TOKEN` · `BUNQUEUE_TOKEN` ·
-`TRUST_PROXY` · `BUNQUEUE_START_CMD`.
+`TRUST_PROXY` · `BASE_PATH` · `BUNQUEUE_MANAGED` · `BUNQUEUE_START_CMD`.
 
 Install it permanently instead of running via `bunx`:
 
@@ -196,14 +196,17 @@ Two HTTP clients coexist on purpose: `src/lib/api.ts` (first-generation view pag
 
 ## Configuration
 
-All dashboard variables are build-time (`VITE_*`) and can **also** be changed at runtime from the
-in-app **Settings** page. Copy [`.env.example`](.env.example) to `.env` to set defaults.
+The `VITE_*` dashboard defaults are build-time values and can **also** be changed at runtime from
+the in-app **Settings** page. The all-in-one server reads the non-`VITE_*` runtime variables below.
+Copy [`.env.example`](.env.example) to `.env` to set defaults.
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `VITE_BUNQUEUE_URL` | bunqueue server origin | `/api` (dev proxy → `:6790`) |
 | `VITE_BUNQUEUE_AGENT_URL` | Control-agent origin | `http://localhost:6800` |
 | `BIND_ADDR` | All-in-one dashboard bind address | `127.0.0.1` |
+| `BASE_PATH` | Runtime mount for the all-in-one server (for example `/internal/queue`) | `/` |
+| `BUNQUEUE_MANAGED` | `0` attaches to the externally supervised `BUNQUEUE_URL`; `1` enables local lifecycle controls | `1` |
 | `AGENT_PORT` | Control-agent port | `6800` |
 | `AGENT_ALLOWED_ORIGINS` | Extra browser origins allowed to drive the agent (comma-separated) | dev defaults |
 | `AGENT_ALLOWED_HOSTS` | Extra Host names/IPs accepted by the all-in-one server and agent | loopback names |
@@ -223,6 +226,16 @@ there so the forwarded Authorization header is valid upstream. Behind a reverse
 proxy, allowlist the public origin; if it rewrites `Host`, also allowlist the
 rewritten Host and use `TRUST_PROXY=1` only when the proxy overwrites
 `X-Forwarded-Host`.
+
+For a broker already owned by systemd, Docker or Kubernetes, run the all-in-one
+dashboard with `BUNQUEUE_MANAGED=0`. **Control ▸ Server** then reports health
+from `BUNQUEUE_URL` and cannot spawn, stop, restart or reconfigure a child.
+Stopped-only backup restore is also rejected because the dashboard cannot prove
+that an externally supervised broker is inactive.
+To mount the same process below a reverse-proxy prefix, set for example
+`BASE_PATH=/internal/queue` and preserve that prefix when proxying; the SPA,
+assets, `/api` proxy and `/agent` bridge all move below it, including the
+target-pinned Flow, Workflow, Queue and Backup agent operations.
 
 ## Scripts
 
@@ -282,7 +295,7 @@ The canonical gate must be green before a change is considered done; CI runs the
 bun run quality   # architecture, lint/build, size, docs, coverage, real E2E, packed-bin smoke, audit
 ```
 
-The E2E stage starts disposable Bunqueue 2.8.57 processes and exercises the complete FlowProducer,
+The E2E stage starts disposable Bunqueue 2.8.59 processes and exercises the complete FlowProducer,
 Workflow Engine, and Queue SDK operator bridges. Run it alone with `bun run test:e2e`.
 
 CI enforces this on every push and pull request. See [Contributing](#contributing).

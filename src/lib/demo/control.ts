@@ -1,7 +1,7 @@
 import type { Json } from './shared';
 
 export const DEMO_CONFIG = {
-  command: 'bunx bunqueue@2.8.57 start',
+  command: 'bunx bunqueue@2.8.59 start',
   httpPort: 6790,
   tcpPort: 6791,
   dataPath: './data/bunqueue.db',
@@ -15,7 +15,7 @@ export const demoStatus = (): Json => ({
   startedAt: Date.now() - 3_600_000,
   exitCode: null,
   healthy: true,
-  version: '2.8.57',
+  version: '2.8.59',
   config: DEMO_CONFIG,
   runningConfig: DEMO_CONFIG,
   db: {
@@ -99,8 +99,8 @@ export const demoControlLogs = (): Json => {
   });
   return {
     lines: [
-      line(1, 8000, 'sys', 'starting: bunx bunqueue@2.8.57 start'),
-      line(2, 7800, 'stdout', 'bunqueue v2.8.57 — HTTP :6790, TCP :6791'),
+      line(1, 8000, 'sys', 'starting: bunx bunqueue@2.8.59 start'),
+      line(2, 7800, 'stdout', 'bunqueue v2.8.59 — HTTP :6790, TCP :6791'),
       line(3, 7600, 'stdout', 'SQLite ready (WAL) at ./data/bunqueue.db'),
       line(4, 5000, 'stdout', 'worker registered: image-processing'),
       line(5, 1200, 'stdout', 'health ok — 4 queues, 34 jobs'),

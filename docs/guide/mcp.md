@@ -10,7 +10,7 @@ agent (Claude Desktop, Claude Code) drive the queue with tools, resources, and
 prompts.
 
 ::: warning External MCP mutations bypass dashboard safety gates
-The upstream v2.8.57 MCP tool set includes Cancel, Discard, Drain, Obliterate,
+The upstream v2.8.59 MCP tool set includes Cancel, Discard, Drain, Obliterate,
 DLQ Retry and DLQ Purge. Those tools do not gain atomic
 generation/state/topology or reverse-dependency checks merely because an MCP
 client invokes them. The dashboard's own Copilot exposes only Promote, Pause

@@ -157,7 +157,7 @@ export function McpServer() {
         </p>
         <p className="mt-3 text-sm leading-relaxed text-warning">
           The upstream MCP includes destructive Cancel, Discard, Drain, Obliterate, DLQ Retry and
-          DLQ Purge tools. They bypass this dashboard's v2.8.57 flow-safety gates and have no atomic
+          DLQ Purge tools. They bypass this dashboard's v2.8.59 flow-safety gates and have no atomic
           reverse-dependency or job-generation precondition. Grant MCP write access only after
           independently proving the workload is not flow-linked.
         </p>

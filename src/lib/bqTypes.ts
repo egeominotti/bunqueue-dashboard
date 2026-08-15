@@ -1,7 +1,7 @@
 export interface JobFull {
   id: string;
   queue?: string;
-  /** First-class job name (Bunqueue protocol v3 / v2.8.57). */
+  /** First-class job name (Bunqueue protocol v3 / v2.8.59). */
   name?: string;
   data?: unknown;
   /** Terminal value embedded by current job read/list endpoints. */
@@ -180,50 +180,16 @@ export interface DlqConfig {
 }
 
 // ---- Control agent ----
-export type ServerRunStatus = 'running' | 'stopped' | 'starting' | 'stopping';
+export type {
+  DbStats,
+  ServerConfig,
+  ServerLogLine,
+  ServerManagementMode,
+  ServerRunStatus,
+  ServerStatus,
+} from './controlTypes';
 
-export interface ServerConfig {
-  command: string;
-  httpPort: number;
-  tcpPort: number;
-  dataPath: string;
-  extraEnv: Record<string, string>;
-}
-
-/** On-disk footprint of the SQLite database (main file + WAL + SHM sidecars). */
-export interface DbStats {
-  path: string;
-  exists: boolean;
-  size: number;
-  walSize: number;
-  shmSize: number;
-  totalSize: number;
-  mtimeMs: number | null;
-}
-
-export interface ServerStatus {
-  status: ServerRunStatus;
-  generation: number; // Monotonic identity of the managed process generation.
-  pid: number | null;
-  startedAt: number | null;
-  exitCode: number | null;
-  healthy: boolean;
-  version?: string;
-  config: ServerConfig;
-  /** Config the live process was launched with (null when stopped). */
-  runningConfig?: ServerConfig | null;
-  /** SQLite on-disk size for the configured data path. */
-  db?: DbStats | null;
-}
-
-export interface ServerLogLine {
-  seq: number;
-  ts: number;
-  stream: 'stdout' | 'stderr' | 'sys';
-  line: string;
-}
-
-// ---- Workflow Engine observability (Bunqueue 2.8.57 persisted contract) ----
+// ---- Workflow Engine observability (Bunqueue 2.8.59 persisted contract) ----
 export type WorkflowExecutionState =
   | 'running'
   | 'waiting'

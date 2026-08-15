@@ -23,7 +23,7 @@ describe('connectionStore security boundary', () => {
   });
 
   test('rehydration rewrites versioned and unversioned raw blobs without legacy authority or tokens', async () => {
-    for (const version of [1, 2, undefined]) {
+    for (const version of [1, 2, 3, undefined]) {
       useConnectionStore.setState({
         baseUrl: 'https://current.example',
         token: 'current-server-token',
@@ -55,7 +55,7 @@ describe('connectionStore security boundary', () => {
       expect(raw, label).not.toBeNull();
       expect(JSON.parse(raw as string), label).toEqual({
         state: { baseUrl: '/api', refreshMs: 500 },
-        version: 2,
+        version: 3,
       });
       expect(raw, label).not.toContain('legacy.example');
       expect(raw, label).not.toContain('token');

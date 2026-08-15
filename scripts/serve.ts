@@ -8,14 +8,21 @@ import { BunqueueBackupRunner } from '../agent/backup/runner';
 import { setBackupWorkerUrl } from '../agent/backup/workerFactory';
 import { setQueryWorkerUrl } from '../agent/db';
 import { QueueOperationsRuntime } from '../agent/queue/runtime';
-import { AgentLifecycleGate, createFetchHandler, resolveAllowedOrigins } from '../agent/server';
+import {
+  AgentLifecycleGate,
+  createFetchHandler,
+  resolveAllowedOrigins,
+  resolveServerControlTarget,
+} from '../agent/server';
 import { installAgentShutdown } from '../agent/shutdown';
 import { WorkflowRuntime } from '../agent/workflow/runtime';
 import { createServeHandler } from './serveHandler';
 import {
   isLoopbackBind,
+  prepareRuntimeIndexHtml,
   remoteBridgeRequiresToken,
   remoteControlEnabled,
+  resolveBasePath,
   resolveServeAllowedHosts,
   withSecurityHeaders,
 } from './servePolicy';
@@ -27,10 +34,14 @@ export {
   isLoopbackBind,
   isLoopbackHost,
   isRemoteBridgeRequest,
+  prefixCssAssetUrls,
+  prepareRuntimeIndexHtml,
   RESPONSE_SECURITY_HEADERS,
   remoteBridgeRequiresToken,
   remoteControlEnabled,
+  resolveBasePath,
   resolveServeAllowedHosts,
+  stripBasePath,
   type ServeHandlerOptions,
   withSecurityHeaders,
 } from './servePolicy';
@@ -52,6 +63,9 @@ async function main(): Promise<void> {
   const port = Number(process.env.PORT) || 8080;
   const host = process.env.BIND_ADDR || '127.0.0.1';
   const api = (process.env.BUNQUEUE_URL || 'http://localhost:6790').replace(/\/$/, '');
+  const basePath = resolveBasePath(process.env.BASE_PATH);
+  const managedProxyPath = `${basePath}/api`;
+  const controlTarget = resolveServerControlTarget(process.env);
   const agentPort = Number(process.env.AGENT_PORT) || 6800;
   const allowedOrigins = Array.from(
     new Set([
@@ -85,9 +99,9 @@ async function main(): Promise<void> {
 
   // Complete every awaited startup step before installing handlers/listeners.
   const { ASSETS } = await import('./embedded.gen');
-  const indexHtml = (await Bun.file(ASSETS['/index.html']).text()).replace(
-    '</head>',
-    "<script>window.__BUNQUEUE_AGENT_URL__='/agent'</script></head>"
+  const indexHtml = prepareRuntimeIndexHtml(
+    await Bun.file(ASSETS['/index.html']).text(),
+    basePath
   );
 
   // Keep ProcessManager out of policy-only test imports.
@@ -99,7 +113,14 @@ async function main(): Promise<void> {
   const lifecycle = new AgentLifecycleGate();
   const localAgentHandle = createFetchHandler(
     mgr,
-    { allowedOrigins, allowedHosts, token },
+    {
+      allowedOrigins,
+      allowedHosts,
+      token,
+      controlTarget,
+      managedProxyPath,
+      managedProxyUrl: api,
+    },
     workflowRuntime,
     backupRunner,
     queueRuntime,
@@ -107,7 +128,15 @@ async function main(): Promise<void> {
   );
   const remoteAgentHandle = createFetchHandler(
     mgr,
-    { allowedOrigins, allowedHosts, token, requireTokenForAll: true },
+    {
+      allowedOrigins,
+      allowedHosts,
+      token,
+      requireTokenForAll: true,
+      controlTarget,
+      managedProxyPath,
+      managedProxyUrl: api,
+    },
     workflowRuntime,
     backupRunner,
     queueRuntime,
@@ -146,6 +175,7 @@ async function main(): Promise<void> {
       apiShutdownSignal: proxyShutdown.signal,
       remoteBridgePolicy,
       trustProxy: process.env.TRUST_PROXY === '1',
+      basePath,
     }),
     error: onError,
   });
@@ -153,12 +183,13 @@ async function main(): Promise<void> {
 
   logger.info(
     {
-      dashboard: `http://${host}:${port}`,
+      dashboard: `http://${host}:${port}${basePath || '/'}`,
       apiProxy: api,
       agent: `http://127.0.0.1:${agentPort}/control`,
       agentBridge,
       remoteBridgePolicy,
       allowedHosts,
+      serverManagement: controlTarget.mode,
     },
     'bunqueue dashboard (standalone) ready'
   );
