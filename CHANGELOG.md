@@ -15,6 +15,25 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.38] - 2026-08-15
+
+### Changed
+
+- Replaced Biome with the latest Oxlint, Oxfmt, and type-aware tsgolint releases
+  for linting, safe fixes, import ordering, formatting, editor configuration,
+  and the canonical CI quality gate without weakening the former error policy.
+
+### Fixed
+
+- Made demo queue discovery honor `limit` and `offset`, so every classic queue,
+  job, DLQ, and log page can discover all demo queues without a malformed-page
+  failure.
+- Serialized S3 backup status, object-list reads, manual refreshes, backup and
+  restore operations through one coordinator for Bunqueue's single-operation
+  runner; each queued snapshot and mutation now owns an immutable server/agent
+  identity and is discarded on retarget or unmount, eliminating cross-target
+  restores, polling races, false concurrency errors and duplicate messages.
+
 ## [0.0.37] - 2026-08-15
 
 ### Added

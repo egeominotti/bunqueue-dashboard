@@ -62,12 +62,14 @@ export function CronForm({
   const setValue = <K extends keyof CronFormValues>(key: K, value: CronFormValues[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the lifecycle boundary
+  // scopeKey is the lifecycle boundary.
+  /* oxlint-disable react/exhaustive-deps -- scopeKey alone defines this reset lifecycle */
   useEffect(() => {
     setBusy(false);
     setError(null);
     resetCreated();
   }, [scopeKey]);
+  /* oxlint-enable react/exhaustive-deps */
 
   const nameConflict = existingCronNameError(values.name, existingNames);
   const submit = async () => {

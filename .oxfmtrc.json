@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "useTabs": false,
+  "tabWidth": 2,
+  "printWidth": 100,
+  "singleQuote": true,
+  "jsxSingleQuote": false,
+  "quoteProps": "as-needed",
+  "trailingComma": "es5",
+  "semi": true,
+  "arrowParens": "always",
+  "bracketSameLine": false,
+  "bracketSpacing": true,
+  "singleAttributePerLine": false,
+  "sortPackageJson": false,
+  "sortImports": {
+    "newlinesBetween": false,
+    "partitionByComment": true,
+    "partitionByNewline": true,
+    "groups": [
+      ["value-builtin", "type-builtin"],
+      ["type-import", "value-external", "type-external"],
+      ["type-internal", "value-internal"],
+      ["type-parent", "type-sibling", "type-index", "value-parent", "value-sibling", "value-index"],
+      "unknown"
+    ]
+  },
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    "src/index.css",
+    "**/*.html",
+    "**/*.md",
+    "**/*.mdx",
+    "**/*.yaml",
+    "**/*.yml",
+    "agent",
+    "scripts",
+    "docs/.vitepress",
+    "coverage",
+    "test/fixtures/oxlint-policy"
+  ]
+}

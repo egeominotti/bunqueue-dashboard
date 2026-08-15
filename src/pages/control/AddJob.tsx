@@ -48,7 +48,7 @@ export function AddJob() {
   const setValue = <K extends keyof AddJobFormValues>(key: K, value: AddJobFormValues[K]) =>
     setValues((current) => ({ ...current, [key]: value }));
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection lifecycle boundary
+  // scopeKey is the connection lifecycle boundary.
   useEffect(() => {
     setBusy(false);
     setResult(null);

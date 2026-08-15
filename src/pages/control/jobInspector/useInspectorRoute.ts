@@ -26,7 +26,8 @@ export function useInspectorRoute({
   connectionBaseUrl,
   connectionToken,
 }: InspectorRouteOptions): void {
-  // biome-ignore lint/correctness/useExhaustiveDependencies: URL and connection changes intentionally drive synchronization; lookup/state containers are render snapshots
+  // URL and connection changes drive synchronization; lookup/state containers are render snapshots.
+  /* oxlint-disable react/exhaustive-deps -- URL and connection changes intentionally drive synchronization */
   useEffect(() => {
     // Clearing a job can render once while its old ?id= remains visible. Bind
     // terminal feedback to that exact history entry instead of refetching it.
@@ -91,4 +92,5 @@ export function useInspectorRoute({
     connectionBaseUrl,
     connectionToken,
   ]);
+  /* oxlint-enable react/exhaustive-deps */
 }

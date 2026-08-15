@@ -126,7 +126,7 @@ export function formatMs(v: number | undefined | null): string {
 // text they read as "[1m…[0m" noise, so log viewers strip them before
 // display/copy/download. Only sequences introduced by the real ESC byte
 // (\u001b) match — legitimate bracketed text like "[Stats]" is untouched.
-// biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes requires the ESC control character
+// oxlint-disable-next-line no-control-regex -- matching ANSI escapes requires the ESC control character
 const ANSI_RE = /(?:\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b[@-Z\\^_])/g;
 
 /** Strip ANSI escape sequences from a log line. */

@@ -27,7 +27,7 @@ export function QueueDetail() {
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const actionGuard = useServerActionGuard(`classic-queue:${name}`);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the route+connection lifecycle boundary
+  // scopeKey is the route and connection lifecycle boundary.
   useEffect(() => {
     setBusy(null);
     setActionError(null);

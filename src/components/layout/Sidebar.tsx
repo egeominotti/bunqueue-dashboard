@@ -125,9 +125,8 @@ export function Sidebar({
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
         />
       )}
-      {/* Biome cannot correlate these conditional props: aria-modal is present
+      {/* Static analysis cannot correlate these conditional props: aria-modal is present
           only in the same branch where role="dialog". */}
-      {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: conditional dialog semantics */}
       <div
         id="app-nav"
         role={open ? 'dialog' : 'complementary'}

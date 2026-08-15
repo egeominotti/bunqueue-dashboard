@@ -40,7 +40,8 @@ This is the exact blocking gate run by the
 on every push and pull request. Release, Pages, and Docker run the same command
 before publishing. It executes, in order:
 
-- `bun run check`: Biome lint and formatting (`bun run check:fix` applies safe fixes).
+- `bun run check`: Oxlint plus an Oxfmt formatting check (`bun run check:fix`
+  applies safe lint fixes, then formats files).
 - `bun run build`: strict typechecks for `src/`, `agent/`, and `scripts/`, then the
   production Vite build.
 - `bun run size`: initial-load and total JavaScript bundle budgets.
@@ -56,15 +57,16 @@ fails the gate. Remove it if the app adopts RSC, or when a compatible patched
 React Router release becomes available.
 
 Notes:
-- `biome.json` is a **production-grade root config** (`"root": true`, schema pinned
-  to the installed CLI). It *must* be root: this is a standalone repo with no parent
-  Biome config, and with `"root": false` Biome silently falls back to default rules
-  on every file (a broken gate, not real findings). It enables `recommended` plus a
-  curated strict set as errors, with a few aspirational rules as warnings.
+- `.oxlintrc.json` and `.oxfmtrc.json` are the committed root configurations for
+  Oxlint and Oxfmt. Oxlint runs the JavaScript, TypeScript, Oxc, Unicorn, React, and
+  JSX accessibility plugins with the project's curated severities; `oxlint-tsgolint`
+  provides the type-aware rules. The lint script also retains Biome's implicit-`any`
+  declaration check, which Oxlint does not yet implement. Oxfmt keeps the established
+  two-space, 100-column, single-quote style and deterministic imports.
   `src/index.css` (Tailwind v4 at-rules), `agent/`, and `scripts/` are excluded from
-  Biome. They are not skipped by typechecking: `tsconfig.json` covers `src/`, while
-  `tsconfig.agent.json` covers both Bun runtime directories (except the generated
-  `scripts/embedded.gen.ts`).
+  formatting and linting. They are not skipped by typechecking: `tsconfig.json`
+  covers `src/`, while `tsconfig.agent.json` covers both Bun runtime directories
+  (except the generated `scripts/embedded.gen.ts`).
 - `bunfig.toml` preloads `test/setup.ts` (a `localStorage` shim) so store imports
   work under `bun test`.
 

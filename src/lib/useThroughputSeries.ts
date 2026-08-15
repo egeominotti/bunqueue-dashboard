@@ -78,7 +78,7 @@ export function useThroughputSeries(windowSize = 60): ThroughputData {
       setError(null);
       lastSampleAt.current = 0;
     }
-    const gate = createPollGate(() => typeof document !== 'undefined' && document.hidden);
+    const gate = createPollGate(() => globalThis.document?.hidden ?? false);
     const tick = async () => {
       // Skip if the previous request hasn't returned yet — a slow /dashboard
       // (>1s) would otherwise overlap requests and produce out-of-order

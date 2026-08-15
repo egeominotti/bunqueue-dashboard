@@ -86,6 +86,30 @@ function demoQueueResponse(segments: string[], search: string): Json | null {
   };
 }
 
+function demoDashboardQueues(search: string): Json {
+  const fixture = F.dashboardQueues;
+  const queues = Array.isArray(fixture.queues) ? fixture.queues : [];
+  const params = new URLSearchParams(search);
+  const requestedLimit = Number(params.get('limit') ?? fixture.limit);
+  const requestedOffset = Number(params.get('offset') ?? fixture.offset);
+  const limit =
+    Number.isSafeInteger(requestedLimit) && requestedLimit >= 0
+      ? requestedLimit
+      : Number(fixture.limit);
+  const offset =
+    Number.isSafeInteger(requestedOffset) && requestedOffset >= 0
+      ? requestedOffset
+      : Number(fixture.offset);
+
+  return {
+    ...fixture,
+    queues: queues.slice(offset, offset + limit),
+    total: queues.length,
+    limit,
+    offset,
+  };
+}
+
 function demoJobResponse(segments: string[]): Json | null {
   if (segments[0] !== 'jobs' || !segments[1]) return null;
   const id = decodeURIComponent(segments[1]);
@@ -186,13 +210,14 @@ export function demoApiResponse(path: string, method: string, search: string): J
     };
   }
 
+  if (clean === '/dashboard/queues') return demoDashboardQueues(search);
+
   const exact: Record<string, string> = {
     '/health': 'health',
     '/ping': 'ping',
     '/stats': 'stats',
     '/storage': 'storage',
     '/dashboard': 'dashboard',
-    '/dashboard/queues': 'dashboardQueues',
     '/queues/summary': 'queuesSummary',
     '/crons': 'crons',
     '/webhooks': 'webhooks',

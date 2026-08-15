@@ -6,7 +6,7 @@ const breachBody = (breach: Breach): string =>
   `${breach.queue || 'All queues'}: ${breach.metricLabel} ${breach.operator} ${breach.threshold} (now ${Math.round(breach.value)})`;
 
 function desktopNotify(breach: Breach) {
-  if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+  if (globalThis.Notification?.permission === 'granted') {
     try {
       new Notification(`bunqueue alert: ${breach.ruleName}`, {
         body: breachBody(breach),

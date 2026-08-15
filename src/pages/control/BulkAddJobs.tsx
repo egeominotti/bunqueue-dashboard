@@ -68,7 +68,7 @@ export function BulkAddJobs() {
     setResult,
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection lifecycle boundary
+  // scopeKey is the connection lifecycle boundary.
   useEffect(() => {
     setBusy(false);
     setResult(null);

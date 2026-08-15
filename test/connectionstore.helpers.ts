@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-
 import {
   CONNECTION_STORAGE_KEY,
   getAgentAuthHeaders,
@@ -12,9 +11,7 @@ import {
   sanitizedPersistedConnectionState,
   useConnectionStore,
 } from '../src/components/dashboard/stores/connectionStore';
-
 import { api } from '../src/lib/api';
-
 import { bq } from '../src/lib/bq';
 
 const realFetch = globalThis.fetch;

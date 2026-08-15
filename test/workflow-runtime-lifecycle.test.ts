@@ -32,8 +32,7 @@ describe('workflow runtime lifecycle', () => {
     let closeCalls = 0;
     let closeAttempts = 0;
     let closing: Promise<void> | null = null;
-    let engine: Engine;
-    engine = {
+    const engine: Engine = {
       register: () => engine,
       close: () => {
         closeCalls++;

@@ -1,47 +1,29 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-
 import { act, createElement } from 'react';
-
 import { createRoot } from 'react-dom/client';
-
 import { MemoryRouter } from 'react-router-dom';
-
 import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
-
 import type { JobFull } from '../src/lib/bqTypes';
-
 import { Diagnostics } from '../src/pages/control/Diagnostics';
-
 import { walkFlow } from '../src/pages/control/Flows';
-
-import { JobInspector } from '../src/pages/control/JobInspector';
-
-import { selectionLabel, withoutActed } from '../src/pages/control/JobsPro';
-
 import {
   JobActionsPanel,
   parseFailureStack,
   parseJobActionNumber,
 } from '../src/pages/control/job/JobActionsPanel';
-
 import { previewDelays, remainingRetries } from '../src/pages/control/job/JobBackoff';
-
 import { JobLogs } from '../src/pages/control/job/JobLogs';
-
+import { JobInspector } from '../src/pages/control/JobInspector';
+import { selectionLabel, withoutActed } from '../src/pages/control/JobsPro';
 import { MetricsPro } from '../src/pages/control/MetricsPro';
-
 import { configSig, useSyncedConfig } from '../src/pages/control/queue/ConfigForms';
-
 import {
   cleanArgs,
   promoteCountArgs,
   rateLimitArgs,
 } from '../src/pages/control/queue/QueueActions';
-
 import { duplicateKeys } from '../src/pages/control/server/EnvVarsEditor';
-
 import { discoverAllQueues, Jobs, jobDataName, MAX_ALL_QUEUE_JOB_FANOUT } from '../src/pages/Jobs';
-
 import { ensureDom, renderHook, settle } from './domSetup';
 
 // Regression tests for the "job-queue-pages" audit package: honest reporting of

@@ -68,7 +68,7 @@ export function DlqPro() {
     };
   }, [queue, page]);
   const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue, page]);
-  const data = raw && raw.queue === queue && raw.page === page ? raw : null;
+  const data = raw?.queue === queue && raw.page === page ? raw : null;
 
   // Clamp the page when the DLQ shrinks (retries/purges here or elsewhere) so a
   // stale offset can't render "empty" while entries remain.

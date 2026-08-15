@@ -11,6 +11,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { bq } from '../src/lib/bq';
 import { loadJobForLookup } from '../src/pages/control/JobInspector';
+import { discoverAllQueues } from '../src/pages/jobs/classicJobsData';
 import './domSetup';
 
 const INSTALL_PATH = `${import.meta.dir}/../src/lib/demo/install.ts`;
@@ -204,6 +205,31 @@ describe('demo transport lifecycle', () => {
 });
 
 describe('demo fail-closed dashboard payloads', () => {
+  test('queue discovery honours pagination and remains valid for classic pages', async () => {
+    const page = (await apiJson('/dashboard/queues?limit=2&offset=1')) as unknown as {
+      queues: { name: string }[];
+      total: number;
+      limit: number;
+      offset: number;
+    };
+    expect(page).toMatchObject({ total: 4, limit: 2, offset: 1 });
+    expect(page.queues.map((queue) => queue.name)).toEqual(['image-processing', 'reports']);
+
+    const previousGlobalFetch = globalThis.fetch;
+    globalThis.fetch = window.fetch;
+    try {
+      const discovered = await discoverAllQueues();
+      expect(discovered.queues.map((queue) => queue.name)).toEqual([
+        'emails',
+        'image-processing',
+        'reports',
+        'notifications',
+      ]);
+    } finally {
+      globalThis.fetch = previousGlobalFetch;
+    }
+  });
+
   test('queue summary survives the production parser with prioritized counts', async () => {
     const previousGlobalFetch = globalThis.fetch;
     globalThis.fetch = window.fetch;

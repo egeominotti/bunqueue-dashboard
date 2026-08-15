@@ -23,7 +23,7 @@ Do not "fix" old pages in place; add a corrected new page and route to it.
 
 ## Stack
 
-React 19 · React Router 7 · Zustand 5 · Vite 8 · Tailwind CSS v4 · Biome · Bun · TypeScript.
+React 19 · React Router 7 · Zustand 5 · Vite 8 · Tailwind CSS v4 · Oxlint · Oxfmt · Bun · TypeScript.
 
 ## Layout
 
@@ -98,7 +98,7 @@ it) or point the dashboard at an existing server via Settings / `VITE_BUNQUEUE_U
 ```bash
 bun run architecture # every TypeScript source file stays at or below 300 lines
 bun run build     # tsc --noEmit + vite build
-bun run check     # biome lint + format (production-grade config)
+bun run check     # Oxlint + Oxfmt (production-grade configs)
 bun test          # unit + agent lifecycle tests
 bun run test:e2e # real Bunqueue Flow, Workflow, and Queue SDK validation
 ```
@@ -109,17 +109,17 @@ upgraded to `bun run test:coverage` and followed by `bun run test:e2e`: coverage
 own `coverageThreshold` is per-file and would be failed by any single low-coverage module).
 Raise the floors as coverage grows; never lower them to make a failing change pass.
 
-### Biome config
+### Oxlint and Oxfmt configs
 
-`biome.json` is a **production-grade, root config** (`"root": true`, schema pinned to the installed
-CLI). It **must** be root: this is a standalone repository with no parent Biome config, and with
-`"root": false` Biome silently falls back to *default* rules on every file (thousands of spurious
-errors — that is a broken gate, not real findings). The config enables `recommended` plus a curated
-strict set (const/import-type/self-closing/optional-chain/template/no-double-equals/…) as **errors**,
-with a few aspirational rules (`useExhaustiveDependencies`, `noUnusedFunctionParameters`, perf/spread)
-as **warnings** so they surface without breaking the gate. `agent/` and `scripts/` are excluded
-(they are Bun-runtime infra, not part of the app bundle). Keep new `src/` code passing the strict
-rules; do not silence a rule to dodge a real fix.
+`.oxlintrc.json` and `.oxfmtrc.json` are the committed root configurations used by editors and CI.
+Oxlint enables its JavaScript, TypeScript, Oxc, Unicorn, React, and JSX accessibility plugins, plus
+`oxlint-tsgolint` for type-aware optional-chain and type-export checks. The lint command also runs
+`scripts/check-implicit-any-let.ts`, retaining the former Biome error that Oxlint does not yet
+implement. Intentional hook and positional-key exceptions use scoped `oxlint-disable` comments with
+a reason. Oxfmt preserves the established two-space, 100-column, single-quote style and deterministic
+import ordering. Generated output, runtime-only `agent/` and `scripts/`, the Tailwind entrypoint, and
+documentation formats are excluded from formatting. Keep new `src/` code passing both tools; do not
+silence a rule to dodge a real fix.
 
 ## CI/CD
 

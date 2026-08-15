@@ -24,7 +24,7 @@ export function DlqConfigForm({
   const [draft, setDraft, beginSave] = useSyncedConfig<DlqDraft>(config);
   const [error, setError] = useState<string | null>(null);
   const save = useConfigSaveGuard(`dlq-config:${queue}`);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: target change clears old errors
+  // A target change clears errors from the previous target.
   useEffect(() => setError(null), [save.scopeKey]);
   const payload = dlqConfigMutationPayload(draft);
   const enablingAutoRetry = payload.ok && payload.value.autoRetry;

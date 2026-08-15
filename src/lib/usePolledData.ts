@@ -170,7 +170,7 @@ export function usePolledData<T>(
     let running = false;
     let refreshPending = false;
     let pendingRefreshResolvers: Array<() => void> = [];
-    const hidden = () => typeof document !== 'undefined' && document.hidden;
+    const hidden = () => globalThis.document?.hidden ?? false;
     const gate = createPollGate(hidden);
 
     const clearTimer = () => {
@@ -260,7 +260,6 @@ export function usePolledData<T>(
         document.removeEventListener('visibilitychange', onVisible);
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshMs, viewVersion, load]);
 
   const dataBelongsToView = publishedView.current === viewVersion;

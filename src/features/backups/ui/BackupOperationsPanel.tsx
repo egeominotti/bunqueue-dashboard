@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useConnectionStore } from '@/components/dashboard/stores/connectionStore';
 import { usePolledData } from '@/lib/usePolledData';
 import type {
   BackupItem,
@@ -7,47 +8,92 @@ import type {
   BackupRestoreContext,
   BackupStatus,
 } from '../application/BackupRepository';
-import { parseBackupList, parseBackupStatus } from '../domain/backupData';
+import { createBackupRunnerCoordinator } from '../application/backupRunnerCoordinator';
+import { captureBackupRepository, loadBackupSnapshot } from '../application/backupSnapshot';
 import { parseGeneratedEnvironment } from '../domain/environmentRecord';
 import { bqBackupRepository } from '../infrastructure/bqBackupRepository';
 
-interface Snapshot {
-  status?: BackupStatus;
-  backups: BackupItem[];
-  context?: BackupRestoreContext;
-  errors: string[];
+interface OperationScope {
+  connectionIdentity: string;
+  repository: BackupRepository;
 }
 
 export function BackupOperationsPanel({
   environmentText,
+  pollIntervalMs = 15_000,
   repository = bqBackupRepository,
 }: {
   environmentText?: string;
+  pollIntervalMs?: number;
   repository?: BackupRepository;
 }) {
-  const snapshot = usePolledData(() => loadSnapshot(repository), [repository], {
-    intervalMs: 15_000,
-  });
+  const connectionIdentity = useConnectionStore((state) =>
+    JSON.stringify([state.baseUrl, state.token, state.agentToken])
+  );
+  const mounted = useRef(true);
+  const scopeRef = useRef<OperationScope | null>(null);
+  if (
+    !scopeRef.current ||
+    scopeRef.current.connectionIdentity !== connectionIdentity ||
+    scopeRef.current.repository !== repository
+  ) {
+    scopeRef.current = { connectionIdentity, repository };
+  }
+  const [coordinator] = useState(createBackupRunnerCoordinator);
+  const snapshot = usePolledData(
+    (signal) => loadBackupSnapshot(captureBackupRepository(repository), coordinator, signal),
+    [repository, coordinator],
+    {
+      intervalMs: pollIntervalMs,
+    }
+  );
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const locked = useRef(false);
-  const run = async (label: string, operation: () => Promise<BackupOperationResult | unknown>) => {
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    locked.current = false;
+    setBusy('');
+    setError('');
+    setNotice('');
+  }, [connectionIdentity, repository]);
+  const run = async (
+    label: string,
+    operation: (owner: BackupRepository) => Promise<BackupOperationResult | unknown>
+  ) => {
     if (locked.current) return;
+    const ownerScope = scopeRef.current;
     locked.current = true;
     setBusy(label);
     setError('');
     setNotice('');
     try {
-      const result = await operation();
+      const owner = captureBackupRepository(repository);
+      const result = await coordinator.run(async () => {
+        if (!scopeIsCurrent(ownerScope, scopeRef, mounted)) {
+          throw new Error('Backup operation scope changed before admission.');
+        }
+        return operation(owner);
+      });
+      if (!scopeIsCurrent(ownerScope, scopeRef, mounted)) return;
       const message = (result as BackupOperationResult | undefined)?.message;
       setNotice(message ?? `${label} completed.`);
       await snapshot.refetch();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
+      if (scopeIsCurrent(ownerScope, scopeRef, mounted)) {
+        setError(caught instanceof Error ? caught.message : String(caught));
+      }
     } finally {
-      locked.current = false;
-      setBusy('');
+      if (scopeIsCurrent(ownerScope, scopeRef, mounted)) {
+        locked.current = false;
+        setBusy('');
+      }
     }
   };
   const apply = () => {
@@ -56,19 +102,19 @@ export function BackupOperationsPanel({
       !window.confirm('Apply this S3 configuration to the managed server? A restart is required.')
     )
       return;
-    void run('Configuration', () =>
-      repository.configure(parseGeneratedEnvironment(environmentText))
+    void run('Configuration', (owner) =>
+      owner.configure(parseGeneratedEnvironment(environmentText))
     );
   };
   const backup = () => {
     if (!window.confirm('Create a transactionally consistent S3 backup now?')) return;
-    void run('Backup', () => repository.backupNow());
+    void run('Backup', (owner) => owner.backupNow());
   };
   const restore = (key: string) => {
     const database = snapshot.data?.context?.database;
     if (!database || snapshot.data?.context?.serverStatus !== 'stopped') return;
     if (window.prompt(`Type RESTORE to replace ${database.path} with ${key}`) !== 'RESTORE') return;
-    void run('Restore', () => repository.restore(key, database));
+    void run('Restore', (owner) => owner.restore(key, database));
   };
   const data = snapshot.data;
   return (
@@ -99,7 +145,7 @@ export function BackupOperationsPanel({
           </button>
           <button
             type="button"
-            disabled={snapshot.loading}
+            disabled={Boolean(busy) || snapshot.loading}
             onClick={() => void snapshot.refetch()}
             className="rounded-md border border-line px-3 py-2 text-xs text-muted disabled:opacity-40"
           >
@@ -212,19 +258,10 @@ function BackupList({
   );
 }
 
-async function loadSnapshot(repository: BackupRepository): Promise<Snapshot> {
-  const [status, list, context] = await Promise.allSettled([
-    repository.status().then((result) => parseBackupStatus(result.data)),
-    repository.list().then((result) => parseBackupList(result.data)),
-    repository.restoreContext(),
-  ]);
-  const errors = [status, list, context]
-    .filter((item): item is PromiseRejectedResult => item.status === 'rejected')
-    .map((item) => (item.reason instanceof Error ? item.reason.message : String(item.reason)));
-  return {
-    status: status.status === 'fulfilled' ? status.value : undefined,
-    backups: list.status === 'fulfilled' ? list.value : [],
-    context: context.status === 'fulfilled' ? context.value : undefined,
-    errors,
-  };
+function scopeIsCurrent(
+  owner: OperationScope | null,
+  scope: { current: OperationScope | null },
+  mounted: { current: boolean }
+): boolean {
+  return mounted.current && owner !== null && scope.current === owner;
 }

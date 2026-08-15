@@ -22,7 +22,7 @@ export function useJobMutations({
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const actionGuard = useServerActionGuard(`jobs:${queue}`);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection+queue lifecycle boundary
+  // scopeKey is the connection and queue lifecycle boundary.
   useEffect(() => {
     setBusyIds(new Set());
     setBulkBusy(false);

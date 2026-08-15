@@ -253,14 +253,14 @@ reproduce / impact passes before fixing) resolved the following, gate green, wit
 - **`strictPort: true`**: Vite now fails fast when :5273 is taken instead of
   silently serving on :5274 while `bun start`'s banner points at the stale
   instance.
-- **docker.yml / pages.yml now run the full gate** (biome + build + test)
+- **docker.yml / pages.yml now run the full gate** (lint + build + test)
   before publishing, a commit rejected by CI could previously still ship as
   `edge` / to the public Pages site.
 
 ## Audit fix pass (earlier change-set)
 
 A full-component adversarial audit fixed the following. Each was verified, then
-fixed with the gate (build + biome + `bun test`) green; the agent + store fixes
+fixed with the gate (build + lint + `bun test`) green; the agent + store fixes
 ship with reproducing tests (`test/agent-server.test.ts`, `test/manager.test.ts`, `test/sse.test.ts`, `test/s3store.test.ts`).
 
 - **Control agent is no longer unauthenticated-RCE-by-design.** `agent/` now

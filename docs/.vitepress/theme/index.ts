@@ -40,7 +40,7 @@ export default {
             resolve();
           };
           try {
-            // biome-ignore lint: startViewTransition is feature-detected above
+            // startViewTransition is feature-detected above.
             const t = (document as any).startViewTransition(() => original(href));
             // Resolve navigation as soon as the DOM has updated; let the visual
             // transition finish on its own. Swallow abort rejections.

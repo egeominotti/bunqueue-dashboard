@@ -38,7 +38,7 @@ export function QueuesOverview() {
   // pause-all/resume-all fan-out while the first is still in flight.
   const actionGuard = useServerActionGuard('queues-overview');
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection+rendered-view lifecycle boundary
+  // scopeKey is the connection and rendered-view lifecycle boundary.
   useEffect(() => {
     setBusy(new Set());
     setBulkBusy(false);

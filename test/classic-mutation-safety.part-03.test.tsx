@@ -3,8 +3,8 @@ import { act, createElement, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
-import { QueueDetail } from '../src/pages/QueueDetail';
 import { QueueConfig } from '../src/pages/queue/QueueConfig';
+import { QueueDetail } from '../src/pages/QueueDetail';
 import { ensureDom, settle } from './domSetup';
 
 const realFetch = globalThis.fetch;

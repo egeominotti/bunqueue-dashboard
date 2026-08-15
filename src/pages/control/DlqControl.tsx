@@ -69,7 +69,7 @@ export function DlqControl() {
     };
   }, [queue, page]);
   const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue, page]);
-  const data = raw && raw.queue === queue && raw.page === page ? raw : null;
+  const data = raw?.queue === queue && raw.page === page ? raw : null;
 
   // Clamp the page when the DLQ shrinks externally so a stale offset cannot
   // render "empty" while entries remain.
@@ -81,7 +81,7 @@ export function DlqControl() {
 
   // Selecting a different queue/page shows different rows — drop any expanded
   // detail panels so they can't render against rows that no longer exist.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: collapse on view change
+  // Collapse expanded rows whenever the rendered view changes.
   useEffect(() => {
     setExpanded(new Set());
   }, [queue, page]);

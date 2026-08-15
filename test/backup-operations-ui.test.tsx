@@ -94,6 +94,65 @@ describe('S3 backup operations', () => {
     );
     expect(host.textContent).toContain('No backup objects returned');
   });
+
+  test('serializes status and list against the single-operation backup runner', async () => {
+    const calls: string[] = [];
+    let activeBackupOperation = '';
+    const guarded = async <T,>(name: string, value: T): Promise<T> => {
+      if (activeBackupOperation) throw new Error(`overlap: ${activeBackupOperation}/${name}`);
+      activeBackupOperation = name;
+      calls.push(`${name}:start`);
+      await Promise.resolve();
+      calls.push(`${name}:end`);
+      activeBackupOperation = '';
+      return value;
+    };
+    const repository = fakeRepository({
+      status: () =>
+        guarded('status', {
+          success: true,
+          message: 'configured',
+          data: {
+            enabled: true,
+            bucket: 'production',
+            endpoint: 'AWS S3',
+            interval: '360 minutes',
+            retention: '7 backups',
+          },
+        }),
+      list: () =>
+        guarded('list', {
+          success: true,
+          message: 'one backup',
+          data: [{ key: 'backups/one.db', size: '1.00 MB', date: '2026-08-04T10:00:00.000Z' }],
+        }),
+    });
+
+    const host = render(createElement(BackupOperationsPanel, { repository }));
+    await settle(5);
+
+    expect(calls).toEqual(['status:start', 'status:end', 'list:start', 'list:end']);
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(host.textContent).toContain('backups/one.db');
+  });
+
+  test('shows a shared status/list configuration failure only once', async () => {
+    const repository = fakeRepository({
+      status: async () => {
+        throw new Error('S3 configuration is incomplete');
+      },
+      list: async () => {
+        throw new Error('S3 configuration is incomplete');
+      },
+    });
+
+    const host = render(createElement(BackupOperationsPanel, { repository }));
+    await settle(5);
+
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(
+      'S3 configuration is incomplete'
+    );
+  });
 });
 
 const database: DbStats = {

@@ -1,20 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-
 import { act, createElement, type ReactElement } from 'react';
-
 import { createRoot } from 'react-dom/client';
-
 import { MemoryRouter } from 'react-router-dom';
-
 import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
-
 import {
   AddJob,
   addJobCloneDefaults,
   MAX_JOB_DATA_CHARS,
   parseAddJobNumbers,
 } from '../src/pages/control/AddJob';
-
 import {
   assertCronNameAvailable,
   buildCronBody,
@@ -22,7 +16,6 @@ import {
   CronManager,
   existingCronNameError,
 } from '../src/pages/control/CronManager';
-
 import { ensureDom, settle } from './domSetup';
 
 const realFetch = globalThis.fetch;

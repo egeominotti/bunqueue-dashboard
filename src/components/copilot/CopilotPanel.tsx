@@ -24,7 +24,7 @@ export function CopilotPanel() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLElement>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll on new content
+  // Scroll to the latest message whenever new content arrives.
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, pending]);

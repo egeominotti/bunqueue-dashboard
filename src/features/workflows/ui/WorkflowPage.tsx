@@ -189,8 +189,9 @@ function WorkflowContent({
         hint="Start a Bunqueue Workflow Engine with this server dataPath; its official workflow_executions tables will appear here automatically."
       />
     );
-  if (page.executions.length === 0)
-    if (page.total > 0 && offset > 0) return <LoadingState label="Loading workflow page…" />;
+  if (page.executions.length === 0 && page.total > 0 && offset > 0) {
+    return <LoadingState label="Loading workflow page…" />;
+  }
   if (page.executions.length === 0)
     return (
       <EmptyState

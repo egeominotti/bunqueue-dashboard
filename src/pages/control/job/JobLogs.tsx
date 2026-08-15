@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getBaseUrl, useConnectionStore } from '@/components/dashboard/stores/connectionStore';
 import { BqError } from '@/lib/bq';
 import { opaqueHttpPathSegment } from '@/lib/upstreamPaths';
-import { JobLogsView } from './JobLogsView';
 import {
   currentLogTarget,
   type LogLevel,
@@ -11,6 +10,7 @@ import {
   parseLogSnapshot,
   sameLogTarget,
 } from './jobLogsTransport';
+import { JobLogsView } from './JobLogsView';
 
 /**
  * Job logs viewer + writer. Reads `GET /jobs/:id/logs` (bq.jobLogs), appends

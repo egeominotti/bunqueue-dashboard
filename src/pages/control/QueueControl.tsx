@@ -33,7 +33,7 @@ export function QueueControl() {
   const [operationsRevision, setOperationsRevision] = useState(0);
   const [msg, setMsg] = useState<{ queue: string; ok: boolean; text: string } | null>(null);
   const actionGuard = useServerActionGuard(`queue-control:${queue}`);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the queue+connection lifecycle boundary
+  // scopeKey is the queue and connection lifecycle boundary.
   useEffect(() => {
     setBusy(false);
     setMsg(null);
@@ -72,7 +72,7 @@ export function QueueControl() {
   }, [queue]);
   const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue]);
   const queueIsDiscovered = !qs || qs.queues.some((entry) => entry.name === queue);
-  const data = raw && raw.queue === queue && queueIsDiscovered ? raw : null;
+  const data = raw?.queue === queue && queueIsDiscovered ? raw : null;
 
   const run = (
     label: string,

@@ -24,7 +24,7 @@ export function useQueueDepth(name: string, counts?: QueueDepthCounts | null) {
       (counts['waiting-children'] ?? 0);
   }, [counts]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset and re-arm only when the queue changes
+  // Reset and re-arm only when the queue changes.
   useEffect(() => {
     currentDepthRef.current = null;
     setDepth([]);

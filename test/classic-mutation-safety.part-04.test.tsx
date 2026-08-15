@@ -4,8 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
 import { RuleForm } from '../src/pages/Alerts';
-import { QueueDetail } from '../src/pages/QueueDetail';
 import { QueueConfig } from '../src/pages/queue/QueueConfig';
+import { QueueDetail } from '../src/pages/QueueDetail';
 import { ensureDom, settle } from './domSetup';
 
 const realFetch = globalThis.fetch;

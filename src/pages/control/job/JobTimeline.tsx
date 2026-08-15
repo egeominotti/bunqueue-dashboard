@@ -19,7 +19,7 @@ export function JobTimeline({ timeline }: { timeline: JobFull['timeline'] }) {
           {entries.map((e, i) => (
             <li
               // Timeline entries have no stable id; index is fine, order is append-only.
-              // biome-ignore lint/suspicious/noArrayIndexKey: append-only server log, stable order
+              // oxlint-disable-next-line react/no-array-index-key -- append-only server log, stable order
               key={i}
               className="border-b border-line/60 py-2 last:border-0"
             >

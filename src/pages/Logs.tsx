@@ -71,7 +71,7 @@ export function Logs() {
   }, [events, status, search]);
 
   // Reset to first page when filters change.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on filter change
+  // Reset the view whenever the active filters change.
   useEffect(() => setPage(0), [queue, status, search]);
 
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE));

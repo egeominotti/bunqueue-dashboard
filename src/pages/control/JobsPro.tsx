@@ -64,7 +64,7 @@ export function JobsPro() {
     return { view, jobs: (r.jobs ?? []).map((j) => ({ ...j, queue: j.queue ?? queue })) };
   }, [queue, status, page, view]);
   const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue, status, page]);
-  const jobs = raw && raw.view === view ? raw.jobs : null;
+  const jobs = raw?.view === view ? raw.jobs : null;
 
   // No `total` from jobs/list — a full page means there may be a next one.
   const hasNext = (jobs?.length ?? 0) === JOBS_PAGE_SIZE;
@@ -103,7 +103,7 @@ export function JobsPro() {
 
   // A different page/queue/status shows different jobs — a selection made on
   // the old view must not silently carry over to rows it never referred to.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: clear on view change
+  // Clear selection whenever the rendered view changes.
   useEffect(() => {
     setSelected(new Set());
   }, [queue, status, page]);

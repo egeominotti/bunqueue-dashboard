@@ -50,7 +50,7 @@ export function JobLogsView(props: JobLogsViewProps) {
         <ol className="flex max-h-64 flex-col gap-1 overflow-auto rounded-lg bg-surface-2 p-3">
           {logs.map((line, index) => (
             <li
-              // biome-ignore lint/suspicious/noArrayIndexKey: append-only server log, stable order
+              // oxlint-disable-next-line react/no-array-index-key -- append-only server log, stable order
               key={index}
               className="whitespace-pre-wrap break-words font-mono text-xs text-muted"
             >

@@ -16,7 +16,6 @@ import { createRoot } from 'react-dom/client';
 
 declare global {
   // React's act() refuses to run (and warns) unless this flag is set.
-  // eslint-disable-next-line no-var
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
 

@@ -70,11 +70,11 @@ export function LogsPro() {
   const newSincePause = paused ? Math.max(0, (events[0]?.seq ?? 0) - (frozen[0]?.seq ?? 0)) : 0;
 
   // Reset to first page when filters change.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset on filter change
+  // Reset the view whenever the active filters change.
   useEffect(() => setPage(0), [queue, status, search]);
   // Any queue/server/credential switch tears the stream down. A paused snapshot
   // from the old target must not survive and render under the new connection.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: streamTarget is the explicit lifecycle identity
+  // streamTarget is the explicit lifecycle identity.
   useEffect(() => setFrozen(null), [streamTarget]);
 
   const start = page * PAGE;

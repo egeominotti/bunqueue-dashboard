@@ -32,7 +32,7 @@ export function CronManager() {
   const [removing, setRemoving] = useState<Set<string>>(new Set());
   const actionGuard = useServerActionGuard('cron-manager');
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection lifecycle boundary
+  // scopeKey is the connection lifecycle boundary.
   useEffect(() => {
     setActionError(null);
     setRemoving(new Set());

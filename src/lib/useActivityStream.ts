@@ -115,8 +115,8 @@ export function useActivityStream(queue?: string) {
   // baseUrl/token aren't read directly in the body (api.eventsUrl / getAuthHeaders
   // read them fresh at connect time) — they're deps so the stream tears down and
   // reconnects when the server URL or token changes in Settings. Removing them
-  // (biome's "unnecessary" fix) would keep streaming from the stale server.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional reconnect triggers
+  // Removing these explicit reconnect triggers would keep streaming from the stale server.
+  // These dependencies are the intentional reconnect triggers.
   useEffect(() => {
     const ctrl = new AbortController();
     const generation = ++streamGeneration.current;

@@ -30,7 +30,7 @@ export function Cron() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const actionGuard = useServerActionGuard('classic-cron');
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection lifecycle boundary
+  // scopeKey is the connection lifecycle boundary.
   useEffect(() => {
     setActionError(null);
     setRemoving(null);

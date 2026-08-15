@@ -35,7 +35,7 @@ function useAction(queue: string, kind: string) {
   const [receipt, setReceipt] = useState<string | null>(null);
   const guard = useServerActionGuard(`classic-queue-policy:${queue}:${kind}`);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the queue+connection lifecycle boundary
+  // scopeKey is the queue and connection lifecycle boundary.
   useEffect(() => {
     setBusy(false);
     setError(null);

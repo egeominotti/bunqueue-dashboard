@@ -11,7 +11,6 @@ import { errorRate, formatNumber, formatPercent } from '@/lib/format';
 import { settledPool } from '@/lib/promisePool';
 import type { Job } from '@/lib/types';
 import { usePolledData } from '@/lib/usePolledData';
-import { ClassicJobsTable } from './jobs/ClassicJobsTable';
 import {
   ALL_QUEUES,
   DISPLAY_LIMIT,
@@ -23,6 +22,7 @@ import {
   MAX_ALL_QUEUE_JOB_FANOUT,
   type StatusFilter,
 } from './jobs/classicJobsData';
+import { ClassicJobsTable } from './jobs/ClassicJobsTable';
 
 export { discoverAllQueues, jobDataName, MAX_ALL_QUEUE_JOB_FANOUT } from './jobs/classicJobsData';
 

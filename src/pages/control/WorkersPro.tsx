@@ -30,7 +30,7 @@ export function WorkersPro() {
   const [sort, setSort] = useState<Sort | null>(null);
   const actionGuard = useServerActionGuard('workers-pro');
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the connection lifecycle boundary
+  // scopeKey is the connection lifecycle boundary.
   useEffect(() => {
     setBusyIds(new Set());
     setMsg(null);

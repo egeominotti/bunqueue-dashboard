@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
 import { BqError } from '../src/lib/bq';
-import { loadJobForLookup } from '../src/pages/control/JobInspector';
 import { jobDataReadOnlyReason } from '../src/pages/control/job/JobDataEditor';
+import { loadJobForLookup } from '../src/pages/control/JobInspector';
 import { ensureDom } from './domSetup';
 
 const originalFetch = globalThis.fetch;

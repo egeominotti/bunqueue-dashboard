@@ -28,7 +28,7 @@ The full dashboard running on sample data, no server needed.
 ![Vite 8](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
 ![Bun](https://img.shields.io/badge/Bun-1.3-000?logo=bun&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Biome](https://img.shields.io/badge/Biome-lint%20%2B%20format-60A5FA?logo=biome&logoColor=white)
+![Oxlint + Oxfmt](https://img.shields.io/badge/Oxc-Oxlint%20%2B%20Oxfmt-7C3AED)
 
 <br />
 
@@ -246,8 +246,10 @@ target-pinned Flow, Workflow, Queue and Backup agent operations.
 | `bun run agent` | Control agent only |
 | `bun run build` | Typecheck (`tsc --noEmit`) + production build → `dist/` |
 | `bun run preview` | Preview the production build |
-| `bun run check` | Biome lint + format (the CI gate) |
-| `bun run check:fix` | Biome lint + format with safe fixes applied |
+| `bun run lint` | Lint with Oxlint, including type-aware rules and the implicit-`any` parity guard |
+| `bun run format:check` | Check formatting with Oxfmt |
+| `bun run check` | Oxlint + Oxfmt validation (the CI gate) |
+| `bun run check:fix` | Apply safe Oxlint fixes, then format with Oxfmt |
 | `bun test` | Unit + agent-lifecycle tests |
 
 ## Docker

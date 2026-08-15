@@ -122,7 +122,7 @@ export function ResultsTable({
           {rows.map((r, ri) => (
             <tr
               // Rows are positional within one immutable result page.
-              // biome-ignore lint/suspicious/noArrayIndexKey: rows have no stable id
+              // oxlint-disable-next-line react/no-array-index-key -- rows have no stable id
               key={ri}
               className="border-b border-line font-mono text-xs last:border-0 hover:bg-surface-2/40"
             >
@@ -140,7 +140,7 @@ export function ResultsTable({
               )}
               {r.map((v, ci) => (
                 <td
-                  // biome-ignore lint/suspicious/noArrayIndexKey: cells are positional
+                  // oxlint-disable-next-line react/no-array-index-key -- cells are positional
                   key={ci}
                   className="whitespace-nowrap px-4 py-2 text-muted"
                 >

@@ -114,9 +114,8 @@ export function sanitizedPersistedCopilotState(value: unknown): {
 // confirm card resolve another's promise; the counter + random suffix can't.
 let uidSeq = 0;
 const uid = () =>
-  typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${Date.now()}-${(uidSeq++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  globalThis.crypto?.randomUUID?.() ??
+  `${Date.now()}-${(uidSeq++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 // Confirmation resolvers kept OUT of store state so they are never serialized.
 const resolvers = new Map<string, (approved: boolean) => void>();

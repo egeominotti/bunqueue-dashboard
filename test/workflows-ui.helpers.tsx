@@ -1,21 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-
 import { act, createElement, type ReactElement } from 'react';
-
 import { createRoot } from 'react-dom/client';
-
 import { MemoryRouter } from 'react-router-dom';
-
 import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
-
 import type { WorkflowExecutionSummary } from '../src/lib/bqTypes';
-
 import {
   reconcileWorkflowSelection,
   type WorkflowSelection,
   Workflows,
 } from '../src/pages/control/Workflows';
-
 import { ensureDom, settle } from './domSetup';
 
 const realFetch = globalThis.fetch;

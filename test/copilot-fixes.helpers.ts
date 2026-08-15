@@ -1,26 +1,17 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-
 import { act, createElement } from 'react';
-
 import { createRoot } from 'react-dom/client';
-
 import { CopilotBoundary } from '../src/components/copilot/Copilot';
-
 import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
-
 import { useCopilotStore } from '../src/components/dashboard/stores/copilotStore';
-
 import {
   createModel,
   normalizeCustomProviderBaseURL,
   providerById,
   resolveCompatibleProviderBaseURL,
 } from '../src/lib/copilot/providers';
-
 import { abortActive, clearChat, sendMessage } from '../src/lib/copilot/runtime';
-
 import { buildTools } from '../src/lib/copilot/tools';
-
 import { ensureDom } from './domSetup';
 
 /**

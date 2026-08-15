@@ -35,7 +35,7 @@ export function QueueDetailPro() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const actionGuard = useServerActionGuard(`queue:${name}`);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is the queue+connection lifecycle boundary
+  // scopeKey is the queue and connection lifecycle boundary.
   useEffect(() => {
     setBusy(false);
     setMsg(null);
@@ -83,7 +83,7 @@ export function QueueDetailPro() {
     };
   }, [name]);
   const { data: raw, error, loading, refetch } = usePolledData(fetcher, [name]);
-  const data = raw && raw.queue === name ? raw : null;
+  const data = raw?.queue === name ? raw : null;
 
   const { depth, trend } = useQueueDepth(name, data?.detail?.counts);
 

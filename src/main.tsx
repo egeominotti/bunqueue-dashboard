@@ -2,7 +2,6 @@
 // imports pull cyrillic/greek/vietnamese woff2 the UI never renders.
 import './fonts.css';
 import './index.css';
-
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';

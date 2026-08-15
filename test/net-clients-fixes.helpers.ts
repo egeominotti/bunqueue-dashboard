@@ -1,13 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-
 import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
-
 import { ApiError, api, setRequestTimeoutMs as setApiTimeout } from '../src/lib/api';
-
 import { BqError, bq, setRequestTimeoutMs as setBqTimeout } from '../src/lib/bq';
-
 import { streamEvents } from '../src/lib/sse';
-
 import { fetchHealthWithTimeout, isValidBaseUrl } from '../src/pages/Settings';
 
 // Regression tests for the "net-clients" audit package: transport deadlines in

@@ -154,8 +154,8 @@ export function useFlowExplorer() {
   );
   useEffect(() => {
     const next = { ...urlState };
-    if (graph) {
-      if (!next.node || !graph.jobs.has(next.node)) next.node = snapshot?.defaultSelected ?? null;
+    if (graph && (!next.node || !graph.jobs.has(next.node))) {
+      next.node = snapshot?.defaultSelected ?? null;
     }
     const canonical = flowSearchParams(next).toString();
     if (canonical !== serializedParams) setParams(canonical, { replace: true });

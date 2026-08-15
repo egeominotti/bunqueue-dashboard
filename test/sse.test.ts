@@ -14,8 +14,9 @@ describe('parseFrame', () => {
   test('parses an event with JSON data', () => {
     const f = parseFrame('event: job:completed\ndata: {"jobId":"1","queue":"q"}');
     expect(f?.event).toBe('job:completed');
-    expect((f?.data as { jobId: string }).jobId).toBe('1');
-    expect((f?.data as { queue: string }).queue).toBe('q');
+    if (!f) throw new Error('Expected a parsed SSE frame');
+    expect((f.data as { jobId: string }).jobId).toBe('1');
+    expect((f.data as { queue: string }).queue).toBe('q');
   });
 
   test('captures the id field', () => {
@@ -65,7 +66,8 @@ describe('parseFrame', () => {
     const f = parseFrame('retry: 3000\ndata: {"connected":true,"clientId":"abc"}');
     expect(f).not.toBeNull();
     expect(f?.event).toBe('message');
-    expect((f?.data as { connected?: boolean }).connected).toBe(true);
+    if (!f) throw new Error('Expected a parsed SSE handshake');
+    expect((f.data as { connected?: boolean }).connected).toBe(true);
   });
 });
 

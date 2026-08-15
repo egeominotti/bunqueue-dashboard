@@ -84,7 +84,7 @@ export function QueueOperationsPanel({
     }
   }, [maxJobs, queue, repository]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey explicitly invalidates the snapshot
+  // oxlint-disable-next-line react/exhaustive-deps -- refreshKey explicitly invalidates the snapshot
   useEffect(() => void loadLimits(), [queue, refreshKey]);
 
   const run: QueueOperationRunner = (label, task, onSuccess, mutation = false) => {

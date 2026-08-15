@@ -10,15 +10,8 @@ import { useInspectorRoute } from './jobInspector/useInspectorRoute';
 import { useInspectorState } from './jobInspector/useInspectorState';
 
 export { loadJobForLookup } from './jobInspector/jobLookup';
-export {
-  buildStacktracePreview,
-  type StacktracePreview,
-} from './jobInspector/jobValidation';
-export type {
-  JobLookupOptions,
-  JobLookupTarget,
-  LookupMode,
-} from './jobInspector/types';
+export { buildStacktracePreview, type StacktracePreview } from './jobInspector/jobValidation';
+export type { JobLookupOptions, JobLookupTarget, LookupMode } from './jobInspector/types';
 
 export function JobInspector() {
   const location = useLocation();

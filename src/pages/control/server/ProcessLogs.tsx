@@ -65,7 +65,7 @@ export function ProcessLogs() {
   }, [lines, stream, search]);
 
   // Follow the tail only while enabled, so scrolling up to read isn't yanked back.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: follow the tail on new lines
+  // Follow the tail whenever new lines arrive.
   useEffect(() => {
     if (!follow) return;
     const el = scrollRef.current;

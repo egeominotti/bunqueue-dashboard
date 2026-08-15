@@ -86,7 +86,7 @@ export function QueryRunner({
     gen.current++;
     activeQuery.current = null;
   }
-  // biome-ignore lint/correctness/useExhaustiveDependencies: the connection identity is the invalidation trigger
+  // The connection identity is the invalidation trigger.
   useEffect(() => {
     gen.current++;
     activeQuery.current = null;
@@ -94,6 +94,7 @@ export function QueryRunner({
     setError(null);
     setResult(null);
     return () => {
+      // oxlint-disable-next-line react/exhaustive-deps -- the shared generation ref invalidates this request on cleanup
       gen.current++;
       activeQuery.current = null;
     };

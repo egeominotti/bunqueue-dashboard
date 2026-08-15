@@ -19,7 +19,7 @@ export function StallForm({
   const [draft, setDraft, beginSave] = useSyncedConfig<StallDraft>(config);
   const [error, setError] = useState<string | null>(null);
   const save = useConfigSaveGuard(`stall-config:${queue}`);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: target change clears old errors
+  // A target change clears errors from the previous target.
   useEffect(() => setError(null), [save.scopeKey]);
   const payload = stallConfigPayload(draft);
   const submit = async () => {

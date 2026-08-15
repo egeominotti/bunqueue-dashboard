@@ -21,9 +21,9 @@ export async function getDbRowsAtTarget(
   signal?.throwIfAborted();
   const result = await call<DbRowsPage>(
     target.baseUrl,
-    `/db/tables/${decodedHttpPathSegment(table, 'Database table')}?limit=${limit}&offset=${offset}` +
-      (orderBy ? `&orderBy=${q(orderBy)}&dir=${dir}` : '') +
-      (filter?.value ? `&fcol=${q(filter.column)}&fop=${filter.op}&fval=${q(filter.value)}` : ''),
+    `/db/tables/${decodedHttpPathSegment(table, 'Database table')}?limit=${limit}&offset=${offset}${
+      orderBy ? `&orderBy=${q(orderBy)}&dir=${dir}` : ''
+    }${filter?.value ? `&fcol=${q(filter.column)}&fop=${filter.op}&fval=${q(filter.value)}` : ''}`,
     { ...agentHeadersFor(target) },
     signal ? { signal } : undefined,
     true,

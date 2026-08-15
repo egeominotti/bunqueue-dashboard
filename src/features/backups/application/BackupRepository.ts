@@ -26,6 +26,8 @@ export interface BackupRestoreContext {
 }
 
 export interface BackupRepository {
+  /** Capture immutable server/agent targets for a multi-request operation. */
+  capture?(): BackupRepository;
   status(): Promise<BackupOperationResult & { data: BackupStatus }>;
   list(): Promise<BackupOperationResult & { data: BackupItem[] }>;
   backupNow(): Promise<BackupOperationResult>;

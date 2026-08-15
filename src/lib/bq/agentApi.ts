@@ -56,9 +56,9 @@ export const dbApi = {
     filter?: DbFilter
   ) =>
     agentRequest<DbRowsPage>(
-      `/db/tables/${decodedHttpPathSegment(table, 'Database table')}?limit=${limit}&offset=${offset}` +
-        (orderBy ? `&orderBy=${q(orderBy)}&dir=${dir}` : '') +
-        (filter?.value ? `&fcol=${q(filter.column)}&fop=${filter.op}&fval=${q(filter.value)}` : '')
+      `/db/tables/${decodedHttpPathSegment(table, 'Database table')}?limit=${limit}&offset=${offset}${
+        orderBy ? `&orderBy=${q(orderBy)}&dir=${dir}` : ''
+      }${filter?.value ? `&fcol=${q(filter.column)}&fop=${filter.op}&fval=${q(filter.value)}` : ''}`
     ),
   cell: (table: string, rowid: DbRowId, column: string) =>
     agentRequest<{ ok: boolean; value: unknown }>(

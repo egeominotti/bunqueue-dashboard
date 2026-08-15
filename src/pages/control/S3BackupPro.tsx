@@ -32,12 +32,13 @@ export function S3BackupPro() {
   const visibleTest = test?.target === targetIdentity ? test : null;
   const checking = checkingTarget === targetIdentity;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: target identity changes invalidate checks
+  // A target identity change invalidates checks from the previous target.
   useEffect(() => {
     requestGeneration.current++;
     setTest(null);
     setCheckingTarget(null);
     return () => {
+      // oxlint-disable-next-line react/exhaustive-deps -- the shared generation ref invalidates this request on cleanup
       requestGeneration.current++;
     };
   }, [targetIdentity]);

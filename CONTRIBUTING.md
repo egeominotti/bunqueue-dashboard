@@ -18,7 +18,7 @@ bun start          # control agent + dashboard together (Ctrl-C stops both)
 
 ```bash
 bun run build      # tsc --noEmit + vite build
-bun run check      # biome lint + format
+bun run check      # Oxlint + Oxfmt
 bun test           # unit + agent-lifecycle tests
 ```
 
@@ -31,8 +31,8 @@ before opening a PR.
   code. The project keeps two API clients on purpose: `src/lib/api.ts` (the
   original, classic pages) and `src/lib/bq.ts` (the complete, shape-verified
   client for all new work). See `CLAUDE.md` for the full architecture notes.
-- **Keep `src/` passing the strict Biome ruleset.** Don't silence a rule to
-  dodge a real fix.
+- **Keep `src/` passing the strict type-aware Oxlint ruleset, its implicit-`any` parity guard,
+  and the Oxfmt check.** Don't silence a rule to dodge a real fix.
 - **Update `CHANGELOG.md`** under `## [Unreleased]` and **bump the
   `package.json` `version`** for anything that ships. The release workflow tags
   and publishes `v<version>` from `package.json`.

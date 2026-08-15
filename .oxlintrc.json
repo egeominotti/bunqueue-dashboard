@@ -1,0 +1,76 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "jsx-a11y"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "default-param-last": "error",
+    "eqeqeq": ["error", "always", { "null": "ignore" }],
+    "no-debugger": "error",
+    "no-else-return": "error",
+    "no-eval": "error",
+    "no-param-reassign": "error",
+    "no-unsafe-optional-chaining": "error",
+    "no-unused-expressions": ["error", { "allowShortCircuit": true, "allowTernary": true }],
+    "no-unused-vars": "error",
+    "object-shorthand": "error",
+    "operator-assignment": "error",
+    "prefer-const": ["error", { "ignoreReadBeforeAssign": true }],
+    "prefer-template": "error",
+    "jsx-a11y/control-has-associated-label": "off",
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "jsx-a11y/role-supports-aria-props": "error",
+    "oxc/no-accumulating-spread": "warn",
+    "react/exhaustive-deps": "warn",
+    "react/no-array-index-key": "warn",
+    "react/no-danger": "warn",
+    "react/no-did-update-set-state": "off",
+    "react/rules-of-hooks": "error",
+    "react/self-closing-comp": "error",
+    "typescript/consistent-type-imports": [
+      "error",
+      {
+        "disallowTypeAnnotations": false,
+        "fixStyle": "separate-type-imports",
+        "prefer": "type-imports"
+      }
+    ],
+    "typescript/consistent-type-exports": "error",
+    "typescript/no-base-to-string": "off",
+    "typescript/no-floating-promises": "off",
+    "typescript/no-misused-spread": "off",
+    "typescript/no-redundant-type-constituents": "off",
+    "typescript/no-unnecessary-type-constraint": "error",
+    "typescript/no-useless-default-assignment": "off",
+    "typescript/prefer-optional-chain": "error",
+    "typescript/require-array-sort-compare": "off",
+    "typescript/restrict-template-expressions": "off",
+    "typescript/unbound-method": "off",
+    "unicorn/no-lonely-if": "error",
+    "unicorn/no-new-array": "off",
+    "unicorn/no-useless-spread": "off",
+    "unicorn/prefer-array-flat-map": "error",
+    "unicorn/prefer-node-protocol": "error",
+    "unicorn/prefer-number-properties": "error"
+  },
+  "env": {
+    "browser": true,
+    "builtin": true,
+    "es2024": true,
+    "node": true
+  },
+  "ignorePatterns": [
+    "dist",
+    "node_modules",
+    "agent",
+    "scripts",
+    "docs/.vitepress",
+    "coverage",
+    "test/fixtures/oxlint-policy"
+  ],
+  "options": {
+    "reportUnusedDisableDirectives": "error",
+    "typeAware": true
+  }
+}

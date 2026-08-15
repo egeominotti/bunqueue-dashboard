@@ -6,17 +6,11 @@
  *   check-coverage.ts — a malformed lcov must fail, not pass.
  */
 import { describe, expect, it, mock } from 'bun:test';
-
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-
 import { tmpdir } from 'node:os';
-
 import { join } from 'node:path';
-
 import { ProcessManager } from '../agent/manager';
-
 import { createFetchHandler, isHostAllowed } from '../agent/server';
-
 import {
   agentSubUrl,
   apiTokenOk,

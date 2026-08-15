@@ -37,7 +37,7 @@ export function AppLayout() {
   useRouteScrollReset(mainRef, locationKey);
 
   // Close the drawer whenever the route changes (tapping a nav item navigates).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: close on navigation
+  // Close the mobile navigation whenever the route changes.
   useEffect(() => closeNav(), [pathname, closeNav]);
 
   // Close the drawer if the viewport grows to lg (where the sidebar is a static

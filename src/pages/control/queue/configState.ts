@@ -35,7 +35,7 @@ export function useConfigSaveGuard(ownerKey: string) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scopeKey is intentionally a reset trigger.
+  // scopeKey intentionally acts as the reset trigger.
   useEffect(() => {
     active.current = null;
     setSaving(false);
