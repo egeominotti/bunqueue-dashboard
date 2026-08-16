@@ -11,6 +11,7 @@ export const DEMO_CONFIG = {
 export const demoStatus = (): Json => ({
   status: 'running',
   generation: 1,
+  configRevision: 1,
   pid: 42317,
   startedAt: Date.now() - 3_600_000,
   exitCode: null,

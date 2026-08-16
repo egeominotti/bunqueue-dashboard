@@ -21,6 +21,7 @@ export function WorkflowRuntimePanel({
   );
   const status = usePolledData(() => repository.status(), [repository], { intervalMs: 5000 });
   const command = useWorkflowCommand({
+    operationGroup: 'runtime',
     scopeKey: commandScope,
     onApplied: async () => {
       await status.refetch();

@@ -3,6 +3,7 @@ import {
   currentControlConnectionEpoch,
   useControlConnectionEpoch,
 } from '@/lib/controlConnectionEpoch';
+import { useControlActionGuard } from '@/lib/useControlActionGuard';
 
 interface RequestIdentity {
   key: string;
@@ -15,6 +16,7 @@ interface ActiveRequest {
 }
 
 interface PendingRequest extends ActiveRequest {
+  exclusive: boolean;
   label: string;
 }
 
@@ -32,14 +34,17 @@ export function flowRequestKey(...parts: readonly string[]): string {
   return JSON.stringify(parts);
 }
 
-export function useLatestFlowRequest<T>(contextKey: string) {
+export function useLatestFlowRequest<T>(contextKey: string, operationGroup = 'shared') {
   const connectionEpoch = useControlConnectionEpoch();
+  const persistentLockKey = `flow-exclusive:${operationGroup}`;
+  const actionGuard = useControlActionGuard(persistentLockKey);
   const identity = useMemo<RequestIdentity>(
     () => ({ key: contextKey, connectionEpoch }),
     [connectionEpoch, contextKey]
   );
   const identityRef = useRef(identity);
   const lockedRef = useRef<ActiveRequest | undefined>(undefined);
+  const exclusiveRef = useRef<ActiveRequest | undefined>(undefined);
   const latestRef = useRef<ActiveRequest | undefined>(undefined);
   const sequenceRef = useRef(0);
   const mountedRef = useRef(true);
@@ -48,6 +53,9 @@ export function useLatestFlowRequest<T>(contextKey: string) {
   const [failure, setFailure] = useState<RequestFailure>();
 
   useLayoutEffect(() => {
+    if (identityRef.current.connectionEpoch !== identity.connectionEpoch) {
+      exclusiveRef.current = undefined;
+    }
     identityRef.current = identity;
     lockedRef.current = undefined;
     latestRef.current = undefined;
@@ -58,21 +66,35 @@ export function useLatestFlowRequest<T>(contextKey: string) {
     return () => {
       mountedRef.current = false;
       lockedRef.current = undefined;
+      exclusiveRef.current = undefined;
       latestRef.current = undefined;
     };
   }, []);
 
-  const run = async (label: string, task: () => Promise<T>): Promise<void> => {
+  const run = async (
+    label: string,
+    task: () => Promise<T>,
+    options: { exclusive?: boolean } = {}
+  ): Promise<void> => {
+    const exclusive = options.exclusive === true;
     if (
+      exclusiveRef.current ||
       lockedRef.current?.identity === identity ||
       currentControlConnectionEpoch() !== identity.connectionEpoch
     ) {
       return;
     }
+    // Probe the module-global lease even for reads so an exclusive mutation
+    // from an unmounted instance keeps blocking this operation group. Reads do
+    // not retain the lease; exclusive work owns it through final settlement.
+    const persistentLease = actionGuard.begin(persistentLockKey);
+    if (!persistentLease) return;
+    if (!exclusive) persistentLease.finish();
     const request = { id: ++sequenceRef.current, identity };
-    lockedRef.current = request;
+    if (exclusive) exclusiveRef.current = request;
+    else lockedRef.current = request;
     latestRef.current = request;
-    setPending({ ...request, label });
+    setPending({ ...request, exclusive, label });
     setResultState(undefined);
     setFailure(undefined);
     try {
@@ -95,6 +117,8 @@ export function useLatestFlowRequest<T>(contextKey: string) {
         setFailure({ identity, message: errorMessage(caught) });
       }
     } finally {
+      if (exclusive) persistentLease.finish();
+      if (exclusiveRef.current === request) exclusiveRef.current = undefined;
       if (lockedRef.current === request) lockedRef.current = undefined;
       if (mountedRef.current) {
         setPending((current) => (current?.id === request.id ? undefined : current));
@@ -103,7 +127,8 @@ export function useLatestFlowRequest<T>(contextKey: string) {
   };
 
   const reject = (message: string): void => {
-    if (currentControlConnectionEpoch() !== identity.connectionEpoch) return;
+    if (exclusiveRef.current || currentControlConnectionEpoch() !== identity.connectionEpoch)
+      return;
     latestRef.current = undefined;
     lockedRef.current = undefined;
     setPending(undefined);
@@ -112,7 +137,11 @@ export function useLatestFlowRequest<T>(contextKey: string) {
   };
 
   return {
-    busy: pending?.identity === identity ? pending.label : '',
+    busy:
+      (pending?.exclusive && pending.identity.connectionEpoch === identity.connectionEpoch) ||
+      pending?.identity === identity
+        ? pending.label
+        : '',
     error: failure?.identity === identity ? failure.message : '',
     result: resultState?.identity === identity ? resultState.value : undefined,
     reject,

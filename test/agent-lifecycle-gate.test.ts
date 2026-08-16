@@ -17,6 +17,7 @@ describe('AgentLifecycleGate', () => {
       await second.ready;
       events.push('lease-2:end');
     });
+    expect(events).toEqual(['lease-1:start', 'lease-2:start']);
     await Bun.sleep(0);
     const writer = gate.run(async () => {
       events.push('writer');
@@ -68,6 +69,31 @@ describe('AgentLifecycleGate', () => {
     active.release();
     await Promise.all([lease, closing, sameClosing]);
     expect(closes).toBe(1);
+  });
+
+  test('publishes a lease before its synchronous prefix queues run and close', async () => {
+    const gate = new AgentLifecycleGate();
+    const active = deferred();
+    const events: string[] = [];
+    let writer!: Promise<void>;
+    let closing!: Promise<void>;
+    const lease = gate.lease(async () => {
+      events.push('lease:start');
+      writer = gate.run(async () => {
+        events.push('writer');
+      });
+      closing = gate.close(async () => {
+        events.push('close');
+      });
+      await active.ready;
+      events.push('lease:end');
+    });
+
+    await Bun.sleep(0);
+    expect(events).toEqual(['lease:start']);
+    active.release();
+    await Promise.all([lease, writer, closing]);
+    expect(events).toEqual(['lease:start', 'lease:end', 'writer', 'close']);
   });
 });
 

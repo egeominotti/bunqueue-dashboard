@@ -29,6 +29,9 @@ export class ProcessManager {
   private startedAt: number | null = null;
   private exitCode: number | null = null;
   private config: ServerConfig = defaultConfig();
+  // A per-agent random seed prevents stale compare-and-set tokens from a
+  // previous control-agent process matching again after a restart (ABA).
+  private configRevision = configRevisionSeed();
   private runningConfig: ServerConfig | null = null;
   private procToken = 0;
   private stopping: Promise<StatusSnapshot> | null = null;
@@ -42,13 +45,26 @@ export class ProcessManager {
     return copyConfig(this.config);
   }
 
-  setConfig(patch: Partial<ServerConfig>): ServerConfig {
+  getConfigRevision(): number {
+    return this.configRevision;
+  }
+
+  setConfig(patch: Partial<ServerConfig>, expectedRevision?: number): ServerConfig {
+    if (expectedRevision !== undefined && expectedRevision !== this.configRevision) {
+      throw new Error(
+        `Configuration changed since revision ${expectedRevision}; current revision is ${this.configRevision}`
+      );
+    }
     const valid = validateConfigPatch(patch);
-    this.config = {
+    const next = validateServerConfig({
       ...this.config,
       ...valid,
       extraEnv: valid.extraEnv ?? this.config.extraEnv,
-    };
+    });
+    if (!sameConfig(this.config, next)) {
+      this.config = next;
+      this.configRevision = nextConfigRevision(this.configRevision);
+    }
     return copyConfig(this.config);
   }
 
@@ -56,6 +72,7 @@ export class ProcessManager {
     return {
       status: this.status,
       generation: this.procToken,
+      configRevision: this.configRevision,
       pid: this.proc?.pid ?? null,
       startedAt: this.startedAt,
       exitCode: this.exitCode,
@@ -64,8 +81,10 @@ export class ProcessManager {
     };
   }
 
-  dbStats(): Promise<DbStats> {
-    return databaseStats(this.config.dataPath);
+  dbStats(dataPath?: string): Promise<DbStats> {
+    const effectivePath =
+      dataPath ?? (this.runningConfig ?? this.config).dataPath;
+    return databaseStats(effectivePath);
   }
 
   getLogs(): LogLine[] {
@@ -230,4 +249,28 @@ export class ProcessManager {
       );
     }
   }
+}
+
+function sameConfig(left: ServerConfig, right: ServerConfig): boolean {
+  const leftEnv = Object.entries(left.extraEnv).sort(([a], [b]) => a.localeCompare(b));
+  const rightEnv = Object.entries(right.extraEnv).sort(([a], [b]) => a.localeCompare(b));
+  return (
+    left.command === right.command &&
+    left.httpPort === right.httpPort &&
+    left.tcpPort === right.tcpPort &&
+    left.dataPath === right.dataPath &&
+    JSON.stringify(leftEnv) === JSON.stringify(rightEnv)
+  );
+}
+
+function configRevisionSeed(): number {
+  const words = crypto.getRandomValues(new Uint32Array(2));
+  return ((words[0] ?? 0) & 0x1f_ffff) * 0x1_0000_0000 + (words[1] ?? 0);
+}
+
+function nextConfigRevision(current: number): number {
+  if (current < Number.MAX_SAFE_INTEGER) return current + 1;
+  let next = configRevisionSeed();
+  while (next === current) next = configRevisionSeed();
+  return next;
 }

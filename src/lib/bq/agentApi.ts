@@ -1,5 +1,6 @@
 import type {
   ServerConfig,
+  ServerConfigSnapshot,
   ServerLogLine,
   ServerStatus,
   WorkflowExecutionDetail,
@@ -81,9 +82,15 @@ export const controlApi = {
   stop: () => agentRequest<ServerStatus>('/control/stop', { method: 'POST' }),
   restart: () => agentRequest<ServerStatus>('/control/restart', { method: 'POST' }),
   logs: () => agentRequest<{ lines: ServerLogLine[] }>('/control/logs'),
-  getConfig: () => agentRequest<ServerConfig>('/control/config'),
-  setConfig: (config: Partial<ServerConfig>) =>
-    agentRequest<ServerConfig>('/control/config', body('PUT', config)),
+  getConfig: () => agentRequest<ServerConfigSnapshot>('/control/config'),
+  setConfig: (config: Partial<ServerConfig>, expectedRevision?: number) =>
+    agentRequest<ServerConfigSnapshot>(
+      '/control/config',
+      body('PUT', {
+        ...config,
+        ...(expectedRevision === undefined ? {} : { expectedRevision }),
+      })
+    ),
 };
 
 export const workflowApi = {

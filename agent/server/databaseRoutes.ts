@@ -10,6 +10,7 @@ import {
 } from '../db';
 import { corsHeaders } from './policy';
 import { readLimitedJsonBody } from './jsonBody';
+import type { ManagedDatabaseAdmission } from './managedRuntime';
 import type { RouteResponse } from './types';
 
 const MAX_QUERY_BODY_BYTES = 64 * 1024;
@@ -100,46 +101,58 @@ export async function routeDatabaseRequest(
   method: string,
   dataPath: string,
   origin: string | null,
-  allowedOrigins: string[]
+  allowedOrigins: string[],
+  admission?: ManagedDatabaseAdmission
 ): Promise<RouteResponse | Response | null> {
   if (pathname === '/db/info' && method === 'GET') {
-    return { status: 200, body: { ok: true, ...dbInfo(dataPath) } };
+    return withDatabase(dataPath, admission, (path) => ({
+      status: 200,
+      body: { ok: true, ...dbInfo(path) },
+    }));
   }
   if (pathname === '/db/tables' && method === 'GET') {
-    return { status: 200, body: { ok: true, tables: dbTables(dataPath) } };
+    return withDatabase(dataPath, admission, (path) => ({
+      status: 200,
+      body: { ok: true, tables: dbTables(path) },
+    }));
   }
   if (pathname.startsWith('/db/tables/') && method === 'GET') {
     const segments = pathname.slice('/db/tables/'.length).split('/');
     const table = decodeURIComponent(segments[0] ?? '');
     const subresource = segments[1];
     if (segments.length === 2 && subresource === 'export') {
-      return exportTable(request, table, dataPath, origin, allowedOrigins);
+      return withDatabase(dataPath, admission, (path) =>
+        exportTable(request, table, path, origin, allowedOrigins)
+      );
     }
     if (segments.length === 2 && subresource === 'schema') {
-      return { status: 200, body: { ok: true, ...dbSchema(dataPath, table) } };
+      return withDatabase(dataPath, admission, (path) => ({
+        status: 200,
+        body: { ok: true, ...dbSchema(path, table) },
+      }));
     }
     if (segments.length === 2 && subresource === 'cell') {
       const query = new URL(request.url).searchParams;
       const rowid = query.get('rowid');
       if (rowid === null) throw new Error('rowid is required');
-      return {
+      return withDatabase(dataPath, admission, (path) => ({
         status: 200,
         body: {
           ok: true,
-          ...dbCell(dataPath, table, rowid, query.get('column') ?? ''),
+          ...dbCell(path, table, rowid, query.get('column') ?? ''),
         },
-      };
+      }));
     }
     if (segments.length !== 1) {
       return { status: 404, body: { ok: false, error: 'Not found' } };
     }
     const query = new URL(request.url).searchParams;
-    return {
+    return withDatabase(dataPath, admission, (path) => ({
       status: 200,
       body: {
         ok: true,
         ...dbRows(
-          dataPath,
+          path,
           table,
           Number(query.get('limit')) || 50,
           Number(query.get('offset')) || 0,
@@ -148,7 +161,7 @@ export async function routeDatabaseRequest(
           browseFilter(query)
         ),
       },
-    };
+    }));
   }
   if (pathname === '/db/query' && method === 'POST') {
     const { sql } = (await readLimitedJsonBody(request, {
@@ -156,10 +169,18 @@ export async function routeDatabaseRequest(
       maxBytes: MAX_QUERY_BODY_BYTES,
       limitLabel: '64 KiB',
     })) as { sql?: string };
-    return {
+    return withDatabase(dataPath, admission, async (path) => ({
       status: 200,
-      body: { ok: true, ...(await queryWithTimeout(dataPath, sql ?? '')) },
-    };
+      body: { ok: true, ...(await queryWithTimeout(path, sql ?? '')) },
+    }));
   }
   return null;
+}
+
+function withDatabase<T>(
+  dataPath: string,
+  admission: ManagedDatabaseAdmission | undefined,
+  operation: (path: string) => T | Promise<T>
+): Promise<T> {
+  return admission ? admission(operation) : Promise.resolve(operation(dataPath));
 }

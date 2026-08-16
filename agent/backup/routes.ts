@@ -10,6 +10,59 @@ export interface BackupRouteResponse {
   body: Record<string, unknown>;
 }
 
+export type PreparedBackupRequest =
+  | { operation: 'status' | 'list' | 'now'; query: URLSearchParams }
+  | { operation: 'configure'; query: URLSearchParams; environment: unknown }
+  | { operation: 'restore'; query: URLSearchParams; key: string; database: unknown };
+
+/** Read and validate the bounded HTTP payload before acquiring a lifecycle lease. */
+export async function prepareBackupRequest(
+  request: Request,
+  pathname: string,
+  method: string,
+  config?: ServerConfig,
+  targetPolicy?: ManagedTargetPolicy
+): Promise<PreparedBackupRequest | null> {
+  const operation = routeOperation(pathname, method);
+  if (!operation) return null;
+  const query = exactTargetQuery(request.url);
+  if (config) assertManagedTarget(query, config, targetPolicy);
+  if (operation === 'configure') {
+    const body = await boundedRecord(request, ['environment']);
+    return { operation, query, environment: body.environment };
+  }
+  if (operation === 'restore') {
+    const body = await boundedRecord(request, ['key', 'database']);
+    return { operation, query, key: backupKey(body.key), database: body.database };
+  }
+  return { operation, query };
+}
+
+/** Execute a prepared operation against one lifecycle-pinned config/database snapshot. */
+export async function executePreparedBackupRequest(
+  prepared: PreparedBackupRequest,
+  config: ServerConfig,
+  serverRunning: boolean,
+  database: DbStats,
+  runner: BackupRunnerPort,
+  configure?: (extraEnv: Record<string, string>) => void | Promise<void>,
+  targetPolicy?: ManagedTargetPolicy
+): Promise<BackupRouteResponse> {
+  assertManagedTarget(prepared.query, config, targetPolicy);
+  if (prepared.operation === 'configure') {
+    if (!configure) throw new Error('Backup configuration is unavailable');
+    const next = mergeBackupEnvironment(config.extraEnv, prepared.environment);
+    await configure(next);
+    return success({ configured: true, enabled: next.S3_BACKUP_ENABLED === 'true' });
+  }
+  if (prepared.operation === 'restore') {
+    if (serverRunning) throw new Error('Stop the managed Bunqueue server before restoring a backup');
+    assertDatabaseSnapshot(prepared.database, database);
+    return success(await runner.execute(config, prepared.operation, prepared.key));
+  }
+  return success(await runner.execute(config, prepared.operation));
+}
+
 export async function routeBackupRequest(
   request: Request,
   pathname: string,
@@ -21,25 +74,18 @@ export async function routeBackupRequest(
   configure?: (extraEnv: Record<string, string>) => void,
   targetPolicy?: ManagedTargetPolicy
 ): Promise<BackupRouteResponse | null> {
-  const operation = routeOperation(pathname, method);
-  if (!operation) return null;
-  const query = exactTargetQuery(request.url);
-  assertManagedTarget(query, config, targetPolicy);
-  if (operation === 'configure') {
-    if (!configure) throw new Error('Backup configuration is unavailable');
-    const body = await boundedRecord(request, ['environment']);
-    const next = mergeBackupEnvironment(config.extraEnv, body.environment);
-    configure(next);
-    return success({ configured: true, enabled: next.S3_BACKUP_ENABLED === 'true' });
-  }
-  if (operation === 'restore') {
-    if (serverRunning) throw new Error('Stop the managed Bunqueue server before restoring a backup');
-    const body = await boundedRecord(request, ['key', 'database']);
-    const key = backupKey(body.key);
-    assertDatabaseSnapshot(body.database, database);
-    return success(await runner.execute(config, operation, key));
-  }
-  return success(await runner.execute(config, operation));
+  const prepared = await prepareBackupRequest(request, pathname, method, config, targetPolicy);
+  return prepared
+    ? executePreparedBackupRequest(
+        prepared,
+        config,
+        serverRunning,
+        database,
+        runner,
+        configure,
+        targetPolicy
+      )
+    : null;
 }
 
 function routeOperation(pathname: string, method: string) {

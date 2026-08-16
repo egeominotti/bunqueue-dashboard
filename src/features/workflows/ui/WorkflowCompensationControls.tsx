@@ -15,6 +15,7 @@ export function WorkflowCompensationControls({
   onApplied?: () => void | Promise<void>;
 }) {
   const command = useWorkflowCommand({
+    operationGroup: 'compensation',
     scopeKey: `${executionId}:${stuck}`,
     onApplied,
     onSucceeded: (label) =>

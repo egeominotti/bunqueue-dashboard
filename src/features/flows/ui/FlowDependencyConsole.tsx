@@ -41,7 +41,10 @@ export function FlowDependencyConsole({
   const [localTarget, setLocalTarget] = useState<FlowTarget>(initialTarget);
   const target = controlledTarget ?? localTarget;
   const setTarget = onTargetChange ?? setLocalTarget;
-  const request = useLatestFlowRequest<unknown>(flowRequestKey(target.id, target.queueName));
+  const request = useLatestFlowRequest<unknown>(
+    flowRequestKey(target.id, target.queueName),
+    'dependency-console'
+  );
   const busy = request.busy;
   const valid = Boolean(target.id.trim() && target.queueName.trim());
   const inspect = (operation: FlowInspectOperation) => {
@@ -56,7 +59,9 @@ export function FlowDependencyConsole({
       )
     )
       return;
-    void request.run(operation, () => repository.mutate(pinnedTarget, operation));
+    void request.run(operation, () => repository.mutate(pinnedTarget, operation), {
+      exclusive: true,
+    });
   };
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(360px,0.8fr)_minmax(0,1.2fr)]">

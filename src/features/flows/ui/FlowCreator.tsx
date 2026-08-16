@@ -56,7 +56,7 @@ export function FlowCreator({
 }) {
   const [operation, setOperation] = useState<FlowCreateOperation>('add');
   const [source, setSource] = useState(() => JSON.stringify(TEMPLATES.add, null, 2));
-  const request = useLatestFlowRequest<unknown>(flowRequestKey(operation, source));
+  const request = useLatestFlowRequest<unknown>(flowRequestKey(operation, source), 'creator');
   const busy = Boolean(request.busy);
   const changeOperation = (next: FlowCreateOperation) => {
     setOperation(next);
@@ -73,8 +73,10 @@ export function FlowCreator({
     if (!payload || typeof payload !== 'object' || Array.isArray(payload))
       return request.reject('The definition must be a JSON object.');
     const pinnedOperation = operation;
-    await request.run(pinnedOperation, () =>
-      repository.create(pinnedOperation, payload as Record<string, unknown>)
+    await request.run(
+      pinnedOperation,
+      () => repository.create(pinnedOperation, payload as Record<string, unknown>),
+      { exclusive: true }
     );
   };
   const rootId = createdRootId(request.result);

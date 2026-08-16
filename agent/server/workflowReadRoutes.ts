@@ -7,6 +7,7 @@ import {
   WORKFLOW_STATES,
 } from '../workflows';
 import type { RouteResponse } from './types';
+import type { ManagedDatabaseAdmission } from './managedRuntime';
 
 function workflowKind(query: URLSearchParams): WorkflowStoreKind {
   const kind = query.get('kind') ?? 'active';
@@ -23,14 +24,18 @@ function integer(query: URLSearchParams, name: 'limit' | 'offset', fallback: num
   return Number(raw);
 }
 
-export function routeWorkflowReadRequest(
+export async function routeWorkflowReadRequest(
   request: Request,
   pathname: string,
   method: string,
-  dataPath: string
-): RouteResponse | null {
+  dataPath: string,
+  admission?: ManagedDatabaseAdmission
+): Promise<RouteResponse | null> {
   if (pathname === '/workflows/stats' && method === 'GET') {
-    return { status: 200, body: { ok: true, ...workflowStats(dataPath) } };
+    return withDatabase(dataPath, admission, (path) => ({
+      status: 200,
+      body: { ok: true, ...workflowStats(path) },
+    }));
   }
   if (pathname === '/workflows' && method === 'GET') {
     const query = new URL(request.url).searchParams;
@@ -47,11 +52,11 @@ export function routeWorkflowReadRequest(
     ) {
       throw new Error('Unknown workflow execution state');
     }
-    return {
+    return withDatabase(dataPath, admission, (path) => ({
       status: 200,
       body: {
         ok: true,
-        ...workflowExecutions(dataPath, {
+        ...workflowExecutions(path, {
           kind: workflowKind(query),
           workflowName: query.get('workflowName') || undefined,
           state: state as WorkflowStateFilter | undefined,
@@ -59,7 +64,7 @@ export function routeWorkflowReadRequest(
           offset: integer(query, 'offset', 0),
         }),
       },
-    };
+    }));
   }
   if (!pathname.startsWith('/workflows/') || method !== 'GET') return null;
   const rawId = pathname.slice('/workflows/'.length);
@@ -73,8 +78,18 @@ export function routeWorkflowReadRequest(
       throw new Error(`Duplicate workflow detail option: ${key}`);
     }
   }
-  const execution = workflowExecution(dataPath, decodeURIComponent(rawId), workflowKind(query));
-  return execution
-    ? { status: 200, body: { ok: true, execution } }
-    : { status: 404, body: { ok: false, error: 'Workflow execution not found' } };
+  return withDatabase(dataPath, admission, (path) => {
+    const execution = workflowExecution(path, decodeURIComponent(rawId), workflowKind(query));
+    return execution
+      ? { status: 200, body: { ok: true, execution } }
+      : { status: 404, body: { ok: false, error: 'Workflow execution not found' } };
+  });
+}
+
+function withDatabase<T>(
+  dataPath: string,
+  admission: ManagedDatabaseAdmission | undefined,
+  operation: (path: string) => T
+): Promise<T> {
+  return admission ? admission(operation) : Promise.resolve(operation(dataPath));
 }

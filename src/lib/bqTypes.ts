@@ -183,6 +183,7 @@ export interface DlqConfig {
 export type {
   DbStats,
   ServerConfig,
+  ServerConfigSnapshot,
   ServerLogLine,
   ServerManagementMode,
   ServerRunStatus,

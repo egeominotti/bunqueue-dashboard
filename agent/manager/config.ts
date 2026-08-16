@@ -76,6 +76,7 @@ export function validateServerConfig(value: unknown): ServerConfig {
   for (const key of CONFIG_KEYS) {
     if (!Object.hasOwn(value, key)) throw new Error(`Missing config key: ${key}`);
   }
+  if (config.httpPort === config.tcpPort) throw new Error('httpPort and tcpPort must differ');
   return config as ServerConfig;
 }
 

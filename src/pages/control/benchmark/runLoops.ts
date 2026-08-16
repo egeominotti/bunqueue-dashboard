@@ -1,4 +1,5 @@
 import type { ServerTargetClient } from '@/lib/bq';
+import type { BenchmarkCompensationQueue } from './compensationQueue';
 import { errMsg, makeJobs, type RunConfig, sleepWhile } from './engine';
 import { assertBenchmarkSuccess } from './queueValidation';
 import type { BenchmarkStats } from './runtimeState';
@@ -7,6 +8,7 @@ export interface BenchmarkLoopContext {
   batch: number;
   blob: string;
   client: ServerTargetClient;
+  compensationQueue: BenchmarkCompensationQueue;
   deadline: number;
   isCurrent: () => boolean;
   ownJobIds: Set<string>;
@@ -97,7 +99,10 @@ export function createConsumer(context: BenchmarkLoopContext): () => Promise<voi
       let jobs: { id: string }[] = [];
       try {
         jobs = await pullJobs(context);
-        if (!context.shouldContinue()) break;
+        if (!context.shouldContinue()) {
+          await restoreInterruptedJobs(context, jobs);
+          break;
+        }
         if (jobs.length > 0) await processJobs(context, jobs);
       } finally {
         if (context.isCurrent()) stats.activeWorkers--;
@@ -119,7 +124,6 @@ export function createConsumer(context: BenchmarkLoopContext): () => Promise<voi
 async function pullJobs(context: BenchmarkLoopContext): Promise<{ id: string }[]> {
   try {
     const response = await context.client.pullBatch(context.queue, context.workerBatch);
-    if (!context.shouldContinue()) return [];
     if (
       response?.ok !== true ||
       !Array.isArray(response.jobs) ||
@@ -132,7 +136,12 @@ async function pullJobs(context: BenchmarkLoopContext): Promise<{ id: string }[]
     ) {
       throw new Error('Malformed pull-batch response.');
     }
-    return response.jobs;
+    const jobs = response.jobs;
+    if (!context.shouldContinue()) {
+      await restoreInterruptedJobs(context, jobs);
+      return [];
+    }
+    return jobs;
   } catch (error) {
     if (context.isCurrent()) context.stats.error ??= errMsg(error);
     return [];
@@ -143,15 +152,20 @@ async function processJobs(context: BenchmarkLoopContext, jobs: { id: string }[]
   if (jobs.some((job) => !context.ownJobIds.has(job.id)) && context.pendingPushes.size > 0) {
     await Promise.allSettled([...context.pendingPushes]);
   }
-  if (!context.shouldContinue()) return;
+  if (!context.shouldContinue()) return restoreInterruptedJobs(context, jobs);
 
   const own = jobs.filter((job) => context.ownJobIds.has(job.id));
   const foreign = jobs.filter((job) => !context.ownJobIds.has(job.id));
-  if (foreign.length > 0) await restoreForeignJobs(context, foreign);
-  if (own.length === 0 || !context.shouldContinue()) return;
+  if (foreign.length > 0) {
+    await restoreForeignJobs(context, jobs, foreign.length);
+    return;
+  }
+  if (own.length === 0) return;
+  if (!context.shouldContinue()) return restoreInterruptedJobs(context, own);
   if (context.processMs > 0) await sleepWhile(context.processMs, context.shouldContinue);
-  if (!context.shouldContinue()) return;
+  if (!context.shouldContinue()) return restoreInterruptedJobs(context, own);
 
+  let ackStarted = false;
   try {
     const ids = own.map((job) => job.id);
     const heartbeat = await context.client.heartbeatBatch(ids);
@@ -168,32 +182,64 @@ async function processJobs(context: BenchmarkLoopContext, jobs: { id: string }[]
         `Heartbeat confirmed ${String(data?.count)} of ${own.length} benchmark jobs; refusing a lossy batch ACK.`
       );
     }
-    if (!context.shouldContinue()) return;
+    if (!context.shouldContinue()) return restoreInterruptedJobs(context, own);
+    ackStarted = true;
     const response = await context.client.ackBatch(ids);
     assertBenchmarkSuccess(response, 'Acknowledge benchmark jobs');
     if (!context.isCurrent()) return;
     context.stats.completed += own.length;
     for (const job of own) context.ownJobIds.delete(job.id);
   } catch (error) {
-    if (!context.isCurrent()) return;
-    context.stats.ackFailed += own.length;
-    context.stats.error ??= errMsg(error);
+    if (context.isCurrent()) {
+      context.stats.ackFailed += own.length;
+      context.stats.error ??= errMsg(error);
+    }
+    // Before ACK there is no ambiguous completion: best-effort release every
+    // reservation, including when Stop/unmount coincides with a rejected or
+    // malformed heartbeat. Once ACK has started its transport may have applied
+    // the completion despite rejecting locally, so retrying would be unsafe.
+    if (!ackStarted) await restoreInterruptedJobs(context, own);
   }
 }
 
-async function restoreForeignJobs(context: BenchmarkLoopContext, foreign: Array<{ id: string }>) {
-  if (!context.shouldContinue()) return;
-  const restored = await Promise.allSettled(
-    foreign.map(async (job) => {
-      const response = await context.client.retryJob(job.id);
-      assertBenchmarkSuccess(response, `Restore job ${job.id}`);
-    })
-  );
-  if (!context.isCurrent()) return;
-  const failures = restored.filter((result) => result.status === 'rejected');
-  context.stats.error ??=
-    failures.length > 0
-      ? `Detected ${foreign.length} foreign job(s); ${failures.length} could not be returned to waiting. Benchmark stopped.`
-      : `Detected ${foreign.length} foreign job(s); returned them to waiting and stopped without counting them.`;
+async function restoreForeignJobs(
+  context: BenchmarkLoopContext,
+  pulled: Array<{ id: string }>,
+  foreignCount: number
+) {
+  const failures = await returnToWaiting(context, pulled);
+  if (context.isCurrent()) {
+    context.stats.error ??=
+      failures > 0
+        ? `Detected ${foreignCount} foreign job(s); ${failures} pulled job(s) could not be returned to waiting. Benchmark stopped.`
+        : `Detected ${foreignCount} foreign job(s); returned the complete pulled batch to waiting and stopped without counting it.`;
+  }
   context.stop();
+}
+
+async function restoreInterruptedJobs(
+  context: BenchmarkLoopContext,
+  jobs: Array<{ id: string }>
+): Promise<void> {
+  if (jobs.length === 0) return;
+  const failures = await returnToWaiting(context, jobs);
+  if (failures > 0 && context.isCurrent()) {
+    context.stats.error ??= `${failures} interrupted benchmark job(s) could not be returned to waiting.`;
+  }
+}
+
+async function returnToWaiting(
+  context: BenchmarkLoopContext,
+  jobs: Array<{ id: string }>
+): Promise<number> {
+  const restored = await Promise.allSettled(
+    jobs.map((job) =>
+      context.compensationQueue.run(async () => {
+        const response = await context.client.retryJob(job.id);
+        assertBenchmarkSuccess(response, `Restore job ${job.id}`);
+        context.ownJobIds.delete(job.id);
+      })
+    )
+  );
+  return restored.filter((result) => result.status === 'rejected').length;
 }

@@ -50,7 +50,8 @@ export function FlowJobToolkit({
   const [source, setSource] = useState(JSON.stringify(TEMPLATES.updateData, null, 2));
   const [ttl, setTtl] = useState('30000');
   const request = useLatestFlowRequest<unknown>(
-    flowRequestKey(target.id, target.queueName, operation, source, ttl)
+    flowRequestKey(target.id, target.queueName, operation, source, ttl),
+    'job-toolkit'
   );
   const busy = request.busy;
   const valid = Boolean(target.id.trim() && target.queueName.trim());
@@ -76,8 +77,10 @@ export function FlowJobToolkit({
       )
     )
       return;
-    void request.run(pinnedOperation, () =>
-      repository.mutate(pinnedTarget, pinnedOperation, payload as Record<string, unknown>)
+    void request.run(
+      pinnedOperation,
+      () => repository.mutate(pinnedTarget, pinnedOperation, payload as Record<string, unknown>),
+      { exclusive: true }
     );
   };
   return (

@@ -1,5 +1,3 @@
-import { useRef, useState } from 'react';
-import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { LoadingState, OfflineBanner } from '@/components/ui/feedback';
@@ -13,11 +11,11 @@ import {
   EndpointDiagnostics,
   type EndpointSnapshot,
   HeapPanel,
-  type HeapStats,
   Mini,
   PrometheusPanel,
   TotalsPanel,
 } from './diagnostics/DiagnosticsPanels';
+import { useDiagnosticActions } from './diagnostics/useDiagnosticActions';
 
 type Health = Awaited<ReturnType<typeof bq.health>>;
 type Storage = Awaited<ReturnType<typeof bq.storage>>;
@@ -73,59 +71,8 @@ export function Diagnostics() {
       metricsError: metrics.error,
     } satisfies DiagnosticSnapshot;
   }, []);
-
-  const [ping, setPing] = useState<string | null>(null);
-  // Sequence guard (last-to-start wins): the Ping button isn't gated while a
-  // probe runs, and a slow earlier probe resolving last would overwrite the
-  // newer, faster reading it superseded.
-  const pingGen = useRef(0);
-  const doPing = async () => {
-    const my = ++pingGen.current;
-    setPing('…');
-    const t0 = performance.now();
-    try {
-      await bq.ping();
-      if (my === pingGen.current) setPing(`${Math.round(performance.now() - t0)} ms`);
-    } catch {
-      if (my === pingGen.current) setPing('unreachable');
-    }
-  };
-
-  const [gcBusy, setGcBusy] = useState(false);
-  const [gcMsg, setGcMsg] = useState<string | null>(null);
-  const doGc = async () => {
-    setGcBusy(true);
-    setGcMsg(null);
-    try {
-      const r = await bq.gc();
-      const freed = r.before.rss - r.after.rss;
-      const text =
-        freed > 0
-          ? `Freed ${freed} MB (RSS ${r.before.rss}→${r.after.rss})`
-          : 'No memory reclaimed';
-      setGcMsg(text);
-      toast.success('Memory compacted', text);
-      refetch();
-    } catch (e) {
-      toast.error('GC failed', (e as Error).message);
-      setGcMsg((e as Error).message);
-    } finally {
-      setGcBusy(false);
-    }
-  };
-
-  const [heap, setHeap] = useState<HeapStats | null>(null);
-  const [heapBusy, setHeapBusy] = useState(false);
-  const loadHeap = async () => {
-    setHeapBusy(true);
-    try {
-      setHeap(await bq.heapStats());
-    } catch (e) {
-      toast.error('Heap stats failed', (e as Error).message);
-    } finally {
-      setHeapBusy(false);
-    }
-  };
+  const { doGc, doPing, gcBusy, gcMsg, heap, heapBusy, loadHeap, ping } =
+    useDiagnosticActions(refetch);
 
   if (loading && !data && !pollError) return <LoadingState label="Loading diagnostics…" />;
 

@@ -18,6 +18,7 @@ export class AgentLifecycleGate implements AgentLifecyclePort {
   private leases = new Set<Promise<void>>();
   private closed = false;
   private closing: Promise<void> | null = null;
+  private pendingTransitions = 0;
 
   assertOpen(): void {
     if (this.closed) throw new AgentLifecycleClosedError();
@@ -29,14 +30,25 @@ export class AgentLifecycleGate implements AgentLifecyclePort {
     } catch (error) {
       return Promise.reject(error);
     }
-    const result = this.barrier.then(operation);
     const batch = this.leases;
-    const completion = result.then(
-      () => undefined,
-      () => undefined
-    );
+    let complete!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      complete = resolve;
+    });
+    // Publish the lease before invoking user code. Its synchronous prefix may
+    // re-enter run()/close(), which must observe this lease and wait for it.
     batch.add(completion);
-    void completion.then(() => batch.delete(completion));
+    let result: Promise<T>;
+    if (this.pendingTransitions === 0) {
+      try {
+        result = Promise.resolve(operation());
+      } catch (error) {
+        result = Promise.reject(error);
+      }
+    } else {
+      result = this.barrier.then(operation);
+    }
+    void result.then(complete, complete).then(() => batch.delete(completion));
     return result;
   }
 
@@ -60,12 +72,17 @@ export class AgentLifecycleGate implements AgentLifecyclePort {
     const precedingBarrier = this.barrier;
     const precedingLeases = this.leases;
     this.leases = new Set();
+    this.pendingTransitions += 1;
     const result = precedingBarrier
       .then(() => Promise.all(precedingLeases))
       .then(operation);
     this.barrier = result.then(
-      () => undefined,
-      () => undefined
+      () => {
+        this.pendingTransitions -= 1;
+      },
+      () => {
+        this.pendingTransitions -= 1;
+      }
     );
     return result;
   }

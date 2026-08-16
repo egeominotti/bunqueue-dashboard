@@ -1,96 +1,195 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Field, Input } from '@/components/ui/form';
 import { IconRefresh } from '@/components/ui/icons';
 import { bq } from '@/lib/bq';
 import type { ServerConfig, ServerStatus } from '@/lib/bqTypes';
+import { useControlActionGuard } from '@/lib/useControlActionGuard';
+import {
+  adoptConfig,
+  changedConfigFields,
+  configDraftError,
+  type ConfigEditor,
+  type ConfigSaveFence,
+  createConfigSaveFence,
+  parseConfigSaveResponse,
+  sameConfig,
+  shouldIgnoreStatusBehindSave,
+  validConfigRevision,
+} from './configEditor';
 import { EnvVarsEditor } from './EnvVarsEditor';
 
 export function ConfigCard({
   status,
   onSaved,
   running,
+  statusRequestId,
+  getStatusRequestSequence,
   transitioning,
 }: {
   status: ServerStatus | null;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
   running: boolean;
+  statusRequestId?: number;
+  getStatusRequestSequence?: () => number;
   transitioning: boolean;
 }) {
-  const [cfg, setCfg] = useState<ServerConfig | null>(null);
+  const actionGuard = useControlActionGuard('server-config');
+  const editorId = useRef(0);
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusFenceAfterSave = useRef<ConfigSaveFence | null>(null);
+  const [editor, setEditor] = useState<ConfigEditor | null>(null);
+  const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [restarting, setRestarting] = useState(false);
+  const [operation, setOperation] = useState<'save' | 'restart' | null>(null);
+  const [conflict, setConflict] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
   useEffect(() => {
-    if (status?.config && !cfg) setCfg(status.config);
-  }, [status, cfg]);
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    savedTimer.current = null;
+    statusFenceAfterSave.current = null;
+    setEditor(null);
+    setDirty(false);
+    setSaved(false);
+    setOperation(null);
+    setConflict(false);
+    setErr(null);
+  }, [actionGuard.scopeKey]);
+  useEffect(() => {
+    if (!status?.config || dirty) return;
+    const fence = statusFenceAfterSave.current;
+    if (
+      fence &&
+      shouldIgnoreStatusBehindSave(
+        fence,
+        status.config,
+        validConfigRevision(status.configRevision),
+        statusRequestId
+      )
+    ) {
+      return;
+    }
+    statusFenceAfterSave.current = null;
+    setEditor(
+      adoptConfig(
+        status.config,
+        validConfigRevision(status.configRevision),
+        actionGuard.scopeKey,
+        ++editorId.current
+      )
+    );
+    setConflict(false);
+  }, [actionGuard.scopeKey, dirty, status?.config, status?.configRevision, statusRequestId]);
+  useEffect(
+    () => () => {
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+    },
+    []
+  );
 
-  const value = cfg ?? status?.config ?? null;
+  const currentEditor = editor?.scope === actionGuard.scopeKey ? editor : null;
+  const value = currentEditor?.value ?? status?.config ?? null;
   if (!value) return <Card>Loading…</Card>;
 
-  const set = (patch: Partial<ServerConfig>) => setCfg({ ...value, ...patch });
-  const rc = status?.runningConfig ?? null;
-  const envKey = (o: Record<string, string> = {}) =>
-    JSON.stringify(
-      Object.keys(o)
-        .sort()
-        .map((k) => [k, o[k]])
-    );
-  const changed: string[] = [];
-  if (rc != null) {
-    if (rc.command !== value.command) changed.push('command');
-    if (rc.httpPort !== value.httpPort) changed.push('HTTP port');
-    if (rc.tcpPort !== value.tcpPort) changed.push('TCP port');
-    if (rc.dataPath !== value.dataPath) changed.push('data path');
-    if (envKey(rc.extraEnv) !== envKey(value.extraEnv)) changed.push('environment variables');
-  }
+  const set = (patch: Partial<ServerConfig>) => {
+    const base =
+      currentEditor ??
+      adoptConfig(
+        value,
+        validConfigRevision(status?.configRevision),
+        actionGuard.scopeKey,
+        ++editorId.current
+      );
+    setEditor({ ...base, value: { ...base.value, ...patch } });
+    setDirty(true);
+    setSaved(false);
+    setConflict(false);
+  };
+  const changed = changedConfigFields(status?.runningConfig ?? null, value);
   const pending = running && changed.length > 0;
-  const busy = transitioning || restarting;
+  const busy = transitioning || operation !== null;
 
   const flashSaved = () => {
+    if (savedTimer.current) clearTimeout(savedTimer.current);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    savedTimer.current = setTimeout(() => {
+      savedTimer.current = null;
+      setSaved(false);
+    }, 2000);
   };
-  const validate = (): string | null => {
-    const validPort = (p: number) => Number.isInteger(p) && p >= 1 && p <= 65535;
-    if (!validPort(value.httpPort)) return 'HTTP port must be an integer between 1 and 65535';
-    if (!validPort(value.tcpPort)) return 'TCP port must be an integer between 1 and 65535';
-    if (value.httpPort === value.tcpPort) return 'HTTP and TCP ports must differ';
-    return null;
-  };
-
-  const save = async () => {
-    const invalid = validate();
-    if (invalid) return setErr(invalid);
+  const persist = async (restart: boolean) => {
+    const lease = actionGuard.begin(['config', 'lifecycle']);
+    if (!lease) return;
+    const invalid = configDraftError(value);
+    if (invalid) {
+      lease.finish();
+      return setErr(invalid);
+    }
+    const baseline = currentEditor?.baseline ?? status?.config;
+    const expectedRevision = currentEditor?.revision ?? validConfigRevision(status?.configRevision);
+    if (
+      expectedRevision === undefined &&
+      baseline &&
+      status?.config &&
+      !sameConfig(baseline, status.config)
+    ) {
+      lease.finish();
+      setConflict(true);
+      return setErr('Configuration changed elsewhere; reload the latest values before saving.');
+    }
     setErr(null);
+    setConflict(false);
+    setOperation(restart ? 'restart' : 'save');
     try {
-      await bq.control.setConfig(value);
+      const response = await bq.control.setConfig(value, expectedRevision);
+      if (!lease.isCurrent()) return;
+      const { config: next, revision } = parseConfigSaveResponse(response);
+      statusFenceAfterSave.current = createConfigSaveFence(
+        next,
+        revision,
+        status?.config ?? null,
+        validConfigRevision(status?.configRevision),
+        getStatusRequestSequence?.()
+      );
+      setEditor(adoptConfig(next, revision, actionGuard.scopeKey, ++editorId.current));
+      setDirty(false);
+      if (restart) await bq.control.restart();
+      if (!lease.isCurrent()) return;
       flashSaved();
-      onSaved();
+      await onSaved();
     } catch (e) {
-      setErr((e as Error).message);
+      if (!lease.isCurrent()) return;
+      const message = (e as Error).message;
+      if (message.startsWith('Configuration changed since revision')) setConflict(true);
+      setErr(message);
+    } finally {
+      if (lease.finish()) setOperation(null);
     }
   };
 
-  const saveAndRestart = async () => {
-    const invalid = validate();
-    if (invalid) return setErr(invalid);
+  const save = () => persist(false);
+
+  const saveAndRestart = () => {
     const what = changed.length > 0 ? ` Changed: ${changed.join(', ')}.` : '';
     if (!window.confirm(`Save configuration and restart the server to apply it?${what}`)) return;
+    return persist(true);
+  };
+
+  const reloadLatest = () => {
+    if (!status?.config) return;
+    statusFenceAfterSave.current = null;
+    setEditor(
+      adoptConfig(
+        status.config,
+        validConfigRevision(status.configRevision),
+        actionGuard.scopeKey,
+        ++editorId.current
+      )
+    );
+    setDirty(false);
+    setConflict(false);
     setErr(null);
-    setRestarting(true);
-    try {
-      await bq.control.setConfig(value);
-      await bq.control.restart();
-      flashSaved();
-      onSaved();
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setRestarting(false);
-    }
   };
 
   return (
@@ -166,6 +265,7 @@ export function ConfigCard({
           hint="Injected into the server process on start, on top of the ports + data path. Applies on the next restart."
         >
           <EnvVarsEditor
+            key={currentEditor?.id ?? 'initial'}
             value={value.extraEnv ?? {}}
             onChange={(extraEnv) => set({ extraEnv })}
             disabled={busy}
@@ -184,6 +284,11 @@ export function ConfigCard({
             <span className="text-xs text-warning">Restart to apply changes</span>
           )}
           {saved && <span className="text-xs text-success">Saved</span>}
+          {conflict && (
+            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={reloadLatest}>
+              Reload latest
+            </Button>
+          )}
           {err && <span className="text-xs text-danger">{err}</span>}
         </div>
       </form>

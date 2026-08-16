@@ -16,6 +16,7 @@ export function WorkflowSignalControl({
   const [event, setEvent] = useState('');
   const [payload, setPayload] = useState('{}');
   const command = useWorkflowCommand({
+    operationGroup: 'signal',
     scopeKey: executionId,
     onApplied,
     onSucceeded: () =>

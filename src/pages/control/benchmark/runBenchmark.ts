@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { bq, type ServerTargetClient } from '@/lib/bq';
+import { createBenchmarkCompensationQueue } from './compensationQueue';
 import type { Phase, RunConfig, RunRecord, Summary } from './engine';
 import { normalizeRunConfig, preflightBenchmark } from './prepareRun';
 import { type BenchmarkLoopContext, createConsumer, createProducer } from './runLoops';
@@ -75,6 +76,7 @@ export async function runBenchmark(
       batch: config.batch,
       blob: 'x'.repeat(config.payload),
       client,
+      compensationQueue: createBenchmarkCompensationQueue(),
       deadline: performance.now() + config.durationS * 1000,
       isCurrent,
       ownJobIds: new Set<string>(),

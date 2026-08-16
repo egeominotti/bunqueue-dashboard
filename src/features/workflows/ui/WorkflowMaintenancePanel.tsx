@@ -24,6 +24,7 @@ export function WorkflowMaintenancePanel({
     [completed, failed, hours]
   );
   const command = useWorkflowCommand({
+    operationGroup: 'maintenance',
     scopeKey: commandScope,
     onApplied,
   });

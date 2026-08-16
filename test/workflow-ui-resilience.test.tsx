@@ -180,15 +180,19 @@ describe('Workflow UI resilience', () => {
       resolveA = resolve;
     });
     const hook = renderHook(
-      ({ scope }: { scope: string }) => useWorkflowCommand({ scopeKey: scope }),
+      ({ scope }: { scope: string }) =>
+        useWorkflowCommand({ operationGroup: 'test-retarget', scopeKey: scope }),
       { scope: 'run-a' }
     );
     act(() => void hook.result.current.run('signal-a', () => pendingA));
     expect(hook.result.current.busy).toBe('signal-a');
     hook.rerender({ scope: 'run-b' });
-    expect(hook.result.current.busy).toBe('');
+    expect(hook.result.current.busy).toBe('signal-a');
+    await act(async () => hook.result.current.run('signal-b-blocked', async () => undefined));
+    expect(hook.result.current.succeeded).toBe('');
     resolveA({ stale: true });
     await settle(2);
+    expect(hook.result.current.busy).toBe('');
     expect(hook.result.current.succeeded).toBe('');
     expect(hook.result.current.result).toBeUndefined();
     await act(async () => hook.result.current.run('signal-b', async () => undefined));
@@ -204,6 +208,7 @@ describe('Workflow UI resilience', () => {
     });
     const hook = renderHook(() =>
       useWorkflowCommand({
+        operationGroup: 'test-unmount',
         scopeKey: 'run-a',
         onSucceeded: () => {
           successes += 1;

@@ -138,35 +138,44 @@ describe('useThroughputSeries — series integrity', () => {
 
   test('a long outage restarts the window; ordinary jitter does not', async () => {
     let healthy = true;
-    globalThis.fetch = ((input) =>
-      Promise.resolve(
-        healthy ? telemetryResponse(input) : Response.json({ ok: false, error: 'down' })
-      )) as typeof fetch;
+    let recovered = false;
+    globalThis.fetch = ((input) => {
+      if (!healthy) return Promise.resolve(Response.json({ ok: false, error: 'down' }));
+      const body = String(input).endsWith('/stats') ? stats() : overview();
+      if (recovered) body.stats.waiting = 100;
+      return Promise.resolve(Response.json(body));
+    }) as typeof fetch;
 
     const h = renderHook(() => useThroughputSeries(60));
-    await settle(50);
-    expect(h.result.current.depth.length).toBe(1);
+    try {
+      await settle(50);
+      expect(h.result.current.depth.length).toBe(1);
 
-    // A short hiccup (under the 4-interval slack) must NOT wipe the chart —
-    // otherwise a backend answering slower than one interval leaves the window
-    // permanently stuck at a single point.
-    healthy = false;
-    await settle(1600);
-    healthy = true;
-    await settle(1200);
-    const afterJitter = h.result.current.depth.length;
-    expect(afterJitter).toBeGreaterThanOrEqual(2);
+      // A short hiccup (under the 4-interval slack) must NOT wipe the chart —
+      // otherwise a backend answering slower than one interval leaves the window
+      // permanently stuck at a single point.
+      healthy = false;
+      await settle(1600);
+      healthy = true;
+      await settle(1200);
+      const afterJitter = h.result.current.depth.length;
+      expect(afterJitter).toBeGreaterThanOrEqual(2);
 
-    // A real outage does restart it: the points either side are seconds apart,
-    // and the index→seconds axis would otherwise render them as adjacent 1 Hz
-    // samples.
-    healthy = false;
-    await settle(5200);
-    expect(h.result.current.depth.length).toBe(afterJitter);
-    healthy = true;
-    await settle(1200);
-    expect(h.result.current.depth.length).toBe(1);
-    h.unmount();
+      // A real outage does restart it: the points either side are seconds apart,
+      // and the index→seconds axis would otherwise render them as adjacent 1 Hz
+      // samples. Depending on the interval boundary, 1.2s can legitimately
+      // admit one or two new points, so distinguish the new epoch by value.
+      healthy = false;
+      await settle(5200);
+      expect(h.result.current.depth.length).toBe(afterJitter);
+      recovered = true;
+      healthy = true;
+      await settle(1200);
+      expect(h.result.current.depth.length).toBeGreaterThanOrEqual(1);
+      expect(h.result.current.depth.every((value) => value === 104)).toBe(true);
+    } finally {
+      h.unmount();
+    }
   }, 20000);
 });
 

@@ -1,4 +1,7 @@
-import { routeBackupRequest } from '../backup/routes';
+import {
+  executePreparedBackupRequest,
+  prepareBackupRequest,
+} from '../backup/routes';
 import type { BackupRunnerPort } from '../backup/runner';
 import { routeFlowRequest } from '../flow/routes';
 import type { ManagedTargetPolicy } from '../managedTarget';
@@ -11,7 +14,7 @@ import { assertManagedControl, routeControlRequest } from './controlRoutes';
 import type { ServerControlTarget } from './controlTarget';
 import { routeDatabaseRequest } from './databaseRoutes';
 import type { AgentLifecyclePort } from './lifecycle';
-import { managedRuntimeAdmission } from './managedRuntime';
+import { managedDatabaseAdmission, managedRuntimeAdmission } from './managedRuntime';
 import type { RouteResponse } from './types';
 import { routeWorkflowReadRequest } from './workflowReadRoutes';
 
@@ -45,6 +48,7 @@ export async function routeAgentRequest(
   const snapshot = manager.getStatus();
   const managedConfig = snapshot.runningConfig ?? snapshot.config;
   const admission = managedRuntimeAdmission(manager, lifecycle, snapshot);
+  const databaseAdmission = managedDatabaseAdmission(manager, lifecycle);
   if (pathname.startsWith('/flows/')) {
     const flow = await routeFlowRequest(
       request,
@@ -73,14 +77,16 @@ export async function routeAgentRequest(
     if (workflowRuntime) return workflowRuntime;
   }
 
-  const desiredConfig = manager.getConfig();
-  const workflowRead = routeWorkflowReadRequest(
-    request,
-    pathname,
-    method,
-    managedConfig.dataPath
-  );
-  if (workflowRead) return workflowRead;
+  if (isWorkflowReadRoute(pathname, method)) {
+    const workflowRead = await routeWorkflowReadRequest(
+      request,
+      pathname,
+      method,
+      managedConfig.dataPath,
+      databaseAdmission
+    );
+    if (workflowRead) return workflowRead;
+  }
 
   if (pathname.startsWith('/queue-operations/')) {
     const queueOperation = await routeQueueOperationsRequest(
@@ -99,49 +105,73 @@ export async function routeAgentRequest(
   if (pathname.startsWith('/backup/')) {
     if (pathname === '/backup/restore' && method === 'POST') {
       assertManagedControl(controlTarget);
-      return manager.withStoppedMaintenance('restoring a backup', async () => {
-        const stoppedSnapshot = manager.getStatus();
-        const restoreDesired = manager.getConfig();
-        const restoreConfig = {
-          ...(stoppedSnapshot.runningConfig ?? stoppedSnapshot.config),
-          extraEnv: restoreDesired.extraEnv,
-        };
-        return routeBackupRequest(
-          request,
-          pathname,
-          method,
-          restoreConfig,
-          stoppedSnapshot.status === 'running',
-          await manager.dbStats(),
-          backupRunner,
-          undefined,
-          managedTargetPolicy
-        );
-      });
+      const prepared = await prepareBackupRequest(
+        request,
+        pathname,
+        method,
+        managedConfig,
+        managedTargetPolicy
+      );
+      if (!prepared || prepared.operation !== 'restore') return null;
+      return lifecycle.run(() =>
+        manager.withStoppedMaintenance('restoring a backup', async () => {
+          const stoppedSnapshot = manager.getStatus();
+          const restoreDesired = manager.getConfig();
+          const restoreConfig = {
+            ...(stoppedSnapshot.runningConfig ?? stoppedSnapshot.config),
+            extraEnv: restoreDesired.extraEnv,
+          };
+          return executePreparedBackupRequest(
+            prepared,
+            restoreConfig,
+            stoppedSnapshot.status === 'running',
+            await manager.dbStats(restoreConfig.dataPath),
+            backupRunner,
+            undefined,
+            managedTargetPolicy
+          );
+        })
+      );
     }
-    const database = await manager.dbStats();
-    const backupConfig = { ...managedConfig, extraEnv: desiredConfig.extraEnv };
-    const backup = await routeBackupRequest(
+    const prepared = await prepareBackupRequest(
       request,
       pathname,
       method,
-      backupConfig,
-      snapshot.status === 'running',
-      database,
-      backupRunner,
-      (extraEnv) => manager.setConfig({ extraEnv }),
+      managedConfig,
       managedTargetPolicy
     );
-    if (backup) return backup;
+    if (prepared) {
+      const execute = async () => {
+        const current = manager.getStatus();
+        const desired = manager.getConfig();
+        const effective = current.runningConfig ?? current.config;
+        const backupConfig = { ...effective, extraEnv: desired.extraEnv };
+        return executePreparedBackupRequest(
+          prepared,
+          backupConfig,
+          current.status === 'running',
+          await manager.dbStats(effective.dataPath),
+          backupRunner,
+          (extraEnv) => {
+            manager.setConfig({ extraEnv });
+          },
+          managedTargetPolicy
+        );
+      };
+      return prepared.operation === 'configure'
+        ? lifecycle.run(execute)
+        : lifecycle.lease(execute);
+    }
   }
 
   return routeDatabaseRequest(
     request,
     pathname,
     method,
-    desiredConfig.dataPath,
+    managedConfig.dataPath,
     origin,
-    allowedOrigins
+    allowedOrigins,
+    databaseAdmission
   );
 }
 
@@ -158,4 +188,8 @@ function isWorkflowRuntimeRoute(pathname: string, method: string): boolean {
     ].includes(pathname) ||
     /^\/workflows\/[^/]+\/(signal|resume-compensation|abandon-compensation)$/.test(pathname)
   );
+}
+
+function isWorkflowReadRoute(pathname: string, method: string): boolean {
+  return method === 'GET' && (pathname === '/workflows' || pathname.startsWith('/workflows/'));
 }

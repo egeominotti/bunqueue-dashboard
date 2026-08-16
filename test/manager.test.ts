@@ -259,6 +259,7 @@ describe('ProcessManager', () => {
       [{ dataPath: null }, 'dataPath'],
       [{ extraEnv: [] }, 'extraEnv'],
       [{ extraEnv: { GOOD: 'yes', BAD: 1 } }, 'extraEnv.BAD'],
+      [{ tcpPort: before.httpPort }, 'httpPort and tcpPort must differ'],
       [{ surprise: true }, 'Unknown config key'],
     ];
     for (const [patch, message] of invalid) {

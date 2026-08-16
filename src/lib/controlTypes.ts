@@ -9,6 +9,11 @@ export interface ServerConfig {
   extraEnv: Record<string, string>;
 }
 
+export interface ServerConfigSnapshot extends ServerConfig {
+  /** Monotonic agent-side revision for compare-and-set updates. */
+  configRevision: number;
+}
+
 /** On-disk footprint of the SQLite database (main file + WAL + SHM sidecars). */
 export interface DbStats {
   path: string;
@@ -25,6 +30,8 @@ export interface ServerStatus {
   managementMode?: ServerManagementMode;
   status: ServerRunStatus;
   generation: number;
+  /** Missing only when connected to an older control agent. */
+  configRevision?: number;
   pid: number | null;
   startedAt: number | null;
   exitCode: number | null;

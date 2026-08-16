@@ -240,6 +240,7 @@ describe('Benchmark — pre-existing job safety', () => {
         return json({ ok: true, data: { ok: true, count: 1 } });
       }
       if (url.includes('/ack-batch')) return json({ ok: true });
+      if (url.includes('/move-to-wait')) return json({ ok: true });
       return json({ ok: false, error: `unexpected ${url}` }, 500);
     }) as typeof fetch;
 
@@ -260,6 +261,7 @@ describe('Benchmark — pre-existing job safety', () => {
     expect(h.result.current.summary).toMatchObject({ completed: 0, ackFailed: 2 });
     expect(h.result.current.live.error).toContain('Heartbeat confirmed 1 of 2');
     expect(calls.some((url) => url.includes('/ack-batch'))).toBe(false);
+    expect(calls.filter((url) => url.includes('/move-to-wait'))).toHaveLength(2);
     const jobs = (bulkBody as { jobs: Array<Record<string, unknown>> }).jobs;
     expect(jobs).toHaveLength(2);
     expect(jobs.every((job) => job.stallTimeout === 120_000)).toBe(true);

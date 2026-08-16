@@ -172,7 +172,7 @@ export function demoApiResponse(path: string, method: string, search: string): J
 
   if (segments[0] === 'control') {
     if (segments[1] === 'logs') return demoControlLogs();
-    if (segments[1] === 'config') return DEMO_CONFIG;
+    if (segments[1] === 'config') return { ...DEMO_CONFIG, configRevision: 1 };
     return demoStatus();
   }
   if (segments[0] === 'workflows') return demoWorkflowResponse(segments, search, method);

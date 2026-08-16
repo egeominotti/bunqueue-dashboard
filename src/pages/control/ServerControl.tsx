@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { bq } from '@/lib/bq';
+import { useControlActionGuard } from '@/lib/useControlActionGuard';
 import { usePolledData } from '@/lib/usePolledData';
 import { AgentInfoCard } from './server/AgentInfoCard';
 import { ConfigCard } from './server/ConfigCard';
@@ -17,9 +18,22 @@ interface HealthVitals {
 }
 
 export function ServerControl() {
-  const { data, error, refetch } = usePolledData(() => bq.control.status(), []);
+  const statusRequestSequence = useRef(0);
+  const statusRequestIds = useRef(new WeakMap<object, number>());
+  const { data, error, refetch } = usePolledData(async () => {
+    const requestId = ++statusRequestSequence.current;
+    const result = await bq.control.status();
+    statusRequestIds.current.set(result, requestId);
+    return result;
+  }, []);
+  const actionGuard = useControlActionGuard('server-lifecycle');
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBusy(null);
+    setActionError(null);
+  }, [actionGuard.scopeKey]);
 
   // RAM + connections come from the server's own /health, not the agent —
   // only poll it while the process is running (it can't answer otherwise).
@@ -38,16 +52,27 @@ export function ServerControl() {
     : ' In-flight jobs are interrupted.';
 
   const run = async (label: string, fn: () => Promise<unknown>, confirmMsg?: string) => {
-    if (confirmMsg && !window.confirm(confirmMsg)) return;
+    const lease = actionGuard.begin('lifecycle');
+    if (!lease) return;
+    if (confirmMsg && !window.confirm(confirmMsg)) {
+      lease.finish();
+      return;
+    }
+    if (!lease.isCurrent()) {
+      lease.finish();
+      return;
+    }
     setBusy(label);
     setActionError(null);
     try {
       await fn();
+      if (!lease.isCurrent()) return;
       await refetch();
     } catch (e) {
+      if (!lease.isCurrent()) return;
       setActionError((e as Error).message);
     } finally {
-      setBusy(null);
+      if (lease.finish()) setBusy(null);
     }
   };
 
@@ -152,6 +177,8 @@ export function ServerControl() {
             status={data}
             onSaved={refetch}
             running={running}
+            statusRequestId={data ? statusRequestIds.current.get(data) : undefined}
+            getStatusRequestSequence={() => statusRequestSequence.current}
             transitioning={transitioning}
           />
           <div className="flex flex-col gap-6">

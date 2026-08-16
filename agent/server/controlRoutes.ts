@@ -15,12 +15,18 @@ import type { RouteResponse } from './types';
 
 const MAX_CONFIG_BODY_BYTES = 64 * 1024;
 
-async function statusWithHealth(manager: ProcessManager, controlTarget: ServerControlTarget) {
+async function statusWithHealth(
+  manager: ProcessManager,
+  controlTarget: ServerControlTarget,
+  retryOnProcessChange = true
+) {
   const snapshot = manager.getStatus();
+  const configRevision = snapshot.configRevision ?? manager.getConfigRevision?.() ?? 0;
   if (controlTarget.mode === 'external') {
     const health = await probeExternalHealth(controlTarget);
     return {
       ...snapshot,
+      configRevision,
       managementMode: 'external' as const,
       healthy: health.healthy,
       version: health.version,
@@ -51,8 +57,29 @@ async function statusWithHealth(manager: ProcessManager, controlTarget: ServerCo
       // The managed process is not healthy yet.
     }
   }
-  const database = await manager.dbStats().catch(() => null);
-  return { ...snapshot, managementMode: 'managed' as const, healthy, version, db: database };
+  const effectiveConfig = snapshot.runningConfig ?? snapshot.config;
+  const database = await manager.dbStats(effectiveConfig.dataPath).catch(() => null);
+  const current = manager.getStatus();
+  if (!sameProcessSnapshot(snapshot, current)) {
+    if (retryOnProcessChange) return statusWithHealth(manager, controlTarget, false);
+    const currentConfig = current.runningConfig ?? current.config;
+    return {
+      ...current,
+      configRevision: current.configRevision ?? manager.getConfigRevision?.() ?? 0,
+      managementMode: 'managed' as const,
+      healthy: false,
+      version: undefined,
+      db: await manager.dbStats(currentConfig.dataPath).catch(() => null),
+    };
+  }
+  return {
+    ...snapshot,
+    configRevision,
+    managementMode: 'managed' as const,
+    healthy,
+    version,
+    db: database,
+  };
 }
 
 export async function routeControlRequest(
@@ -65,7 +92,10 @@ export async function routeControlRequest(
   controlTarget: ServerControlTarget = MANAGED_CONTROL_TARGET
 ): Promise<RouteResponse | null> {
   if (pathname === '/control/status') {
-    return { status: 200, body: await statusWithHealth(manager, controlTarget) };
+    return coordinatedLease(lifecycle, async () => ({
+      status: 200,
+      body: await statusWithHealth(manager, controlTarget),
+    }));
   }
   if (pathname === '/control/logs') {
     return { status: 200, body: { lines: manager.getLogs() } };
@@ -96,20 +126,60 @@ export async function routeControlRequest(
     });
   }
   if (pathname === '/control/config' && method === 'GET') {
-    return { status: 200, body: manager.getConfig() };
+    return { status: 200, body: configSnapshot(manager) };
   }
   if (pathname === '/control/config' && method === 'PUT') {
     assertManagedControl(controlTarget);
-    const patch = validateConfigPatch(
+    const update = configUpdate(
       await readLimitedJsonBody(request, {
         scope: 'Agent configuration',
         maxBytes: MAX_CONFIG_BODY_BYTES,
         limitLabel: '64 KiB',
       })
     );
-    return { status: 200, body: manager.setConfig(patch) };
+    return coordinated(lifecycle, async () => {
+      manager.setConfig(update.patch, update.expectedRevision);
+      return { status: 200, body: configSnapshot(manager) };
+    });
   }
   return null;
+}
+
+function configSnapshot(manager: ProcessManager) {
+  return { ...manager.getConfig(), configRevision: manager.getConfigRevision?.() ?? 0 };
+}
+
+function configUpdate(value: unknown): {
+  patch: ReturnType<typeof validateConfigPatch>;
+  expectedRevision?: number;
+} {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return { patch: validateConfigPatch(value) };
+  }
+  const input = { ...(value as Record<string, unknown>) };
+  const hasExpectedRevision = Object.hasOwn(input, 'expectedRevision');
+  const hasConfigRevision = Object.hasOwn(input, 'configRevision');
+  const expected = hasExpectedRevision
+    ? input.expectedRevision
+    : hasConfigRevision
+      ? input.configRevision
+      : undefined;
+  if (
+    hasExpectedRevision &&
+    hasConfigRevision &&
+    input.expectedRevision !== input.configRevision
+  ) {
+    throw new Error('expectedRevision and configRevision must match');
+  }
+  delete input.expectedRevision;
+  delete input.configRevision;
+  if (expected !== undefined && (!Number.isSafeInteger(expected) || (expected as number) < 0)) {
+    throw new Error('expectedRevision must be a non-negative safe integer');
+  }
+  return {
+    patch: validateConfigPatch(input),
+    ...(expected === undefined ? {} : { expectedRevision: expected as number }),
+  };
 }
 
 export function assertManagedControl(controlTarget: ServerControlTarget): void {
@@ -171,6 +241,25 @@ function coordinated<T>(
   operation: () => Promise<T>
 ): Promise<T> {
   return lifecycle ? lifecycle.run(operation) : operation();
+}
+
+function coordinatedLease<T>(
+  lifecycle: AgentLifecyclePort | undefined,
+  operation: () => Promise<T>
+): Promise<T> {
+  return lifecycle ? lifecycle.lease(operation) : operation();
+}
+
+function sameProcessSnapshot(
+  initial: ReturnType<ProcessManager['getStatus']>,
+  current: ReturnType<ProcessManager['getStatus']>
+): boolean {
+  return (
+    initial.status === current.status &&
+    initial.generation === current.generation &&
+    initial.pid === current.pid &&
+    initial.configRevision === current.configRevision
+  );
 }
 
 type SettledOperation = { ok: true } | { ok: false; error: unknown };

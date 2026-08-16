@@ -10,6 +10,10 @@ export type ManagedRuntimeAdmission = <T>(
   operation: (snapshot: ManagedRuntimeSnapshot) => Promise<T>
 ) => Promise<T>;
 
+export type ManagedDatabaseAdmission = <T>(
+  operation: (dataPath: string) => T | Promise<T>
+) => Promise<T>;
+
 /**
  * Admit SDK work against one managed-process generation. The operation and its
  * final state/config check share the same lifecycle section as start/stop.
@@ -29,6 +33,18 @@ export function managedRuntimeAdmission(
         config: current.runningConfig ?? current.config,
         running: current.status === 'running',
       });
+    });
+}
+
+/** Pin DB-backed observability to the live process config for one reader lease. */
+export function managedDatabaseAdmission(
+  manager: ProcessManager,
+  lifecycle: AgentLifecyclePort
+): ManagedDatabaseAdmission {
+  return (operation) =>
+    lifecycle.lease(async () => {
+      const snapshot = manager.getStatus();
+      return operation((snapshot.runningConfig ?? snapshot.config).dataPath);
     });
 }
 

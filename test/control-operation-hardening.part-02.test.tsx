@@ -168,11 +168,64 @@ describe('Benchmark operation identity and lifecycle', () => {
 
     expect(pulls).toBe(1);
     expect(calls.some((url) => url.endsWith('/ack-batch'))).toBe(false);
+    expect(calls.some((url) => url.endsWith('/move-to-wait'))).toBe(true);
     expect(hook.result.current.phase).toBe('stopped');
     hook.unmount();
   });
 
-  test('unmount while pull is pending prevents ACK, retry, and another pull', async () => {
+  test('Stop during heartbeat returns the owned job to waiting before finishing', async () => {
+    const heartbeat = deferred<Response>();
+    let acknowledgements = 0;
+    let retries = 0;
+    globalThis.fetch = ((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/dashboard')) return Promise.resolve(json({ ok: true }));
+      if (url.endsWith('/counts')) {
+        return Promise.resolve(json({ ok: true, counts: benchmarkCounts() }));
+      }
+      if (url.endsWith('/jobs/bulk')) {
+        return Promise.resolve(json({ ok: true, ids: ['benchmark-own'] }));
+      }
+      if (url.endsWith('/pull-batch')) {
+        return Promise.resolve(json({ ok: true, jobs: [{ id: 'benchmark-own' }] }));
+      }
+      if (url.endsWith('/heartbeat-batch')) return heartbeat.promise;
+      if (url.endsWith('/ack-batch')) {
+        acknowledgements += 1;
+        return Promise.resolve(json({ ok: true }));
+      }
+      if (url.endsWith('/move-to-wait')) {
+        retries += 1;
+        return Promise.resolve(json({ ok: true }));
+      }
+      return Promise.resolve(json({ ok: true }));
+    }) as typeof fetch;
+
+    const hook = renderHook(() => useBenchmark());
+    let run!: Promise<void>;
+    act(() => {
+      run = hook.result.current.run({
+        ...DEFAULT_CONFIG,
+        total: 1,
+        batch: 1,
+        producers: 1,
+        workers: 1,
+        workerBatch: 1,
+        processMs: 0,
+      });
+    });
+    await settle(15);
+    act(() => hook.result.current.stop());
+    heartbeat.resolve(json({ ok: true, data: { ok: true, count: 1 } }));
+    await act(async () => run);
+
+    expect(acknowledgements).toBe(0);
+    expect(retries).toBe(1);
+    expect(hook.result.current.phase).toBe('stopped');
+    hook.unmount();
+  });
+
+  test('unmount while pull is pending compensates the admitted job without ACK or another pull', async () => {
     const pull = deferred<Response>();
     const calls: string[] = [];
     let pulls = 0;
@@ -216,6 +269,6 @@ describe('Benchmark operation identity and lifecycle', () => {
 
     expect(pulls).toBe(1);
     expect(calls.some((url) => url.endsWith('/ack-batch'))).toBe(false);
-    expect(calls.some((url) => url.endsWith('/move-to-wait'))).toBe(false);
+    expect(calls.filter((url) => url.endsWith('/move-to-wait'))).toHaveLength(1);
   });
 });

@@ -153,6 +153,7 @@ describe('agent config runtime validation', () => {
       { extraEnv: { OK: 'yes', BAD: false } },
       { unknown: 'field' },
       { httpPort: 7000, tcpPort: 70_000 },
+      { httpPort: 7000, tcpPort: 7000 },
     ];
 
     for (const body of invalid) {
@@ -204,6 +205,60 @@ describe('agent config runtime validation', () => {
       dataPath: '',
       extraEnv: { LOG_LEVEL: 'debug' },
     });
+  });
+
+  test('rejects a stale compare-and-set config update without losing the newer value', async () => {
+    const m = new ProcessManager();
+    const handle = createFetchHandler(m, { allowedOrigins: ALLOWED });
+    const initialRevision = m.getConfigRevision();
+    const first = await handle(
+      put(
+        'http://127.0.0.1:6800/control/config',
+        { httpPort: 7200, expectedRevision: initialRevision },
+        null
+      )
+    );
+    expect(first.status).toBe(200);
+    const nextRevision = m.getConfigRevision();
+    expect(nextRevision).not.toBe(initialRevision);
+    expect(await first.json()).toMatchObject({
+      httpPort: 7200,
+      configRevision: nextRevision,
+    });
+
+    const stale = await handle(
+      put(
+        'http://127.0.0.1:6800/control/config',
+        { httpPort: 7300, expectedRevision: initialRevision },
+        null
+      )
+    );
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({
+      error: expect.stringContaining(`current revision is ${nextRevision}`),
+    });
+    expect(m.getConfig().httpPort).toBe(7200);
+  });
+
+  test('rejects an explicit null config revision instead of bypassing compare-and-set', async () => {
+    const m = new ProcessManager();
+    const handle = createFetchHandler(m, { allowedOrigins: ALLOWED });
+    const before = m.getConfig();
+
+    for (const revision of [
+      { expectedRevision: null },
+      { configRevision: null },
+      { expectedRevision: null, configRevision: null },
+    ]) {
+      const response = await handle(
+        put('http://127.0.0.1:6800/control/config', { httpPort: 7400, ...revision }, null)
+      );
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: 'expectedRevision must be a non-negative safe integer',
+      });
+    }
+    expect(m.getConfig()).toEqual(before);
   });
 });
 

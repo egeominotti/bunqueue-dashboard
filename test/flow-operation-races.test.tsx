@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { act, StrictMode } from 'react';
+import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
 import { FlowCreator } from '../src/features/flows/ui/FlowCreator';
 import { FlowDependencyConsole } from '../src/features/flows/ui/FlowDependencyConsole';
 import { FlowJobToolkit } from '../src/features/flows/ui/FlowJobToolkit';
@@ -23,10 +25,11 @@ const cleanups = new Set<() => void>();
 afterEach(() => {
   for (const cleanup of cleanups) cleanup();
   cleanups.clear();
+  useConnectionStore.setState({ baseUrl: '/api', token: '', agentToken: '', refreshMs: 3000 });
 });
 
 describe('Flow operation request identity', () => {
-  test('FlowCreator drops an old operation and clears success before a later error', async () => {
+  test('FlowCreator keeps a durable create locked across draft changes', async () => {
     const heldAdd = deferred<unknown>();
     const calls: string[] = [];
     let bulkCalls = 0;
@@ -47,13 +50,17 @@ describe('Flow operation request identity', () => {
     changeControl(field<HTMLSelectElement>(view.host, 'FlowProducer method'), 'addBulk');
     submit(view.host);
     await settle(2);
-    expect(calls).toEqual(['add', 'addBulk']);
-    expect(view.host.textContent).toContain('fresh-create');
+    expect(calls).toEqual(['add']);
+    expect(view.host.textContent).not.toContain('fresh-create');
 
     heldAdd.resolve(marker('stale-create'));
     await settle(2);
-    expect(view.host.textContent).toContain('fresh-create');
     expect(view.host.textContent).not.toContain('stale-create');
+
+    submit(view.host);
+    await settle(2);
+    expect(calls).toEqual(['add', 'addBulk']);
+    expect(view.host.textContent).toContain('fresh-create');
 
     changeControl(field<HTMLTextAreaElement>(view.host, 'Flow definition JSON'), '{"flows":[]}');
     expect(view.host.textContent).not.toContain('fresh-create');
@@ -61,6 +68,130 @@ describe('Flow operation request identity', () => {
     await settle(2);
     expect(view.host.querySelector('[role="alert"]')?.textContent).toContain('create rejected');
     expect(view.host.textContent).not.toContain('fresh-create');
+  });
+
+  test('an exclusive Flow create stays locked across StrictMode remount until settlement', async () => {
+    act(() => {
+      useConnectionStore.setState({
+        baseUrl: 'http://server-a.test',
+        token: 'server-a-token',
+        agentToken: 'agent-a-token',
+      });
+    });
+    for (const outcome of ['resolve', 'reject'] as const) {
+      const held = deferred<unknown>();
+      let calls = 0;
+      const repository = fakeRepository({
+        create: async () => {
+          calls += 1;
+          if (calls === 1) return held.promise;
+          return marker(`fresh-after-${outcome}`);
+        },
+      });
+      const element = createElement(
+        StrictMode,
+        null,
+        createElement(FlowCreator, { repository, onOpen: () => undefined })
+      );
+      const first = renderFlowUi(element);
+      cleanups.add(first.unmount);
+      submit(first.host);
+      expect(calls).toBe(1);
+      first.unmount();
+      cleanups.delete(first.unmount);
+
+      const remounted = renderFlowUi(element);
+      cleanups.add(remounted.unmount);
+      submit(remounted.host);
+      await settle(2);
+      const callsBeforeSettlement = calls;
+      if (outcome === 'resolve') held.resolve(marker('old-result'));
+      else held.reject(new Error('old request timed out'));
+      await settle(2);
+
+      expect(callsBeforeSettlement).toBe(1);
+      submit(remounted.host);
+      await settle(2);
+      expect(calls).toBe(2);
+      expect(remounted.host.textContent).toContain(`fresh-after-${outcome}`);
+      remounted.unmount();
+      cleanups.delete(remounted.unmount);
+    }
+  });
+
+  test('an in-flight Flow create on A does not block the retargeted backend B', async () => {
+    act(() => {
+      useConnectionStore.setState({
+        baseUrl: 'http://server-a.test',
+        token: 'server-a-token',
+        agentToken: 'agent-a-token',
+      });
+    });
+    const heldA = deferred<unknown>();
+    let calls = 0;
+    const repository = fakeRepository({
+      create: async () => {
+        calls += 1;
+        return calls === 1 ? heldA.promise : marker('server-b-create');
+      },
+    });
+    const view = renderFlowUi(createElement(FlowCreator, { repository, onOpen: () => undefined }));
+    cleanups.add(view.unmount);
+    submit(view.host);
+    act(() => {
+      useConnectionStore.setState({
+        baseUrl: 'http://server-b.test',
+        token: 'server-b-token',
+        agentToken: 'agent-b-token',
+      });
+    });
+    submit(view.host);
+    await settle(2);
+    heldA.resolve(marker('server-a-stale'));
+    await settle(2);
+
+    expect(calls).toBe(2);
+    expect(view.host.textContent).toContain('server-b-create');
+    expect(view.host.textContent).not.toContain('server-a-stale');
+  });
+
+  test('a durable dependency mutation cannot be duplicated by remounting its panel', async () => {
+    const originalConfirm = window.confirm;
+    const held = deferred<unknown>();
+    let calls = 0;
+    const repository = fakeRepository({
+      mutate: async () => {
+        calls += 1;
+        return calls === 1 ? held.promise : marker('fresh-retry');
+      },
+    });
+    const element = createElement(FlowDependencyConsole, {
+      repository,
+      initialTarget: { id: 'job-a', queueName: 'queue' },
+    });
+    window.confirm = () => true;
+    try {
+      const first = renderFlowUi(element);
+      click(button(first.host, 'Retry job'));
+      expect(calls).toBe(1);
+      first.unmount();
+
+      const remounted = renderFlowUi(element);
+      cleanups.add(remounted.unmount);
+      click(button(remounted.host, 'Retry job'));
+      await settle(2);
+      expect(calls).toBe(1);
+
+      held.resolve(marker('old-retry'));
+      await settle(2);
+      click(button(remounted.host, 'Retry job'));
+      await settle(2);
+      expect(calls).toBe(2);
+      expect(remounted.host.textContent).toContain('fresh-retry');
+    } finally {
+      held.resolve(marker('cleanup'));
+      window.confirm = originalConfirm;
+    }
   });
 
   test('FlowJobToolkit retargets without publishing the old job receipt', async () => {
