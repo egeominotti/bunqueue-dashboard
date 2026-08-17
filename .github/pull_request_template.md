@@ -15,6 +15,7 @@
 - [ ] `bun run architecture` — every TypeScript source stays within 300 lines
 - [ ] `bun test` — unit + agent-lifecycle tests pass
 - [ ] `bun run test:e2e` — real Bunqueue Flow, Workflow, and Queue SDK contracts pass
+- [ ] `bun run test:e2e:browser` — production UI passes Chromium, Firefox, and WebKit
 
 ## Notes
 

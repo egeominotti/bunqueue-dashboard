@@ -138,9 +138,18 @@ export function prepareRuntimeIndexHtml(indexHtml: string, basePath: string): st
   const mount = basePath || '/';
   const agentUrl = `${basePath}/agent`;
   const apiUrl = `${basePath}/api`;
-  const prefixed = basePath
-    ? indexHtml.replace(/\b(href|src)=(['"])\/(?!\/)/g, `$1=$2${basePath}/`)
-    : indexHtml;
+  const runtimeBasePattern = /<base\s+href=(['"])[^'"]*\1\s+data-bunqueue-base\s*\/?>/;
+  if (!runtimeBasePattern.test(indexHtml)) {
+    throw new Error('Embedded index.html is missing its runtime base marker');
+  }
+  const prefix = basePath || '';
+  const withPrefixedAssets = indexHtml
+    .replace(/\b(href|src)=(['"])\/(?!\/)/g, `$1=$2${prefix}/`)
+    .replace(/\b(href|src)=(['"])\.\/(?!\/)/g, `$1=$2${prefix}/`);
+  const prefixed = withPrefixedAssets.replace(
+    runtimeBasePattern,
+    `<base href="${mount.endsWith('/') ? mount : `${mount}/`}" data-bunqueue-base>`
+  );
   const runtimeConfig =
     '<script>' +
     `window.__BUNQUEUE_BASE_PATH__=${JSON.stringify(mount)};` +

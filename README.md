@@ -300,6 +300,12 @@ bun run quality   # architecture, lint/build, size, docs, coverage, real E2E, pa
 The E2E stage starts disposable Bunqueue 2.8.59 processes and exercises the complete FlowProducer,
 Workflow Engine, and Queue SDK operator bridges. Run it alone with `bun run test:e2e`.
 
+The blocking browser job builds the production bundle under `/e2e/dashboard`, starts an
+authenticated disposable Bunqueue server, and drives the UI with Playwright on Chromium, Firefox,
+and WebKit. It covers the token gate, every sidebar route, SSE recovery across a real server
+restart, confirmed Cron creation/deletion, and automated WCAG A/AA checks. Install the browser
+binaries once with `bun run test:e2e:browser:install`, then run `bun run test:e2e:browser`.
+
 CI enforces this on every push and pull request. See [Contributing](#contributing).
 
 ## Project structure

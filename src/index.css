@@ -14,10 +14,9 @@
   --text-muted: #a8a8b3;
   --text-faint: #868c98;
   --sidebar: #09090b;
-  /* #db2777 (not the brighter #ec4899): white text on it clears WCAG AA (4.6:1)
-     for accent buttons/badges; #ec4899 measured only 3.5:1. */
-  --accent: #db2777;
-  --accent-fg: #ffffff;
+  /* Theme-specific accent pairs clear AA both as text and as a filled control. */
+  --accent: #f472b6;
+  --accent-fg: #18181b;
   /* Semantic status colors — 400 shades read well on the dark surfaces. */
   --success: #34d399;
   --warning: #fbbf24;
@@ -34,7 +33,7 @@
   --text-muted: #52525b;
   --text-faint: #71717a;
   --sidebar: #ffffff;
-  --accent: #db2777;
+  --accent: #be185d;
   --accent-fg: #ffffff;
   /* Darker shades: the 400s used on dark fail WCAG AA on white surfaces. */
   --success: #047857;

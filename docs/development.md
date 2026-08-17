@@ -49,6 +49,17 @@ before publishing. It executes, in order:
 - `bun run test:coverage`: the complete Bun test suite plus aggregate coverage floors.
 - `bun run audit:high`: a blocking dependency audit for HIGH and CRITICAL advisories.
 
+CI also runs `bun run test:e2e:browser` as a separate blocking matrix on Chromium, Firefox, and
+WebKit. The suite uses the production bundle, a non-root `BASE_PATH`, an authenticated disposable
+Bunqueue 2.8.59 process, and a temporary database. It verifies the token gate, full sidebar
+navigation, SSE reconnection after an actual upstream restart, confirmed Cron mutations, and
+automated WCAG A/AA rules. For a local first run:
+
+```bash
+bun run test:e2e:browser:install
+bun run test:e2e:browser
+```
+
 The audit has one ID-specific exception: `GHSA-qwww-vcr4-c8h2` affects React
 Router's RSC mode. This project is a client-only `BrowserRouter` SPA and has no
 RSC request handler or server actions, so that advisory is not applicable. The

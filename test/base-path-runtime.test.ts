@@ -49,10 +49,12 @@ describe('all-in-one runtime base path', () => {
 
   test('injects prefixed router/API/agent settings and build asset URLs', () => {
     const html = prepareRuntimeIndexHtml(
-      '<head><link href="/favicon.svg"><script src="/assets/app.js"></script>' +
+      '<head><base href="/" data-bunqueue-base>' +
+        '<link href="/favicon.svg"><script src="./assets/app.js"></script>' +
         '<link href="https://example.com/canonical"></head>',
       '/internal/queue'
     );
+    expect(html).toContain('<base href="/internal/queue/" data-bunqueue-base>');
     expect(html).toContain('href="/internal/queue/favicon.svg"');
     expect(html).toContain('src="/internal/queue/assets/app.js"');
     expect(html).toContain('href="https://example.com/canonical"');
@@ -73,10 +75,12 @@ describe('all-in-one runtime base path', () => {
   test('scopes SPA fallback, assets, API proxy and agent bridge to the mount', async () => {
     const scratch = mkdtempSync(join(tmpdir(), 'bunqueue-base-path-'));
     const cssPath = join(scratch, 'app.css');
+    const jsPath = join(scratch, 'app.js');
     writeFileSync(cssPath, 'a{src:url(/assets/font.woff2)}');
+    writeFileSync(jsPath, 'export const ok = true;');
     const h = handler({
       basePath: '/internal/queue',
-      assets: { '/assets/app.css': cssPath },
+      assets: { '/assets/app.css': cssPath, '/assets/app.js': jsPath },
     });
     try {
       expect((await h(new Request('http://localhost:8080/'))).status).toBe(404);
@@ -93,6 +97,8 @@ describe('all-in-one runtime base path', () => {
       const css = await h(new Request('http://localhost:8080/internal/queue/assets/app.css'));
       expect(css.headers.get('content-type')).toContain('text/css');
       expect(await css.text()).toContain('url(/internal/queue/assets/font.woff2)');
+      const js = await h(new Request('http://localhost:8080/internal/queue/assets/app.js'));
+      expect(js.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
 
       let upstream = '';
       globalThis.fetch = ((input: RequestInfo | URL) => {

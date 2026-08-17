@@ -10,6 +10,22 @@ import {
   withSecurityHeaders,
 } from './servePolicy';
 
+const ASSET_CONTENT_TYPES: Record<string, string> = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.woff2': 'font/woff2',
+};
+
+function assetContentType(pathname: string): string | undefined {
+  const dot = pathname.lastIndexOf('.');
+  return dot === -1 ? undefined : ASSET_CONTENT_TYPES[pathname.slice(dot).toLowerCase()];
+}
+
 /** Static assets, the admin proxy, and the same-origin agent bridge. */
 export function createServeHandler(opts: ServeHandlerOptions) {
   const {
@@ -164,7 +180,12 @@ export function createServeHandler(opts: ServeHandlerOptions) {
           new Response(await css, { headers: { 'content-type': 'text/css; charset=utf-8' } })
         );
       }
-      return secure(new Response(Bun.file(asset)));
+      const contentType = assetContentType(key);
+      return secure(
+        new Response(Bun.file(asset), {
+          headers: contentType ? { 'content-type': contentType } : undefined,
+        })
+      );
     }
     if (pathname.startsWith('/assets/')) {
       return secure(new Response('Not found', { status: 404 }));

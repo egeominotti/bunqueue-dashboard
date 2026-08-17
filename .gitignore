@@ -10,6 +10,8 @@ dist-ssr/
 # Build/test noise
 *.tsbuildinfo
 coverage/
+playwright-report/
+test-results/
 
 # bun.lock IS committed on purpose — CI uses `bun install --frozen-lockfile`.
 

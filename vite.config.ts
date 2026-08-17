@@ -3,15 +3,19 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+const publicBase = process.env.VITE_BASE ?? './';
+
 // The dashboard talks to a bunqueue server's HTTP API (default :6790).
 // In dev, requests to `/api/*` are proxied there so there is no CORS setup and
 // no need to enable AUTH for local use. In prod, set VITE_BUNQUEUE_URL to the
 // server origin (see src/lib/api.ts) or serve the built assets behind the same
 // origin as the server.
 export default defineConfig({
-  // Served from `/` in dev and Docker; GitHub Pages sets VITE_BASE to the
-  // project sub-path (e.g. `/bunqueue-dashboard/`) so asset URLs resolve.
-  base: process.env.VITE_BASE ?? '/',
+  // The standalone package learns BASE_PATH only at runtime. Relative chunk
+  // URLs keep lazy imports anchored to their entry module, so an arbitrary
+  // mount works without rewriting JavaScript. Static deployments can still set
+  // an explicit VITE_BASE (GitHub Pages does).
+  base: publicBase,
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
