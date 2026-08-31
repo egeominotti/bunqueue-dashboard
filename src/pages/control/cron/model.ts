@@ -1,4 +1,5 @@
 import type { CreateCronBody, CronJobOptions } from '@/lib/bq';
+import { nextCronRuns } from '@/lib/cronPreview';
 import { decodedHttpPathError } from '@/lib/upstreamPaths';
 import { parseJobData } from '../addJob/data';
 import { queueNameError } from '../addJob/options';
@@ -65,7 +66,7 @@ export function assertCronCreateResponse(response: unknown, expected: CreateCron
 }
 
 const cronAlreadyExistsMessage = (name: string) =>
-  `Cron "${name}" already exists. Bunqueue v2.8.59 does not return complete cron definitions, so editing could reset hidden options. Delete it explicitly, wait for the list to refresh, then create the replacement as a separate action.`;
+  `Cron "${name}" already exists. Bunqueue v2.9.0 does not return complete cron definitions, so editing could reset hidden options. Delete it explicitly, wait for the list to refresh, then create the replacement as a separate action.`;
 
 export function existingCronNameError(
   name: string,
@@ -168,6 +169,13 @@ export function buildCronBody(
   if (values.mode === 'cron') {
     const schedule = values.schedule.trim();
     if (!schedule) return { ok: false, msg: 'Cron expression required' };
+    const parsedSchedule = nextCronRuns(schedule, 1, now);
+    if (!parsedSchedule.valid) {
+      return {
+        ok: false,
+        msg: `Cron expression is not supported by Bunqueue 2.9: ${parsedSchedule.error ?? 'invalid syntax'}`,
+      };
+    }
     body.schedule = schedule;
   } else {
     const interval = parseOptionalWhole(values.every, 'Interval', 1, MAX_DELAY_MS);

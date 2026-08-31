@@ -38,7 +38,7 @@ export function JobsPro() {
     loading: discoveryLoading,
     refetch: refetchSummary,
   } = usePolledData(() => bq.queuesSummary(), [], { intervalMs: 30000 });
-  // `/dashboard` omits prioritized and waiting-children in v2.8.59. `/stats`
+  // `/dashboard` omits prioritized and waiting-children in v2.9.0. `/stats`
   // carries every state needed by the inventory cards.
   const {
     data: overview,

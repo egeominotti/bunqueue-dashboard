@@ -111,7 +111,7 @@ export async function lookupGet<T>(
 }
 
 /**
- * The v2.8.59 custom-id route returns the stored snapshot without resolving its
+ * The v2.9.0 custom-id route returns the stored snapshot without resolving its
  * live state, unlike GET /jobs/:id. Resolve the internal id through the normal
  * endpoint so every inspector panel receives one authoritative JobFull.
  */

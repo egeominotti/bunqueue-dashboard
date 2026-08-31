@@ -1,4 +1,4 @@
-import { type ProcessManager, validateConfigPatch } from '../manager';
+import { managedStorageMode, type ProcessManager, validateConfigPatch } from '../manager';
 import { safeErrorMessage } from '../errorMessage';
 import {
   WorkflowRuntimeUnavailableError,
@@ -58,7 +58,7 @@ async function statusWithHealth(
     }
   }
   const effectiveConfig = snapshot.runningConfig ?? snapshot.config;
-  const database = await manager.dbStats(effectiveConfig.dataPath).catch(() => null);
+  const database = await statusDatabase(manager, effectiveConfig);
   const current = manager.getStatus();
   if (!sameProcessSnapshot(snapshot, current)) {
     if (retryOnProcessChange) return statusWithHealth(manager, controlTarget, false);
@@ -69,7 +69,7 @@ async function statusWithHealth(
       managementMode: 'managed' as const,
       healthy: false,
       version: undefined,
-      db: await manager.dbStats(currentConfig.dataPath).catch(() => null),
+      db: await statusDatabase(manager, currentConfig),
     };
   }
   return {
@@ -80,6 +80,18 @@ async function statusWithHealth(
     version,
     db: database,
   };
+}
+
+async function statusDatabase(
+  manager: ProcessManager,
+  config: ReturnType<ProcessManager['getConfig']>
+) {
+  try {
+    return managedStorageMode(config) === 'sqlite' ? await manager.dbStats(config.dataPath) : null;
+  } catch {
+    // Status must remain reachable so an invalid desired storage driver can be corrected.
+    return null;
+  }
 }
 
 export async function routeControlRequest(

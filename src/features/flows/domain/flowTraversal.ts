@@ -62,7 +62,7 @@ function enabledFailurePolicies(job: JobFull): (typeof FAILURE_POLICIES)[number]
 }
 
 /**
- * The v2.8.59 HTTP snapshot exposes a configured failure policy, but not the
+ * The v2.9.0 HTTP snapshot exposes a configured failure policy, but not the
  * canonical failure maps needed to prove whether it has fired. State/timeline
  * are deliberately ignored: retries retain policy flags and may retain, cap or
  * replace failure history. The structural backlink is the only safe ownership
@@ -88,7 +88,7 @@ function possibleFailureRelease(
 }
 
 /**
- * BFS over structural children plus non-structural dependencies. v2.8.59
+ * BFS over structural children plus non-structural dependencies. v2.9.0
  * creates every structural child in BOTH `childrenIds` and `dependsOn`; that
  * pair is rendered once as a child edge, otherwise every new flow becomes an
  * artificial two-edge cycle. Runtime failure resolution can later make those

@@ -15,6 +15,34 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.39] - 2026-08-31
+
+### Added
+
+- Added managed PostgreSQL storage detection. The control agent now removes
+  conflicting SQLite path aliases before launch and returns explicit SQLite-only
+  errors for Database inspection and S3 backup routes.
+
+### Changed
+
+- Pinned the installable Bunqueue client and managed server command to 2.9.0,
+  retained compatibility with the 2.9.2 server release, and raised the runtime,
+  CI, Docker, and type baseline to Bun 1.4.0.
+- Aligned Cron Manager with Bunqueue 2.9's Bun-native grammar: standard five-field
+  schedules and leading-seconds six-field schedules are previewed and accepted,
+  official `@hourly`/`@daily`-style shortcuts are expanded, and Croner-only
+  extensions fail before submission.
+- Validated Bunqueue 2.9's `Queue.removeDlqJob()` contract end to end, while
+  keeping it unavailable as an operator action because queue + job ID is not
+  an atomic generation precondition when custom IDs can be reused.
+- Updated operator copy, demo fixtures, API mapping, guides, and safety notes for
+  the Bunqueue 2.9 contract and its PostgreSQL/SQLite boundaries.
+
+### Fixed
+
+- Prevented a PostgreSQL-managed broker from receiving an injected
+  `BUNQUEUE_DATA_PATH`, which Bunqueue 2.9 correctly rejects as ambiguous storage.
+
 ## [0.0.38] - 2026-08-15
 
 ### Changed
@@ -1140,7 +1168,9 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.37...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.39...HEAD
+[0.0.39]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.38...v0.0.39
+[0.0.38]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.37...v0.0.38
 [0.0.37]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.36...v0.0.37
 [0.0.36]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.35...v0.0.36
 [0.0.35]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.34...v0.0.35

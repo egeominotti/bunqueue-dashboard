@@ -1,6 +1,7 @@
 import { copyConfig, defaultConfig, validateConfigPatch, validateServerConfig } from './config';
 import { ProcessLogs } from './logs';
 import { databaseStats } from './storage';
+import { managedStorageMode, removeSqlitePaths } from './storageMode';
 import type {
   DbStats,
   LogLine,
@@ -109,6 +110,7 @@ export class ProcessManager {
     }
 
     const launchConfig = validateServerConfig(this.config);
+    const storageMode = managedStorageMode(launchConfig);
     const [command, ...args] = launchConfig.command.trim().split(/\s+/);
     this.status = 'starting';
     this.exitCode = null;
@@ -120,6 +122,7 @@ export class ProcessManager {
       TCP_PORT: String(launchConfig.tcpPort),
       BUNQUEUE_DATA_PATH: launchConfig.dataPath,
     };
+    if (storageMode !== 'sqlite') removeSqlitePaths(env);
 
     try {
       this.proc = Bun.spawn([command, ...args], {

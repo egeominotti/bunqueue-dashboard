@@ -19,8 +19,8 @@ import {
 
 installTestHooks();
 
-describe('CronManager v2.8.55 contract', () => {
-  test('transports shortcuts and six-field expressions even when local preview cannot parse them', () => {
+describe('CronManager Bunqueue 2.9 contract', () => {
+  test('accepts official shortcuts and Bun 1.4 leading seconds', () => {
     const shortcut = buildCronBody(cronValues('  @hourly  '));
     expect(shortcut.ok).toBe(true);
     if (shortcut.ok) expect(shortcut.body.schedule).toBe('@hourly');
@@ -29,9 +29,15 @@ describe('CronManager v2.8.55 contract', () => {
     expect(sixFields.ok).toBe(true);
     if (sixFields.ok) expect(sixFields.body.schedule).toBe('*/10 * * * * *');
 
-    // The local helper is a preview only; the server's Croner parser is the
-    // authoritative validator for every non-empty expression.
     expect(buildCronBody(cronValues('')).ok).toBe(false);
+  });
+
+  test('rejects Croner-only extensions before submitting', () => {
+    for (const schedule of ['0 0 L * *', '0 0 1W * *', '0 0 * * 1#2', '0 0 ? * *']) {
+      const result = buildCronBody(cronValues(schedule));
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.msg).toContain('not supported by Bunqueue 2.9');
+    }
   });
 
   test('refuses cron names that URL parsing would retarget or cannot encode', () => {

@@ -1,4 +1,6 @@
 import type { ProcessManager, ServerConfig, StatusSnapshot } from '../manager';
+import { managedStorageMode } from '../manager';
+import type { ManagedStorageMode } from '../manager/storageMode';
 import type { AgentLifecyclePort } from './lifecycle';
 
 export interface ManagedRuntimeSnapshot {
@@ -10,8 +12,13 @@ export type ManagedRuntimeAdmission = <T>(
   operation: (snapshot: ManagedRuntimeSnapshot) => Promise<T>
 ) => Promise<T>;
 
+export interface ManagedDatabaseSnapshot {
+  dataPath: string;
+  storageMode: ManagedStorageMode;
+}
+
 export type ManagedDatabaseAdmission = <T>(
-  operation: (dataPath: string) => T | Promise<T>
+  operation: (snapshot: ManagedDatabaseSnapshot) => T | Promise<T>
 ) => Promise<T>;
 
 /**
@@ -44,7 +51,11 @@ export function managedDatabaseAdmission(
   return (operation) =>
     lifecycle.lease(async () => {
       const snapshot = manager.getStatus();
-      return operation((snapshot.runningConfig ?? snapshot.config).dataPath);
+      const config = snapshot.runningConfig ?? snapshot.config;
+      return operation({
+        dataPath: config.dataPath,
+        storageMode: managedStorageMode(config),
+      });
     });
 }
 

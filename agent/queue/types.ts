@@ -20,6 +20,7 @@ export interface QueueOperationsPort {
     queue: string,
     deduplicationId: string
   ): Promise<number>;
+  removeDlqJob(config: ServerConfig, queue: string, jobId: string): Promise<boolean>;
   metrics(
     config: ServerConfig,
     queue: string,

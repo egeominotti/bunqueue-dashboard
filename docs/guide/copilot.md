@@ -52,7 +52,7 @@ bulk), completed-job requeue, generic retry and purge tools are intentionally
 absent.
 
 DLQ retry is not made safe by a preliminary read: in
-[Bunqueue v2.8.59](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.59)
+[Bunqueue v2.9.2](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.2)
 the later POST has no atomic generation/state/topology precondition and can hit
 a different job recreated under the same ID. Completed-job requeue is also
 unavailable because `retryCompleted` does not reconstruct dependency

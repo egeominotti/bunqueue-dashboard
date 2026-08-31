@@ -15,7 +15,7 @@ description: Inspect Bunqueue Workflow Engine executions, durable decisions, sig
   `compensation-stuck` runs and exposes every per-step rollback outcome.
 - **Archive** (`/workflows/archive`) audits retained terminal executions.
 
-The Workflow Engine page reads Bunqueue 2.8.59's persisted execution contract
+The Workflow Engine page reads Bunqueue 2.9.0's persisted execution contract
 from the configured SQLite `dataPath`. It shows active and archived executions,
 exact workflow/state filters, durable step progress, attempts, results,
 idempotency keys, loop occurrences, signals, branch decisions, definition

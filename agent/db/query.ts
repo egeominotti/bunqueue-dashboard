@@ -47,7 +47,8 @@ export function dbQuery(path: string, sql: string): DbQueryResult {
       throw translateDbError(error);
     }
     let columns = statement.columnNames;
-    if (statement.columnTypes.length > columns.length) {
+    const hasDuplicateNames = new Set(columns).size !== columns.length;
+    if (statement.columnTypes.length > columns.length || hasDuplicateNames) {
       const disambiguated = disambiguateColumns(db, trimmed);
       if (disambiguated) {
         statement = disambiguated.stmt;

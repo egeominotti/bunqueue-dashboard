@@ -67,7 +67,10 @@ export function CronPrimaryFields({
         </fieldset>
         {values.mode === 'cron' ? (
           <div className="min-w-56 flex-1">
-            <Field label="Cron expression">
+            <Field
+              label="Cron expression"
+              hint="Standard 5-field syntax, 6 fields with leading seconds, or an official @hourly/@daily-style shortcut. Croner extensions L/W/#/? are rejected by Bunqueue 2.9."
+            >
               <Input
                 name="cron-expression"
                 value={values.schedule}
@@ -123,8 +126,7 @@ export function CronPrimaryFields({
             )
           ) : (
             <span className="text-warning">
-              Preview unavailable: {preview.error} Bunqueue will validate this expression when you
-              create the schedule.
+              Unsupported expression: {preview.error} Fix it before creating the schedule.
             </span>
           )}
         </div>

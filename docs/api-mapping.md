@@ -6,8 +6,8 @@ description: "Every bunqueue HTTP endpoint the dashboard drives, with verified r
 # API mapping & shape gotchas
 
 `bq` (`src/lib/bq.ts`) targets bunqueue's HTTP API. Shapes below were verified
-against the exact [bunqueue v2.8.59 release](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.59)
-(`2bb5b95`); several differ from older dashboard assumptions.
+against the exact [bunqueue v2.9.2 server release](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.2)
+(`c39facb`) and the installable 2.9.0 client; several differ from older dashboard assumptions.
 
 ## Workflow Engine
 
@@ -31,7 +31,7 @@ adapter over the official SQLite store with a persistent official `Engine`:
 | `POST /workflows/cleanup?target=` | Permanently delete bounded terminal states by age |
 
 The adapter uses the same structured-clone MessagePack codec as Bunqueue
-2.8.59 and opens the configured `dataPath` read-only. Mutations never edit
+2.9.0 and opens the configured `dataPath` read-only. Mutations never edit
 SQLite: they execute on the live Engine loaded from an absolute application
 module. Target pinning, stopped-server checks, bounded payloads, terminal-only
 maintenance, serialization, and the agent auth/origin/host gates protect that
@@ -58,7 +58,7 @@ opened. Worker-lease transitions and process-local `discard()` remain inside the
 real Worker process.
 
 For `updateProgress`, numeric values preserve the optional message. Object
-values follow the v2.8.59 Flow Job contract (`progress: 0` plus the serialized
+values follow the v2.9.0 Flow Job contract (`progress: 0` plus the serialized
 object as the message) after strict JSON, prototype, depth, value-count, and
 65,536-byte validation.
 
@@ -66,7 +66,7 @@ object as the message) after strict JSON, prototype, depth, value-count, and
 
 The Bunqueue HTTP server can write rate and concurrency policies but does not
 expose the matching read contracts. Queue Control therefore uses a pinned local
-agent bridge over the official Bunqueue 2.8.59 `Queue` client:
+agent bridge over the official Bunqueue 2.9.0 `Queue` client:
 
 | Agent endpoint | Official Queue contracts |
 | --- | --- |
@@ -82,7 +82,9 @@ serialized. Deduplication-key removal and journal trimming require explicit UI
 confirmation; trimming lifecycle events does not remove metric buckets.
 
 The remaining client methods are deliberately not operator commands:
-worker-lease transitions (`extendJobLock`, `moveJobTo*`) require the owning
+`removeDlqJob` is E2E-validated but deliberately not exposed: its queue + job ID
+input is not an atomic generation precondition when custom IDs can be reused.
+Worker-lease transitions (`extendJobLock`, `moveJobTo*`) require the owning
 worker token; `waitUntilReady`, `disconnect`, and `close` are adapter lifecycle;
 `discard` is process-local; and `forward` owns a long-lived arbitrary-destination
 runtime. Generic Drain/Clean/Obliterate and non-atomic retry paths remain
@@ -94,7 +96,7 @@ as fire-and-forget controls.
 
 | Agent endpoint | Contract |
 | --- | --- |
-| `GET /backup/status?target=` | Official Bunqueue 2.8.59 CLI JSON status |
+| `GET /backup/status?target=` | Official Bunqueue 2.9.0 CLI JSON status |
 | `GET /backup/list?target=` | Remote object list |
 | `POST /backup/configure?target=` | Atomically replace only whitelisted `S3_*` config keys |
 | `POST /backup/now?target=` | Create a consistent backup |
@@ -136,7 +138,7 @@ plus path/existence/size/WAL/SHM/mtime evidence from `/control/status`.
 - **`backoffConfig`** is `{ type: 'fixed'|'exponential', delay, maxDelay? } |
   null`. `null` doesn't mean "no backoff", it means the job used the plain
   numeric `backoff` field with the server's default strategy (exponential,
-  `job.backoff * 2^attemptsMade`, ±50% jitter, capped at 1h). v2.8.59 accepts
+  `job.backoff * 2^attemptsMade`, ±50% jitter, capped at 1h). v2.9.0 accepts
   both numeric and structured backoff inputs. One upstream readback caveat:
   SQLite's list-row serializer currently restores `backoffConfig` and the
   deduplication detail fields as defaults, so `/jobs/list` can omit those
@@ -167,7 +169,7 @@ health rather than request success.
 The upstream endpoints below still exist, but endpoint availability is not the
 same as dashboard authorization. `lib/jobActions.ts::actionGates(state)` is the
 single client-side model used by `JobInspector` and `JobsPro`; it additionally
-fails closed where v2.8.59 cannot prove worker or reverse-flow safety:
+fails closed where v2.9.0 cannot prove worker or reverse-flow safety:
 
 | Action | Endpoint | Upstream scope | Dashboard exposure |
 | --- | --- | --- | --- |
@@ -192,8 +194,8 @@ are Promote, Pause and Resume; DLQ retry and completed-job requeue are absent.
 
 | Action | Method · Path | Body |
 | --- | --- | --- |
-| Add job | `POST /queues/:q/jobs` | `{ name?, data, priority?, delay?, maxAttempts?, backoff?, timeout?, jobId?, removeOnComplete?, removeOnFail?, durable?, ttl?, uniqueKey?, lifo?, tags?, groupId?, dependsOn?, repeat? }` → `{ ok, id }`. `name` defaults to `default` and is separate from user `data`. The dashboard accepts only interval repeat `{ every, limit? }`: v2.8.59's continuation path treats `pattern` as `every ?? 0`, so cron expressions must use `/crons`. The client validates and sends one captured JSON representation, preventing mutable getters or root `toJSON()` from changing repeat, IDs, dependencies or topology after preflight |
-| Add bulk | `POST /queues/:q/jobs/bulk` | `{ jobs: JobInput[] }` → `{ ok, ids }`; the domain shape calls a custom id `customId`, so the client translates dashboard `jobId` before sending. Bulk spec mode preserves tags/groups/dependencies, structured backoff, repeat/dedup, and the remaining v2.8.59 JobInput controls. The dashboard incrementally serializes at most 10,000 jobs, caps the exact translated JSON envelope at 64 MiB, validates repeat/ID/dependency/topology safety from those captured fragments, and sends the same string so getters or `toJSON()` cannot create a second-pass bypass |
+| Add job | `POST /queues/:q/jobs` | `{ name?, data, priority?, delay?, maxAttempts?, backoff?, timeout?, jobId?, removeOnComplete?, removeOnFail?, durable?, ttl?, uniqueKey?, lifo?, tags?, groupId?, dependsOn?, repeat? }` → `{ ok, id }`. `name` defaults to `default` and is separate from user `data`. The dashboard accepts only interval repeat `{ every, limit? }`: v2.9.0's continuation path treats `pattern` as `every ?? 0`, so cron expressions must use `/crons`. The client validates and sends one captured JSON representation, preventing mutable getters or root `toJSON()` from changing repeat, IDs, dependencies or topology after preflight |
+| Add bulk | `POST /queues/:q/jobs/bulk` | `{ jobs: JobInput[] }` → `{ ok, ids }`; the domain shape calls a custom id `customId`, so the client translates dashboard `jobId` before sending. Bulk spec mode preserves tags/groups/dependencies, structured backoff, repeat/dedup, and the remaining v2.9.0 JobInput controls. The dashboard incrementally serializes at most 10,000 jobs, caps the exact translated JSON envelope at 64 MiB, validates repeat/ID/dependency/topology safety from those captured fragments, and sends the same string so getters or `toJSON()` cannot create a second-pass bypass |
 | Update data | `PUT /jobs/:id/data` | `{ data }` |
 | Change priority | `PUT /jobs/:id/priority` | `{ priority, lifo? }` |
 | Change/move delay | `PUT /jobs/:id/delay` · `POST /jobs/:id/move-to-delayed` | `{ delay }` (ms) |

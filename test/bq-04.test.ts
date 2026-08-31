@@ -59,7 +59,7 @@ describe('bq request construction', () => {
     );
   });
 
-  test('v2.8.59 job and cron names are preserved separately from data', async () => {
+  test('v2.9.0 job and cron names are preserved separately from data', async () => {
     await bq.addJob('reports', {
       name: 'render-report',
       data: { name: 'customer supplied data' },

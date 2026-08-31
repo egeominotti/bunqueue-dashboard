@@ -94,7 +94,7 @@ export function parseRepeat(
     if (raw.pattern !== undefined) {
       return {
         ok: false,
-        msg: 'repeat.pattern is unsafe in bunqueue v2.8.59; use repeat.every or a Cron schedule',
+        msg: 'repeat.pattern is unsafe in bunqueue v2.9.0; use repeat.every or a Cron schedule',
       };
     }
     const every = raw.every;

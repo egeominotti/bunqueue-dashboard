@@ -15,7 +15,7 @@ Your operations console for a single queue: pause, promote, set explicit policie
 
 Start with the **queue picker** at the top and choose a queue by name. Next to it, a colored **status dot** shows whether that queue is running, and an inline **message** reports the result of your most recent action. The first queue is selected for you on load.
 
-Once a queue is selected, a row of eight count cards summarizes every v2.8.59 job state (numbers shown with thousands separators), followed by cards for every control you can operate.
+Once a queue is selected, a row of eight count cards summarizes every v2.9.0 job state (numbers shown with thousands separators), followed by cards for every control you can operate.
 
 | Element | What it tells you |
 |---------|-------------------|
@@ -39,7 +39,7 @@ and the **Stall detection** and **DLQ policy** forms.
 
 **Pause / Resume**, one button toggles the queue between running and paused; its label and color follow the current state.
 
-**Requeue completed** is visible but disabled. Bunqueue v2.8.59's
+**Requeue completed** is visible but disabled. Bunqueue v2.9.0's
 `retryCompleted` path resets the job without reconstructing dependency
 registration or the ordering guarantees of its original flow.
 
@@ -72,7 +72,7 @@ To adjust the dead-letter policy:
 
 1. Open the **DLQ policy** form.
 2. If upstream auto-retry is already enabled, turn it off. The dashboard never
-   permits enabling it because v2.8.59 cannot verify hidden reverse flow
+   permits enabling it because v2.9.0 cannot verify hidden reverse flow
    dependencies. Retry interval and max-auto-retries remain editable.
 3. Read **Max age** and **Max entries** as server state only. They are disabled:
    lowering `maxEntries` can immediately evacuate entries, and `maxAge` drives
@@ -80,7 +80,7 @@ To adjust the dead-letter policy:
 4. Click **Save**. The request deliberately omits `maxAge` and `maxEntries`.
 
 ::: warning Flow-destructive operations fail closed
-**Drain** and **Clean** are visible but disabled. v2.8.59 has no
+**Drain** and **Clean** are visible but disabled. v2.9.0 has no
 reverse-dependency lookup or atomic topology mutation, so no queue scan or
 confirmation can prove that deleting those jobs will not strand a cross-queue
 parent. **Obliterate**, job Cancel and DLQ Purge follow the same policy. Every

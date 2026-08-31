@@ -1,12 +1,12 @@
 ---
 title: DLQ Control
-description: "Pick one queue to inspect and export failed jobs; all retry and purge mutations fail closed under the v2.8.59 contract."
+description: "Pick one queue to inspect and export failed jobs; all retry and purge mutations fail closed under the v2.9.0 contract."
 ---
 
 # DLQ Control
 
 Pick one queue to inspect and export the jobs that failed for good. All row,
-bulk and queue-wide retry mutations are unavailable under the v2.8.59
+bulk and queue-wide retry mutations are unavailable under the v2.9.0
 fail-closed policy.
 
 **Where:** open `/dlq-control` from the sidebar.
@@ -43,14 +43,14 @@ request. Export is a browser-side download and does not change the queue.
 
 ::: warning An exact ID is not an atomic identity
 Between `GET /jobs/:id` and `POST /queues/:q/dlq/retry`, the observed job can be
-removed and a new job created under the same ID. Bunqueue v2.8.59 gives the POST
+removed and a new job created under the same ID. Bunqueue v2.9.0 gives the POST
 no generation/state/topology precondition, so even an exact, fresh,
 topology-empty snapshot cannot make row retry safe.
 :::
 
 ## Good to know
 
-- **Row retry, Retry all and Purge stay disabled** for every queue and page.
+- **Individual removal is not exposed; Retry all and Purge stay disabled** for every queue and page.
 - **If the DLQ is empty**, you'll see "Dead letter queue is empty" and the **Entries** card reads `0`.
 - **The dropdown count and the Entries card update on slightly different clocks**, so after an external mutation or server-side retention event the number in parentheses may briefly lag behind the card. Give it a moment and they'll line up.
 - **If the server can't be reached**, a banner with a **Retry** button appears and the last loaded rows stay on screen so you don't lose your place.
@@ -60,7 +60,8 @@ topology-empty snapshot cannot make row retry safe.
 - Every request uses the `bq` client against the bunqueue HTTP API, never the legacy `api` layer.
 - Queue list: `GET /dashboard/queues`, polled every **30 s** (this feeds the dropdown counts).
 - Table: `GET /queues/:q/dlq?limit=25&offset=…`, polled at the connection store's global cadence (**default 3 s**, floored at 500 ms). Response is flat, `{ ok, entries[], total }`, no `data` wrapper.
-- The page never calls `POST /queues/:q/dlq/retry` (with or without a
-  `jobId`) or the purge route; all corresponding controls are disabled.
+- The page never calls a DLQ retry, removal or purge route; all corresponding
+  controls are disabled because no upstream mutation has an atomic generation
+  and topology precondition.
 - A DLQ entry is `{ job, enteredAt, reason, error, attempts[] }`, the id and attempt count live nested under `job`, with no top-level `id`.
 :::

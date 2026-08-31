@@ -181,6 +181,18 @@ function withDatabase<T>(
   dataPath: string,
   admission: ManagedDatabaseAdmission | undefined,
   operation: (path: string) => T | Promise<T>
-): Promise<T> {
-  return admission ? admission(operation) : Promise.resolve(operation(dataPath));
+): Promise<T | RouteResponse> {
+  return admission
+    ? admission((snapshot) =>
+        snapshot.storageMode === 'sqlite'
+          ? operation(snapshot.dataPath)
+          : {
+              status: 409,
+              body: {
+                ok: false,
+                error: `Database inspection requires Bunqueue SQLite storage; ${snapshot.storageMode} is active`,
+              },
+            }
+      )
+    : Promise.resolve(operation(dataPath));
 }

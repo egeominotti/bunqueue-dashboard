@@ -1,13 +1,13 @@
 ---
 title: Dead Letter Queue
-description: "Inspect, filter and export failed jobs while every DLQ retry and purge path fails closed under the v2.8.59 contract."
+description: "Inspect, filter and export failed jobs while every DLQ retry and purge path fails closed under the v2.9.0 contract."
 ---
 
 # Dead Letter Queue
 
 This screen is where jobs land after they fail and run out of retries. You can
 inspect, filter and export failures; every manual, bulk and queue-wide retry
-control is unavailable under the v2.8.59 fail-closed policy.
+control is unavailable under the v2.9.0 fail-closed policy.
 
 **Where:** open `/dlq` from the sidebar.
 
@@ -34,10 +34,11 @@ Once you pick a queue, its failed jobs list in a table:
 | **Reason** | Why it failed, shown as a red badge (for example `max_attempts_exceeded`). |
 | **Error** | The error message, shortened to fit. A dash means no message was recorded. |
 | **Entered** | How long ago the job landed in the dead letter queue. |
-| _(last column)_ | A disabled retry button whose tooltip explains the fail-closed policy. |
+| _(last column)_ | A disabled retry button; destructive removal is not exposed. |
 
 ::: tip
-Jobs don't have names in bunqueue, so the Job ID is how you identify a failure. Click it to see the full timeline and error detail.
+Jobs can have first-class names in Bunqueue 2.9, but names are not unique and this table uses the
+Job ID as the stable failure identifier. Click it to see the name, full timeline, and error detail.
 :::
 
 ## What you can do
@@ -49,7 +50,6 @@ Jobs don't have names in bunqueue, so the Job ID is how you identify a failure. 
 - **Open a job**, click any Job ID to inspect its full history.
 - **Page through**, the pager moves 25 entries at a time.
 - **Export this page**, download the currently loaded entries as CSV.
-
 **Retry one job** is visible but disabled. A preliminary exact-ID GET cannot
 authorize the separate retry POST: the endpoint has no atomic precondition for
 job generation, state or topology, so the original job can disappear and a
@@ -61,7 +61,7 @@ problem that the targeted DLQ can move while the request is in flight.
 **Purge all** is visible but disabled because deletion can strand hidden cross-queue dependents.
 
 ::: warning Atomic safety takes precedence
-[Bunqueue v2.8.59](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.59)
+[Bunqueue v2.9.2](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.2)
 exposes no generation/state/topology-conditional DLQ retry and no
 reverse-dependency-aware purge. A warning, confirmation, pinned target or fresh
 queue/job scan cannot make either mutation atomic, so the dashboard calls none
@@ -75,6 +75,9 @@ of those routes.
 - **The three per-queue cards can go blank.** If the queue's stats fail to load, Top Reason, Pending Retry, and Failure Types fall back to placeholders, but the table still works. **Total in DLQ** is always independent.
 - **Total in DLQ can lag by a few seconds.** It refreshes on a slower cycle than the rest of the page, so after an external mutation or server-side retention event the grand total may take a moment to catch up.
 - **Every Retry / Retry All / Purge All control remains disabled by design**, even after selecting a queue.
+- **Individual permanent removal is unavailable.** Bunqueue 2.9's
+  `Queue.removeDlqJob()` still accepts only queue + job ID, which cannot prove a
+  custom ID was not reused for a different generation after the row was read.
 - **Existing server retention can remove entries without a dashboard action.**
   `maxEntries` may evacuate entries immediately and `maxAge` drives destructive
   expiry. Queue Control shows both values read-only and cannot save them.
@@ -82,6 +85,6 @@ of those routes.
 ::: details Under the hood (for developers)
 - Uses the shape-verified **`bq`** client throughout.
 - Two polls run in parallel. The queue list (for the grand total, tiles, and dropdown counts) refreshes every **10s** via `GET /dashboard/queues`. The selected queue's entries (`GET /queues/:q/dlq`) and stats (`GET /queues/:q/dlq/stats`) refresh on the global interval (default **3s**, set in Settings); a stats failure is swallowed so the table still renders.
-- Row, queue-wide and global retry controls are disabled. No
-  `POST /queues/:q/dlq/retry` or purge request is sent from this page.
+- Row, queue-wide and global retry/removal controls are disabled. No DLQ
+  mutation request is sent from this page.
 :::

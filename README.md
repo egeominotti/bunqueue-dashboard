@@ -26,7 +26,7 @@ The full dashboard running on sample data, no server needed.
 
 ![React 19](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
 ![Vite 8](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
-![Bun](https://img.shields.io/badge/Bun-1.3-000?logo=bun&logoColor=white)
+![Bun](https://img.shields.io/badge/Bun-1.4-000?logo=bun&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
 ![Oxlint + Oxfmt](https://img.shields.io/badge/Oxc-Oxlint%20%2B%20Oxfmt-7C3AED)
 
@@ -90,13 +90,13 @@ The full dashboard running on sample data, no server needed.
 bunqueue exposes a rich HTTP API, but operating it by hand (curl, ad-hoc scripts) is slow and
 error-prone. This dashboard is a production-oriented operator console: it exposes the verified,
 safe subset of the API, fails closed where
-[v2.8.59](https://github.com/egeominotti/bunqueue/releases/tag/v2.8.59) lacks atomic
+[Bunqueue 2.9.x](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.2) lacks atomic
 flow-safety guarantees, and also manages the
 server *process* through a separate guarded agent.
 
 It uses Bunqueue's public HTTP API (`:6790`) for ordinary remote observability and a small local
 **control agent** for process, FlowProducer, Workflow Engine, database, and backup operations. The
-agent is pinned to the server it manages and uses the exact installed Bunqueue 2.8.59 client
+agent is pinned to the server it manages and uses the exact installable Bunqueue 2.9.0 npm client
 contracts; it never patches Bunqueue internals.
 
 ## Features
@@ -111,22 +111,24 @@ contracts; it never patches Bunqueue internals.
 | **Cron** | Control ▸ Cron Manager | Submit acknowledged cron/interval upserts and delete schedules |
 | **Workflow Engine** | Workflow ▸ Overview / Executions / Waiting / Compensation / Archive | Start, recover, signal, inspect, compensate, archive and clean durable executions |
 | **Job Flows** | Workflow ▸ Job Flows | Explore DAGs, run all FlowProducer create modes and operate safe Flow Job methods |
-| **DLQ** | Control ▸ DLQ | Inspect entries, failure history and CSV exports; retry and purge stay unavailable |
+| **DLQ** | Control ▸ DLQ | Inspect/export failures; removal, retry and purge stay unavailable without atomic generation/topology preconditions |
 | **Webhooks** | Control ▸ Webhooks | Create / enable / delete job-event webhooks |
 | **Ops** | Control ▸ Diagnostics | Health, ping, storage, memory, connections, totals |
 | **S3 backup** | Management ▸ S3 Backup | Configure, inspect, list, create and guarded-restore official snapshots |
 | **Browse** | Queues / Jobs / DLQ / Cron / Metrics / Workers / Logs | Read-only browsing with basic actions |
 
-> Job actions are gated by the v2.8.59 flow contract. Every DLQ retry and completed-job requeue is
+> Job actions are gated by the v2.9.0 flow contract. Every DLQ retry and completed-job requeue is
 > unavailable: the DLQ GET + POST sequence has no atomic generation/state/topology precondition and
 > can target a job recreated under the same ID, while `retryCompleted` does not rebuild dependency
 > registration or flow order. Cancel, Discard, Drain, Clean, Obliterate and DLQ Purge also fail
-> closed. DLQ `maxAge`/`maxEntries` are read-only, auto-retry can only be disabled, and Copilot's only
+> closed. Bunqueue 2.9's `Queue.removeDlqJob()` also accepts only queue + job ID, so custom-ID reuse
+> prevents the dashboard from proving that a later deletion still targets the observed generation.
+> DLQ `maxAge`/`maxEntries` are read-only, auto-retry can only be disabled, and Copilot's only
 > mutations are Promote, Pause and Resume.
 
 ## Quick start
 
-**Prerequisites:** [Bun](https://bun.sh) ≥ 1.3 and a reachable bunqueue server (or let the control
+**Prerequisites:** [Bun](https://bun.sh) ≥ 1.4.0 and a reachable bunqueue server (or let the control
 agent start one for you from the **Server** page).
 
 ### Run from npm (no clone)
@@ -297,7 +299,7 @@ The canonical gate must be green before a change is considered done; CI runs the
 bun run quality   # architecture, lint/build, size, docs, coverage, real E2E, packed-bin smoke, audit
 ```
 
-The E2E stage starts disposable Bunqueue 2.8.59 processes and exercises the complete FlowProducer,
+The E2E stage starts disposable Bunqueue 2.9.0 processes and exercises the complete FlowProducer,
 Workflow Engine, and Queue SDK operator bridges. Run it alone with `bun run test:e2e`.
 
 The blocking browser job builds the production bundle under `/e2e/dashboard`, starts an

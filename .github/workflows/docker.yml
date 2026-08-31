@@ -24,7 +24,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  BUN_VERSION: 1.3.14
+  BUN_VERSION: 1.4.0
 
 jobs:
   # The same canonical gate as ci.yml. Without it a commit rejected by CI could

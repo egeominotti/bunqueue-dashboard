@@ -15,7 +15,7 @@ been superseded by a Pro page at the plain path (the classic version moved to a
 
 ![Queue Detail (classic)](../screenshots/queue-detail.png)
 
-**What it shows:** The single-queue drill-in, opened by clicking a row on the classic Queues list. The screenshot shows the `emails` queue: six stat cards, a 12-row Recent Jobs table and a Configuration section. The route first verifies real membership through `/queues/summary`; an unknown queue exposes no mutations. Pause/Resume is guarded by server+queue ownership and a fresh membership check. Drain and Obliterate remain visible but disabled because v2.8.59 cannot prove cross-queue flow safety. Rate-limit and concurrency cards perform explicitly labelled blind desired-state writes with safe-integer validation, a mandatory rate window, explicit TTL mode, typed queue confirmation for clear, and timestamped receipts.
+**What it shows:** The single-queue drill-in, opened by clicking a row on the classic Queues list. The screenshot shows the `emails` queue: six stat cards, a 12-row Recent Jobs table and a Configuration section. The route first verifies real membership through `/queues/summary`; an unknown queue exposes no mutations. Pause/Resume is guarded by server+queue ownership and a fresh membership check. Drain and Obliterate remain visible but disabled because v2.9.0 cannot prove cross-queue flow safety. Rate-limit and concurrency cards perform explicitly labelled blind desired-state writes with safe-integer validation, a mandatory rate window, explicit TTL mode, typed queue confirmation for clear, and timestamped receipts.
 
 **Differences vs the Pro page:** no Pro drill-in exists; [Queue Control](/guide/queue-control) offers the same actions plus stall/DLQ configuration, but via a queue dropdown rather than a per-queue URL.
 
@@ -75,7 +75,7 @@ attempt count and latest failure time.
 cross-queue filters plus CSV export) or
 [`/dlq-control`](/guide/dlq-control) (focused single-queue inspection). Both
 read the correct nested shape; every row/bulk/queue-wide retry control is
-disabled by the v2.8.59 atomicity policy.
+disabled by the v2.9.0 atomicity policy.
 
 ## Cron (classic)
 

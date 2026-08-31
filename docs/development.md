@@ -51,7 +51,7 @@ before publishing. It executes, in order:
 
 CI also runs `bun run test:e2e:browser` as a separate blocking matrix on Chromium, Firefox, and
 WebKit. The suite uses the production bundle, a non-root `BASE_PATH`, an authenticated disposable
-Bunqueue 2.8.59 process, and a temporary database. It verifies the token gate, full sidebar
+Bunqueue 2.9.0 process, and a temporary database. It verifies the token gate, full sidebar
 navigation, SSE reconnection after an actual upstream restart, confirmed Cron mutations, and
 automated WCAG A/AA rules. For a local first run:
 

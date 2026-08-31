@@ -103,7 +103,7 @@ const FLOW_DATA_KEYS = [
 ] as const;
 
 /**
- * v2.8.59's UpdateJobData replaces the complete payload. FlowProducer stores
+ * v2.9.0's UpdateJobData replaces the complete payload. FlowProducer stores
  * topology in reserved data keys as well as the public parent/children fields,
  * so a normal JSON edit would silently make FlowReader reject the graph.
  */
@@ -122,7 +122,7 @@ export function jobDataReadOnlyReason(
     !Array.isArray(data) &&
     FLOW_DATA_KEYS.some((key) => Object.hasOwn(data, key));
   if (job.parentId || (job.childrenIds?.length ?? 0) > 0 || hasReservedFlowData) {
-    return 'Data is read-only for Flow jobs because Bunqueue v2.8.59 replaces the full payload and would remove structural metadata.';
+    return 'Data is read-only for Flow jobs because Bunqueue v2.9.0 replaces the full payload and would remove structural metadata.';
   }
   return null;
 }

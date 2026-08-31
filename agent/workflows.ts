@@ -1,5 +1,5 @@
 /**
- * Read-only facade for Bunqueue 2.8.59 Workflow Engine observability.
+ * Read-only facade for Bunqueue 2.9.0 Workflow Engine observability.
  * Persistence, decoding and validation live behind this stable public module.
  */
 export { workflowExecution } from './workflow/detail';

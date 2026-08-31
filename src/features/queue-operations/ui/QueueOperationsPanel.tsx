@@ -117,7 +117,7 @@ export function QueueOperationsPanel({
         action={busy ? <span className="font-mono text-xs text-accent">{busy}...</span> : undefined}
       />
       <p className="mb-5 max-w-3xl text-xs leading-5 text-faint">
-        Live Bunqueue 2.8.59 limit, deduplication, metric, and event-journal contracts. Requests are
+        Live Bunqueue 2.9.0 limit, deduplication, metric, and event-journal contracts. Requests are
         pinned to the server managed by this control agent.
       </p>
       <div className="mb-5 flex flex-wrap items-end gap-3 border-b border-line pb-5">

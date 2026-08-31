@@ -19,8 +19,7 @@ import {
 } from './validation';
 
 const READ_ROUTE = /^\/queue-operations\/([^/]+)\/(limits|deduplication|metrics)$/;
-const MUTATION_ROUTE =
-  /^\/queue-operations\/([^/]+)\/(deduplication\/remove|events\/trim)$/;
+const MUTATION_ROUTE = /^\/queue-operations\/([^/]+)\/(deduplication\/remove|events\/trim)$/;
 
 export async function routeQueueOperationsRequest(
   request: Request,

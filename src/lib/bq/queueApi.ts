@@ -37,7 +37,7 @@ export const queueApi = {
     ),
   retryCompleted: (_queue: string, _id?: string): never => {
     throw new TypeError(
-      'Completed-job requeue is unavailable in Bunqueue v2.8.59 because flow dependency registration is not rebuilt.'
+      'Completed-job requeue is unavailable in Bunqueue v2.9.0 because flow dependency registration is not rebuilt.'
     );
   },
   setRateLimit: (queue: string, limit: number, duration?: number, ttl?: number) =>
@@ -66,7 +66,7 @@ export const queueApi = {
   setDlqConfig: (queue: string, config: Partial<DlqConfig>) => {
     if (config.autoRetry === true) {
       throw new TypeError(
-        'DLQ auto-retry is unavailable: Bunqueue v2.8.59 does not rebuild flow dependency registration.'
+        'DLQ auto-retry is unavailable: Bunqueue v2.9.0 does not rebuild flow dependency registration.'
       );
     }
     if (config.maxAge !== undefined || config.maxEntries !== undefined) {
@@ -84,7 +84,7 @@ export const queueApi = {
     srv<{ ok: boolean; stats: DlqStatsFull }>(`/queues/${queueHttpPathSegment(queue)}/dlq/stats`),
   retryDlq: (_queue: string, _jobId?: string): never => {
     throw new TypeError(
-      'DLQ retry is unavailable in Bunqueue v2.8.59 because the endpoint has no atomic job-generation, state, or flow-topology precondition.'
+      'DLQ retry is unavailable in Bunqueue v2.9.0 because the endpoint has no atomic job-generation, state, or flow-topology precondition.'
     );
   },
   purgeDlq: (queue: string) =>

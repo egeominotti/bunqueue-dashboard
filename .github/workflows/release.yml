@@ -29,7 +29,7 @@ permissions:
   attestations: write # write the attestation to the repo
 
 env:
-  BUN_VERSION: 1.3.14
+  BUN_VERSION: 1.4.0
 
 jobs:
   release:

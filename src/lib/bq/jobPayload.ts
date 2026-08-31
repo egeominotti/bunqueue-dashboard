@@ -25,7 +25,7 @@ function assertSafeRepeat(repeat: RepeatOptions | undefined): void {
   const unsupported = Object.keys(repeat).filter((key) => key !== 'every' && key !== 'limit');
   if (unsupported.length) {
     throw new TypeError(
-      `Unsupported repeat option(s): ${unsupported.join(', ')}. bunqueue v2.8.59 pattern repeats are unsafe; use the Cron API instead.`
+      `Unsupported repeat option(s): ${unsupported.join(', ')}. bunqueue v2.9.0 pattern repeats are unsafe; use the Cron API instead.`
     );
   }
   if (!Number.isSafeInteger(repeat.every) || repeat.every < 1 || repeat.every > MAX_REPEAT_MS) {
@@ -47,7 +47,7 @@ function assertNoUnsafeFields(job: BulkJobBody): void {
   const unsafe = UNSAFE_FIELDS.filter((field) => raw[field] !== undefined);
   if (unsafe.length) {
     throw new TypeError(
-      `Unsupported Bunqueue v2.8.59 enqueue option(s): ${unsafe.join(', ')}. Flow topology must use the atomic flow API; inert compatibility fields are not sent.`
+      `Unsupported Bunqueue v2.9.0 enqueue option(s): ${unsafe.join(', ')}. Flow topology must use the atomic flow API; inert compatibility fields are not sent.`
     );
   }
 }
@@ -55,9 +55,7 @@ function assertNoUnsafeFields(job: BulkJobBody): void {
 function manageableId(field: string, id: string): void {
   const error = opaqueHttpIdError(id);
   if (error) {
-    throw new TypeError(
-      `${field}: ${error}. The job would not be manageable through v2.8.59 HTTP.`
-    );
+    throw new TypeError(`${field}: ${error}. The job would not be manageable through v2.9.0 HTTP.`);
   }
 }
 

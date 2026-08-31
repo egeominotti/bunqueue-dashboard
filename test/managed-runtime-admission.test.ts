@@ -26,6 +26,45 @@ const running: StatusSnapshot = {
 };
 
 describe('managed SDK runtime admission', () => {
+  test('PostgreSQL mode hides SQLite-only status, inspection, and backup operations', async () => {
+    const postgresConfig: ServerConfig = {
+      ...config,
+      extraEnv: {
+        BUNQUEUE_STORAGE_DRIVER: 'postgres',
+        BUNQUEUE_POSTGRES_URL: 'postgres://example.invalid/bunqueue',
+      },
+    };
+    const postgresRunning: StatusSnapshot = {
+      ...running,
+      config: postgresConfig,
+      runningConfig: postgresConfig,
+    };
+    const harness = managerHarness(postgresRunning);
+    let dbReads = 0;
+    harness.dbStats = async () => {
+      dbReads++;
+      return null;
+    };
+    const handle = createFetchHandler(
+      harness as unknown as ProcessManager,
+      { allowedOrigins: [] },
+      workflowRuntime(),
+      backupRunner(),
+      { close: async () => undefined } as QueueOperationsPort
+    );
+
+    const status = await handle(new Request(`${agentTarget()}/control/status`));
+    expect(status.status).toBe(200);
+    expect(await status.json()).toMatchObject({ db: null });
+    for (const path of ['/db/info', '/backup/status']) {
+      const response = await handle(new Request(`${agentTarget()}${path}`));
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ error: expect.stringContaining('SQLite') });
+    }
+    expect(dbReads).toBe(0);
+    await handle.close();
+  });
+
   test('rejects a Queue mutation whose body completes after restart', async () => {
     const harness = managerHarness(running);
     let trims = 0;
@@ -167,7 +206,9 @@ function managerHarness(initial: StatusSnapshot) {
     getStatus() {
       return this.current;
     },
-    getConfig: () => config,
+    getConfig() {
+      return this.current.runningConfig ?? this.current.config;
+    },
     dbStats: async () => null,
     restart: async () => initial,
   };

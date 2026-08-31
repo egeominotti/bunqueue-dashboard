@@ -51,7 +51,7 @@ export interface StorageStatus {
   [key: string]: unknown;
 }
 
-/** Exact GET /ready response union in Bunqueue 2.8.59. */
+/** Exact GET /ready response union in Bunqueue 2.9.0. */
 export type ReadinessResponse =
   | { ok: true; ready: true }
   | {
@@ -60,7 +60,7 @@ export type ReadinessResponse =
       storage: { diskFull: true; error: string | null; since: number | null };
     };
 
-/** Exact JSON counter payload returned by GET /metrics in Bunqueue 2.8.59. */
+/** Exact JSON counter payload returned by GET /metrics in Bunqueue 2.9.0. */
 export interface MetricsResponse {
   ok: true;
   metrics: {

@@ -61,7 +61,7 @@ try {
   console.log(
     JSON.stringify(
       {
-        bunqueue: '2.8.59',
+        bunqueue: '2.9.0',
         createOperations: creations.operations,
         inspections: 14,
         mutations: 12,
@@ -181,7 +181,7 @@ async function exerciseSafeMutations(): Promise<unknown> {
   const logs = asRecord((await readJson(httpPort, `/jobs/${encodeURIComponent(job.id)}/logs`)).data);
   assert(
     progress.progress === 0 && progress.message === JSON.stringify(objectProgress),
-    'object Flow progress did not follow the Bunqueue 2.8.59 wire contract'
+    'object Flow progress did not follow the Bunqueue 2.9.0 wire contract'
   );
   assert(logs.count === 1, 'Flow clearLogs did not preserve keepLogs');
   const json = asRecord(await inspectFlowJob(config, job, 'toJSON'));

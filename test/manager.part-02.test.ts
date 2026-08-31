@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
 import { ProcessManager, type ServerConfig } from '../agent/manager';
+import { createFetchHandler } from '../agent/server';
 
 describe('ProcessManager', () => {
   test('start validates invalid port defaults read from the environment before changing status', async () => {
@@ -53,6 +54,83 @@ describe('ProcessManager', () => {
     // …and the child really received that port, not the extraEnv one.
     expect(m.getLogs().some((l) => l.stream === 'stdout' && l.line.trim() === '6790')).toBe(true);
     await m.stop();
+  });
+
+  test('PostgreSQL mode does not leak a conflicting SQLite data path to Bunqueue 2.9', async () => {
+    const m = new ProcessManager();
+    m.setConfig({
+      command: 'env',
+      dataPath: './data/ignored.db',
+      extraEnv: {
+        BUNQUEUE_STORAGE_DRIVER: 'postgres',
+        BUNQUEUE_POSTGRES_URL: 'postgres://example.invalid/bunqueue',
+      },
+    });
+    await m.start();
+    await Bun.sleep(300);
+    const output = m
+      .getLogs()
+      .filter((line) => line.stream === 'stdout')
+      .map((line) => line.line);
+    expect(output).toContain('BUNQUEUE_STORAGE_DRIVER=postgres');
+    expect(output.some((line) => line.startsWith('BUNQUEUE_DATA_PATH='))).toBe(false);
+    await m.stop();
+  });
+
+  test('memory mode removes every inherited SQLite path alias', async () => {
+    const m = new ProcessManager();
+    m.setConfig({
+      command: 'env',
+      dataPath: './data/ignored.db',
+      extraEnv: {
+        BUNQUEUE_STORAGE_DRIVER: 'memory',
+        BUNQUEUE_DATA_PATH: './one.db',
+        BQ_DATA_PATH: './two.db',
+        DATA_PATH: './three.db',
+        SQLITE_PATH: './four.db',
+      },
+    });
+    await m.start();
+    await Bun.sleep(300);
+    const output = m
+      .getLogs()
+      .filter((line) => line.stream === 'stdout')
+      .map((line) => line.line);
+    expect(output).toContain('BUNQUEUE_STORAGE_DRIVER=memory');
+    for (const key of ['BUNQUEUE_DATA_PATH', 'BQ_DATA_PATH', 'DATA_PATH', 'SQLITE_PATH']) {
+      expect(output.some((line) => line.startsWith(`${key}=`))).toBe(false);
+    }
+    await m.stop();
+  });
+
+  test('an unsupported Bunqueue 2.9 storage driver fails before changing process status', async () => {
+    const m = new ProcessManager();
+    m.setConfig({ extraEnv: { BUNQUEUE_STORAGE_DRIVER: 'postgress' } });
+
+    await expect(m.start()).rejects.toThrow('Unsupported storage driver: postgress');
+    expect(m.getStatus()).toMatchObject({ status: 'stopped', pid: null });
+  });
+
+  test('keeps status and config recovery reachable with an invalid storage driver', async () => {
+    const m = new ProcessManager();
+    m.setConfig({ extraEnv: { BUNQUEUE_STORAGE_DRIVER: 'postgress' } });
+    const handle = createFetchHandler(m, { allowedOrigins: [] });
+
+    const status = await handle(new Request('http://127.0.0.1:6800/control/status'));
+    expect(status.status).toBe(200);
+    expect(await status.json()).toMatchObject({ status: 'stopped', db: null });
+    const config = await handle(new Request('http://127.0.0.1:6800/control/config'));
+    expect(config.status).toBe(200);
+    expect(await config.json()).toMatchObject({
+      extraEnv: { BUNQUEUE_STORAGE_DRIVER: 'postgress' },
+    });
+    const start = await handle(
+      new Request('http://127.0.0.1:6800/control/start', { method: 'POST' })
+    );
+    expect(start.status).toBe(400);
+    expect(await start.json()).toMatchObject({ error: 'Unsupported storage driver: postgress' });
+    expect(m.getStatus()).toMatchObject({ status: 'stopped', pid: null });
+    await handle.close();
   });
 
   // The reader's line buffer only shrank at a '\n', and the ring buffer trims by

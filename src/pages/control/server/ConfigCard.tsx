@@ -209,7 +209,7 @@ export function ConfigCard({
       >
         <Field
           label="Command"
-          hint="The exact command the agent runs to launch bunqueue. It receives HTTP_PORT, TCP_PORT and BUNQUEUE_DATA_PATH in its environment. The default resolves Bunqueue 2.8.59 with bunx; offline installs can point at a local entry."
+          hint="The exact command the agent runs to launch bunqueue. It receives HTTP_PORT and TCP_PORT; BUNQUEUE_DATA_PATH is injected only for SQLite and removed in non-SQLite modes. The default resolves Bunqueue 2.9.0 with bunx; offline installs can point at a local entry."
         >
           <Input
             name="server-command"
@@ -218,7 +218,7 @@ export function ConfigCard({
             value={value.command}
             disabled={busy}
             onChange={(e) => set({ command: e.target.value })}
-            placeholder="bunx bunqueue@2.8.59 start"
+            placeholder="bunx bunqueue@2.9.0 start"
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">
@@ -249,7 +249,7 @@ export function ConfigCard({
         </div>
         <Field
           label="Data path"
-          hint="SQLite database file, relative to the agent's working directory. The parent folder must already exist — SQLite creates the file, not the directory."
+          hint="Durable SQLite path for the managed broker and Workflow Engine, relative to the agent's working directory. In PostgreSQL mode the agent keeps it for Workflow state but does not pass it to the broker."
         >
           <Input
             name="server-data-path"
@@ -262,7 +262,7 @@ export function ConfigCard({
         </Field>
         <Field
           label="Environment variables"
-          hint="Injected into the server process on start, on top of the ports + data path. Applies on the next restart."
+          hint="Injected on start. Memory and PostgreSQL modes remove inherited SQLite path aliases so Bunqueue cannot start with ambiguous storage. Applies on the next restart."
         >
           <EnvVarsEditor
             key={currentEditor?.id ?? 'initial'}

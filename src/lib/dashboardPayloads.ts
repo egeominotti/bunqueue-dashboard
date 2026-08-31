@@ -9,7 +9,7 @@ const WEBHOOK_EVENT_SET = new Set([
   'job.completed',
   'job.failed',
   'job.progress',
-  // v2.8.59 keeps this legacy value readable in persisted registries even
+  // v2.9.0 keeps this legacy value readable in persisted registries even
   // though new registrations cannot request it and the server never emits it.
   'job.stalled',
 ]);
@@ -64,9 +64,9 @@ function payloadData(value: unknown, label: string): Record<string, unknown> {
   return data;
 }
 
-/** `/queues/summary` is a bare array in v2.8.59, so validate it explicitly. */
+/** `/queues/summary` is a bare array in v2.9.0, so validate it explicitly. */
 export function parseQueueSummaryPayload(value: unknown): QueueSummaryFull[] {
-  // v2.8.59 returns every queue from this endpoint and defines no upper bound.
+  // v2.9.0 returns every queue from this endpoint and defines no upper bound.
   // response.json() has already materialized the allocation here, so rejecting
   // a valid 10,001st row only makes the dashboard semantically incorrect.
   if (!Array.isArray(value)) {
@@ -140,7 +140,7 @@ export function parseWorkersPayload(value: unknown): WorkersPayload {
       if (!count(worker.failedJobs)) issues.push('failedJobs');
       if (!optionalText(worker.currentJob, 1_024)) issues.push('currentJob');
       // registeredAt is supplied by the worker clock, while uptime is derived
-      // by the server clock. A valid v2.8.59 worker can therefore be negative.
+      // by the server clock. A valid v2.9.0 worker can therefore be negative.
       if (!finiteNumber(worker.uptime)) issues.push('uptime');
     }
     if (id) ids.add(id);

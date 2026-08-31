@@ -39,12 +39,13 @@ try {
   await queue.waitUntilReady();
   await validateLimits();
   await validateDeduplication();
-  await validateMaxedAndMetrics();
+  const failedJobId = await validateMaxedAndMetrics();
+  await validateDlqRemoval(failedJobId);
   await validateEventTrim();
   console.log(
     JSON.stringify(
       {
-        bunqueue: '2.8.59',
+        bunqueue: '2.9.0',
         queue: queueName,
         verified: [
           'getGlobalRateLimit',
@@ -53,6 +54,7 @@ try {
           'isMaxed',
           'getDeduplicationJobId',
           'removeDeduplicationKey',
+          'removeDlqJob',
           'getMetrics',
           'trimEvents',
         ],
@@ -115,7 +117,7 @@ async function validateDeduplication(): Promise<void> {
   );
 }
 
-async function validateMaxedAndMetrics(): Promise<void> {
+async function validateMaxedAndMetrics(): Promise<string> {
   const activeGate = new Promise<void>((resolveGate) => {
     releaseActive = resolveGate;
   });
@@ -142,6 +144,30 @@ async function validateMaxedAndMetrics(): Promise<void> {
   await waitForState(failed.id, 'failed');
   await assertMetric('completed');
   await assertMetric('failed');
+  return failed.id;
+}
+
+async function validateDlqRemoval(jobId: string): Promise<void> {
+  assert(await dlqContains(jobId), 'failed job was not visible in the DLQ before removal');
+  assert(
+    await runtime.removeDlqJob(config, queueName, jobId),
+    'DLQ job removal was not acknowledged'
+  );
+  assert(!(await dlqContains(jobId)), 'removed DLQ job remained visible');
+  assert(
+    !(await runtime.removeDlqJob(config, queueName, jobId)),
+    'second DLQ job removal was not idempotently reported as absent'
+  );
+}
+
+async function dlqContains(jobId: string): Promise<boolean> {
+  const response = await fetch(
+    `http://127.0.0.1:${httpPort}/queues/${encodeURIComponent(queueName)}/dlq?limit=100&offset=0`
+  );
+  assert(response.ok, `DLQ inspection returned HTTP ${response.status}`);
+  const body = (await response.json()) as { entries?: Array<{ job?: { id?: string } }> };
+  assert(Array.isArray(body.entries), 'DLQ inspection returned a malformed entries list');
+  return body.entries.some((entry) => entry.job?.id === jobId);
 }
 
 async function assertMetric(type: 'completed' | 'failed'): Promise<void> {

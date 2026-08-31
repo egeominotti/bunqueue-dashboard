@@ -81,5 +81,5 @@ function validIsoDate(value: string): boolean {
 }
 
 function invalid(label: string): never {
-  throw new Error(`Bunqueue ${label} has an invalid 2.8.59 contract`);
+  throw new Error(`Bunqueue ${label} has an invalid 2.9.0 contract`);
 }

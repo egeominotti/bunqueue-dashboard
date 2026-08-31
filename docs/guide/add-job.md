@@ -38,7 +38,7 @@ The page is a single form with two cards and a submit row, no live counters or t
 | **lifo** | Add to the front of the queue instead of the back. |
 | **Tags / Group ID / Depends on / Unique key** | Group, dependency and deduplication metadata for advanced workflows. |
 | **Job name** | The first-class worker routing name. It is separate from the JSON payload and defaults to `default`. |
-| **Repeat policy (JSON)** | The safe v2.8.59 interval form: `{"every":60000,"limit":10}`. Create cron-expression schedules in **Cron Manager**. |
+| **Repeat policy (JSON)** | The safe v2.9.0 interval form: `{"every":60000,"limit":10}`. Create cron-expression schedules in **Cron Manager**. |
 
 **Submit row**
 
@@ -72,7 +72,7 @@ Nothing is sent until you press **Add job**, and there's no confirmation step, t
    accepted by this dashboard.
 
 ::: warning
-Do not send `repeat.pattern` through the v2.8.59 push route. That release stores
+Do not send `repeat.pattern` through the v2.9.0 push route. That release stores
 the pattern but continues the repeat with `every ?? 0`, which can create an
 immediate hot loop instead of following the cron expression. Use **Cron Manager**
 for cron-expression schedules; it uses the dedicated `/crons` API.
@@ -85,7 +85,7 @@ Typing a queue name that doesn't exist creates a brand-new queue. Double-check t
 ## Good to know
 
 - **Name and ID are separate.** **Job name** classifies the work and defaults to `default`; the optional **Custom job ID** controls its caller-selected identity. User payload remains in JSON data.
-- **Count copies are identical.** Every copy shares the exact same data and options. For different payloads, use **Bulk import**, which accepts JSON array/NDJSON job specs and preserves the full v2.8.59 bulk `JobInput` surface (including structured backoff, tags/groups/dependencies, repeat, dedup, retention and dependency-failure controls).
+- **Count copies are identical.** Every copy shares the exact same data and options. For different payloads, use **Bulk import**, which accepts JSON array/NDJSON job specs and preserves the full v2.9.0 bulk `JobInput` surface (including structured backoff, tags/groups/dependencies, repeat, dedup, retention and dependency-failure controls).
 - **The complete bulk request is bounded.** Bunqueue limits data per job but not
   data multiplied by Count. The dashboard measures the exact translated JSON
   envelope without constructing it and refuses submissions above 64 MiB, so a

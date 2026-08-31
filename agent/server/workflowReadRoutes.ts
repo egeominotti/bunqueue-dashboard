@@ -91,5 +91,7 @@ function withDatabase<T>(
   admission: ManagedDatabaseAdmission | undefined,
   operation: (path: string) => T
 ): Promise<T> {
-  return admission ? admission(operation) : Promise.resolve(operation(dataPath));
+  return admission
+    ? admission((snapshot) => operation(snapshot.dataPath))
+    : Promise.resolve(operation(dataPath));
 }

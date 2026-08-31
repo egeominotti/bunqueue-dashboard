@@ -11,7 +11,7 @@ A browser cannot start or stop an OS process, and bunqueue's HTTP API has no
 process-lifecycle endpoint (and we don't modify bunqueue). So the dashboard ships
 a tiny **local agent**, a Bun process that supervises a bunqueue server child.
 It also hosts target-pinned Flow, Workflow, and Queue operations through
-Bunqueue's public 2.8.59 client, runs the pinned backup implementation, and
+Bunqueue's public 2.9.0 client, runs the pinned backup implementation, and
 exposes read-only SQLite observability that the browser cannot perform directly.
 
 ## Files
@@ -139,9 +139,11 @@ disk for the SQLite main file plus its WAL/SHM sidecars.
 are validated atomically: unknown keys, an empty/non-string command, invalid
 ports, a non-string data path, or a non-string environment map return HTTP 400
 without partially changing the previous configuration. The agent
-launches `command` (default `bunx bunqueue@2.8.59 start`, e.g. `bun run ../src/main.ts` when
-developing) with `HTTP_PORT`, `TCP_PORT`, `BUNQUEUE_DATA_PATH` and `extraEnv`
-injected into the environment. Config is **editable at any time**; a running
+launches `command` (default `bunx bunqueue@2.9.0 start`, e.g. `bun run ../src/main.ts` when
+developing) with `HTTP_PORT`, `TCP_PORT`, the selected storage environment and
+`extraEnv` injected. PostgreSQL mode is selected by `BUNQUEUE_STORAGE_DRIVER=postgres`
+or `BUNQUEUE_POSTGRES_URL`; the agent removes inherited SQLite path aliases so Bunqueue 2.9
+cannot receive an ambiguous PostgreSQL-plus-SQLite configuration. Config is **editable at any time**; a running
 process keeps its launch config (`runningConfig`) and picks up port/data-path
 changes on the next start/restart. Defaults come from env: `AGENT_PORT`, `BUNQUEUE_START_CMD`, `HTTP_PORT`, `TCP_PORT`, `BUNQUEUE_DATA_PATH`.
 
@@ -154,6 +156,10 @@ Stop / Restart, an **always-editable config form** (with a `Save & restart`
 shortcut and a "Restart to apply changes" hint when the live config differs), and
 a live, colour-coded process-log tail. If the agent is unreachable it shows how to
 start it (`bun run agent/index.ts`).
+
+The storage row, Database inspector and S3 backup routes are SQLite-only. In PostgreSQL or
+in-memory mode status reports no SQLite file and those routes return `409` instead of reading or
+mutating an unrelated local path.
 
 ## Tested
 
@@ -168,10 +174,11 @@ stop-then-start race** no longer orphans the newly-started process.
 (the CSRF-to-RCE vector), same-origin + non-browser requests succeeding, OPTIONS
 preflight ACAO, loopback mutation auth, and all-route auth for network exposure.
 
-`bun run test:e2e` additionally starts disposable Bunqueue 2.8.59 servers and
+`bun run test:e2e` additionally starts disposable Bunqueue 2.9.0 servers and
 executes every FlowProducer creation mode, every exposed safe Flow Job group,
-Workflow handler discovery/control/compensation/archive, and all eight Queue SDK
-operations. Backup worker and compiled-binary behavior are covered by the
+Workflow handler discovery/control/compensation/archive, all eight exposed Queue
+SDK operations, and the unexposed `removeDlqJob` compatibility contract. Backup
+worker and compiled-binary behavior are covered by the
 runtime-safety suite and the standalone build smoke test. The deterministic
 lifecycle suite suspends a Workflow request body across stop and restart and
 proves it cannot run after Engine closure or cross into a new process

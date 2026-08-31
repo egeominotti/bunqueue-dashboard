@@ -30,9 +30,10 @@ export function AgentInfoCard({ agentBase }: { agentBase: string }) {
             <div className="mb-1 font-medium text-fg">Launch &amp; environment</div>
             <p>
               The agent runs your <span className="text-fg">Command</span> and injects{' '}
-              <Code>HTTP_PORT</Code>, <Code>TCP_PORT</Code> and <Code>BUNQUEUE_DATA_PATH</Code> —
-              plus any <span className="text-fg">Environment variables</span> you add — into its
-              environment. The default <Code>bunx bunqueue@2.8.59 start</Code> resolves the verified
+              <Code>HTTP_PORT</Code> and <Code>TCP_PORT</Code>, plus <Code>BUNQUEUE_DATA_PATH</Code>{' '}
+              only for SQLite. Memory and PostgreSQL modes remove every SQLite path alias before
+              launch. Any <span className="text-fg">Environment variables</span> you add are
+              included too. The default <Code>bunx bunqueue@2.9.0 start</Code> resolves the verified
               release; pointing the command at a local entry (e.g.{' '}
               <Code>bun run /path/to/bunqueue/src/main.ts</Code>) works without one.
             </p>

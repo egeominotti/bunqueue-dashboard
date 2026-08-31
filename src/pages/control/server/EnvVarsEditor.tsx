@@ -31,12 +31,20 @@ export function duplicateKeys(keys: string[]): string[] {
 }
 
 // Common bunqueue env knobs, offered as one-click add buttons.
-const PRESETS = ['AUTH_TOKENS', 'LOG_LEVEL', 'S3_BACKUP_ENABLED', 'S3_BUCKET', 'METRICS_ENABLED'];
+const PRESETS = [
+  'AUTH_TOKENS',
+  'LOG_LEVEL',
+  'BUNQUEUE_STORAGE_DRIVER',
+  'BUNQUEUE_POSTGRES_URL',
+  'S3_BACKUP_ENABLED',
+  'S3_BUCKET',
+  'METRICS_ENABLED',
+];
 
 /**
  * Key/value editor for `ServerConfig.extraEnv`. The agent injects these into the
  * bunqueue process's environment on the next start/restart, on top of the
- * HTTP_PORT / TCP_PORT / BUNQUEUE_DATA_PATH it always sets.
+ * HTTP_PORT / TCP_PORT and the selected storage environment it sets.
  */
 export function EnvVarsEditor({
   value,
@@ -75,8 +83,8 @@ export function EnvVarsEditor({
         <p className="text-xs leading-relaxed text-faint">
           No custom variables. The agent already injects{' '}
           <code className="rounded bg-surface-2 px-1 py-0.5">HTTP_PORT</code>,{' '}
-          <code className="rounded bg-surface-2 px-1 py-0.5">TCP_PORT</code> and{' '}
-          <code className="rounded bg-surface-2 px-1 py-0.5">BUNQUEUE_DATA_PATH</code>.
+          <code className="rounded bg-surface-2 px-1 py-0.5">TCP_PORT</code>, plus the SQLite data
+          path unless PostgreSQL mode is selected.
         </p>
       )}
       {rows.map((r) => (

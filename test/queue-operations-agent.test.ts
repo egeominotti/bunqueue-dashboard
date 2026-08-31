@@ -31,6 +31,10 @@ function fakeRuntime(calls: string[]): QueueOperationsPort {
       calls.push(`remove:${queue}:${id}`);
       return 1;
     },
+    removeDlqJob: async (_config, queue, id) => {
+      calls.push(`remove-dlq:${queue}:${id}`);
+      return true;
+    },
     metrics: async (_config, queue, type, start, end) => {
       calls.push(`metrics:${queue}:${type}:${start}:${end}`);
       return { meta: { count: 7, prevTS: 10, prevCount: 2 }, data: [2, 1], count: 2 };
@@ -44,7 +48,7 @@ function fakeRuntime(calls: string[]): QueueOperationsPort {
 }
 
 describe('Queue operations agent contract', () => {
-  test('routes all eight Bunqueue Queue methods through exact bounded contracts', async () => {
+  test('routes all eight exposed Bunqueue Queue methods through exact bounded contracts', async () => {
     const calls: string[] = [];
     const runtime = fakeRuntime(calls);
     const limits = await routeQueueOperationsRequest(
@@ -165,6 +169,7 @@ describe('Queue operations agent contract', () => {
       isMaxed: async () => false,
       getDeduplicationJobId: async () => null,
       removeDeduplicationKey: async () => 0,
+      removeDlqJob: async () => false,
       getMetrics: async () => {
         active += 1;
         maximum = Math.max(maximum, active);

@@ -5,7 +5,7 @@ import {
 import type { BackupRunnerPort } from '../backup/runner';
 import { routeFlowRequest } from '../flow/routes';
 import type { ManagedTargetPolicy } from '../managedTarget';
-import type { ProcessManager } from '../manager';
+import { managedStorageMode, type ProcessManager } from '../manager';
 import { routeQueueOperationsRequest } from '../queue/routes';
 import type { QueueOperationsPort } from '../queue/types';
 import type { WorkflowRuntimePort } from '../workflow/runtime';
@@ -47,6 +47,7 @@ export async function routeAgentRequest(
 
   const snapshot = manager.getStatus();
   const managedConfig = snapshot.runningConfig ?? snapshot.config;
+  const storageMode = managedStorageMode(managedConfig);
   const admission = managedRuntimeAdmission(manager, lifecycle, snapshot);
   const databaseAdmission = managedDatabaseAdmission(manager, lifecycle);
   if (pathname.startsWith('/flows/')) {
@@ -103,6 +104,7 @@ export async function routeAgentRequest(
   }
 
   if (pathname.startsWith('/backup/')) {
+    if (storageMode !== 'sqlite') return sqliteOnly('S3 backup', storageMode);
     if (pathname === '/backup/restore' && method === 'POST') {
       assertManagedControl(controlTarget);
       const prepared = await prepareBackupRequest(
@@ -113,25 +115,25 @@ export async function routeAgentRequest(
         managedTargetPolicy
       );
       if (!prepared || prepared.operation !== 'restore') return null;
-      return lifecycle.run(() =>
-        manager.withStoppedMaintenance('restoring a backup', async () => {
-          const stoppedSnapshot = manager.getStatus();
-          const restoreDesired = manager.getConfig();
-          const restoreConfig = {
-            ...(stoppedSnapshot.runningConfig ?? stoppedSnapshot.config),
-            extraEnv: restoreDesired.extraEnv,
-          };
+      return lifecycle.run(async () => {
+        const current = manager.getStatus();
+        const restoreConfig = current.runningConfig ?? current.config;
+        const currentStorageMode = managedStorageMode(restoreConfig);
+        if (currentStorageMode !== 'sqlite') {
+          return sqliteOnly('S3 backup', currentStorageMode);
+        }
+        return manager.withStoppedMaintenance('restoring a backup', async () => {
           return executePreparedBackupRequest(
             prepared,
             restoreConfig,
-            stoppedSnapshot.status === 'running',
+            current.status === 'running',
             await manager.dbStats(restoreConfig.dataPath),
             backupRunner,
             undefined,
             managedTargetPolicy
           );
-        })
-      );
+        });
+      });
     }
     const prepared = await prepareBackupRequest(
       request,
@@ -146,11 +148,15 @@ export async function routeAgentRequest(
         const desired = manager.getConfig();
         const effective = current.runningConfig ?? current.config;
         const backupConfig = { ...effective, extraEnv: desired.extraEnv };
+        const currentStorageMode = managedStorageMode(backupConfig);
+        if (currentStorageMode !== 'sqlite') {
+          return sqliteOnly('S3 backup', currentStorageMode);
+        }
         return executePreparedBackupRequest(
           prepared,
           backupConfig,
           current.status === 'running',
-          await manager.dbStats(effective.dataPath),
+          await manager.dbStats(backupConfig.dataPath),
           backupRunner,
           (extraEnv) => {
             manager.setConfig({ extraEnv });
@@ -164,6 +170,9 @@ export async function routeAgentRequest(
     }
   }
 
+  if ((pathname === '/db' || pathname.startsWith('/db/')) && storageMode !== 'sqlite') {
+    return sqliteOnly('Database inspection', storageMode);
+  }
   return routeDatabaseRequest(
     request,
     pathname,
@@ -173,6 +182,13 @@ export async function routeAgentRequest(
     allowedOrigins,
     databaseAdmission
   );
+}
+
+function sqliteOnly(feature: string, storageMode: 'memory' | 'postgres'): RouteResponse {
+  return {
+    status: 409,
+    body: { ok: false, error: `${feature} requires Bunqueue SQLite storage; ${storageMode} is active` },
+  };
 }
 
 function isWorkflowRuntimeRoute(pathname: string, method: string): boolean {

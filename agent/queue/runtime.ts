@@ -13,6 +13,7 @@ export type QueueOperationsClient = Pick<
   | 'isMaxed'
   | 'getDeduplicationJobId'
   | 'removeDeduplicationKey'
+  | 'removeDlqJob'
   | 'getMetrics'
   | 'trimEvents'
   | 'close'
@@ -57,6 +58,10 @@ export class QueueOperationsRuntime implements QueueOperationsPort {
     deduplicationId: string
   ): Promise<number> {
     return this.withQueue(config, queue, (client) => client.removeDeduplicationKey(deduplicationId));
+  }
+
+  removeDlqJob(config: ServerConfig, queue: string, jobId: string): Promise<boolean> {
+    return this.withQueue(config, queue, (client) => client.removeDlqJob(jobId));
   }
 
   metrics(
