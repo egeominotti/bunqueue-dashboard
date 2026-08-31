@@ -124,6 +124,6 @@
   },
   "dependencies": {
     "bunqueue": "2.9.0",
-    "msgpackr": "^1.11.8"
+    "msgpackr": "^2.1.0"
   }
 }
