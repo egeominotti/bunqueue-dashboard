@@ -13,13 +13,17 @@ import {
   exactJsonBody,
   exactQuery,
   metricsRange,
+  optionalMaxCount,
   optionalMaxJobs,
+  positiveSafeInteger,
   requiredDeduplicationId,
+  requiredGroupId,
   validateQueueName,
 } from './validation';
 
-const READ_ROUTE = /^\/queue-operations\/([^/]+)\/(limits|deduplication|metrics)$/;
-const MUTATION_ROUTE = /^\/queue-operations\/([^/]+)\/(deduplication\/remove|events\/trim)$/;
+const READ_ROUTE = /^\/queue-operations\/([^/]+)\/(limits|groups|deduplication|metrics)$/;
+const MUTATION_ROUTE =
+  /^\/queue-operations\/([^/]+)\/(groups\/(?:rate-limit|concurrency)(?:\/remove)?|deduplication\/remove|events\/trim)$/;
 
 export async function routeQueueOperationsRequest(
   request: Request,
@@ -50,6 +54,21 @@ export async function routeQueueOperationsRequest(
         ok({ jobId: await runtime.deduplicationJobId(current, queue, id) })
       );
     }
+    if (read[2] === 'groups') {
+      const query = pinnedQuery(
+        request,
+        config,
+        ['target', 'groupId', 'maxJobs', 'maxCount'],
+        targetPolicy
+      );
+      const groupId = requiredGroupId(query.get('groupId'));
+      const maxJobs = optionalMaxJobs(query);
+      const maxCount = optionalMaxCount(query);
+      assertRunning(running);
+      return admitted(query, config, running, admission, targetPolicy, async ({ config: current }) =>
+        ok({ group: await runtime.group(current, queue, groupId, maxJobs, maxCount) })
+      );
+    }
     const query = pinnedQuery(request, config, ['target', 'type', 'start', 'end'], targetPolicy);
     const type = metricType(query.get('type'));
     const range = metricsRange(query);
@@ -72,6 +91,42 @@ export async function routeQueueOperationsRequest(
       return admitted(query, config, running, admission, targetPolicy, async ({ config: current }) =>
         ok({ removed: await runtime.removeDeduplicationKey(current, queue, id) })
       );
+    }
+    if (mutation[2].startsWith('groups/')) {
+      const remove = mutation[2].endsWith('/remove');
+      const rateLimit = mutation[2].includes('/rate-limit');
+      const allowed = remove
+        ? ['groupId']
+        : rateLimit
+          ? ['groupId', 'max', 'duration']
+          : ['groupId', 'concurrency'];
+      const body = await exactJsonBody(request, allowed);
+      const groupId = requiredGroupId(body.groupId);
+      return admitted(query, config, running, admission, targetPolicy, async ({ config: current }) => {
+        if (remove) {
+          const removed = rateLimit
+            ? await runtime.removeGroupRateLimit(current, queue, groupId)
+            : await runtime.removeGroupConcurrency(current, queue, groupId);
+          return ok({ removed });
+        }
+        if (rateLimit) {
+          await runtime.setGroupRateLimit(
+            current,
+            queue,
+            groupId,
+            positiveSafeInteger(body.max, 'max'),
+            positiveSafeInteger(body.duration, 'duration')
+          );
+        } else {
+          await runtime.setGroupConcurrency(
+            current,
+            queue,
+            groupId,
+            positiveSafeInteger(body.concurrency, 'concurrency')
+          );
+        }
+        return ok({ applied: true });
+      });
     }
     const body = await exactJsonBody(request, ['maxLength']);
     const retention = eventRetention(body.maxLength);

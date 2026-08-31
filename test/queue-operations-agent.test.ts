@@ -1,54 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import type { ServerConfig } from '../agent/manager';
 import { routeQueueOperationsRequest } from '../agent/queue/routes';
 import { type QueueOperationsClient, QueueOperationsRuntime } from '../agent/queue/runtime';
-import type { QueueOperationsPort } from '../agent/queue/types';
-
-const config: ServerConfig = {
-  command: 'bunqueue',
-  httpPort: 6790,
-  tcpPort: 6789,
-  dataPath: '/tmp/not-used.db',
-  extraEnv: {},
-};
-
-function fakeRuntime(calls: string[]): QueueOperationsPort {
-  return {
-    limits: async (_config, queue, maxJobs) => {
-      calls.push(`limits:${queue}:${maxJobs}`);
-      return {
-        rateLimit: { max: 12, duration: 1000 },
-        concurrency: 4,
-        rateLimitTtl: 80,
-        maxed: false,
-      };
-    },
-    deduplicationJobId: async (_config, queue, id) => {
-      calls.push(`dedup:${queue}:${id}`);
-      return 'job-7';
-    },
-    removeDeduplicationKey: async (_config, queue, id) => {
-      calls.push(`remove:${queue}:${id}`);
-      return 1;
-    },
-    removeDlqJob: async (_config, queue, id) => {
-      calls.push(`remove-dlq:${queue}:${id}`);
-      return true;
-    },
-    metrics: async (_config, queue, type, start, end) => {
-      calls.push(`metrics:${queue}:${type}:${start}:${end}`);
-      return { meta: { count: 7, prevTS: 10, prevCount: 2 }, data: [2, 1], count: 2 };
-    },
-    trimEvents: async (_config, queue, maxLength) => {
-      calls.push(`trim:${queue}:${maxLength}`);
-      return 3;
-    },
-    close: async () => undefined,
-  };
-}
+import { config, fakeRuntime, post } from './queue-operations-agent.helpers';
 
 describe('Queue operations agent contract', () => {
-  test('routes all eight exposed Bunqueue Queue methods through exact bounded contracts', async () => {
+  test('routes every exposed Bunqueue Queue operation through exact bounded contracts', async () => {
     const calls: string[] = [];
     const runtime = fakeRuntime(calls);
     const limits = await routeQueueOperationsRequest(
@@ -68,6 +24,70 @@ describe('Queue operations agent contract', () => {
         maxed: false,
       },
     });
+    const group = await routeQueueOperationsRequest(
+      new Request(
+        'http://agent/queue-operations/orders/groups?target=%2Fapi&groupId=tenant-7&maxJobs=2&maxCount=50'
+      ),
+      '/queue-operations/orders/groups',
+      'GET',
+      config,
+      runtime,
+      true
+    );
+    expect(group?.body).toEqual({
+      ok: true,
+      group: {
+        jobs: 2,
+        active: 1,
+        totalGrouped: 4,
+        rateLimit: { max: 5, duration: 1000 },
+        rateLimitTtl: 20,
+        concurrency: 3,
+      },
+    });
+    await routeQueueOperationsRequest(
+      post('/queue-operations/orders/groups/rate-limit?target=%2Fapi', {
+        groupId: 'tenant-7',
+        max: 5,
+        duration: 1000,
+      }),
+      '/queue-operations/orders/groups/rate-limit',
+      'POST',
+      config,
+      runtime,
+      true
+    );
+    await routeQueueOperationsRequest(
+      post('/queue-operations/orders/groups/rate-limit/remove?target=%2Fapi', {
+        groupId: 'tenant-7',
+      }),
+      '/queue-operations/orders/groups/rate-limit/remove',
+      'POST',
+      config,
+      runtime,
+      true
+    );
+    await routeQueueOperationsRequest(
+      post('/queue-operations/orders/groups/concurrency?target=%2Fapi', {
+        groupId: 'tenant-7',
+        concurrency: 3,
+      }),
+      '/queue-operations/orders/groups/concurrency',
+      'POST',
+      config,
+      runtime,
+      true
+    );
+    await routeQueueOperationsRequest(
+      post('/queue-operations/orders/groups/concurrency/remove?target=%2Fapi', {
+        groupId: 'tenant-7',
+      }),
+      '/queue-operations/orders/groups/concurrency/remove',
+      'POST',
+      config,
+      runtime,
+      true
+    );
     await routeQueueOperationsRequest(
       new Request(
         'http://agent/queue-operations/orders/deduplication?target=%2Fapi&deduplicationId=invoice%3A7'
@@ -108,6 +128,11 @@ describe('Queue operations agent contract', () => {
     );
     expect(calls).toEqual([
       'limits:orders:3',
+      'group:orders:tenant-7:2:50',
+      'group-rate:orders:tenant-7:5:1000',
+      'group-rate-remove:orders:tenant-7',
+      'group-concurrency:orders:tenant-7:3',
+      'group-concurrency-remove:orders:tenant-7',
       'dedup:orders:invoice:7',
       'remove:orders:invoice:7',
       'metrics:orders:failed:2:8',
@@ -167,6 +192,16 @@ describe('Queue operations agent contract', () => {
       getGlobalConcurrency: async () => null,
       getRateLimitTtl: async () => -2,
       isMaxed: async () => false,
+      getGroupJobsCount: async () => 0,
+      getGroupsJobsCount: async () => 0,
+      getGroupActiveCount: async () => 0,
+      setGroupRateLimit: async () => undefined,
+      getGroupRateLimit: async () => null,
+      removeGroupRateLimit: async () => 0,
+      getGroupRateLimitTtl: async () => -2,
+      setGroupConcurrency: async () => undefined,
+      getGroupConcurrency: async () => null,
+      removeGroupConcurrency: async () => 0,
       getDeduplicationJobId: async () => null,
       removeDeduplicationKey: async () => 0,
       removeDlqJob: async () => false,
@@ -193,11 +228,3 @@ describe('Queue operations agent contract', () => {
     await expect(runtime.trimEvents(config, 'q', 0)).rejects.toThrow('closed');
   });
 });
-
-function post(path: string, body: unknown): Request {
-  return new Request(`http://agent${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}

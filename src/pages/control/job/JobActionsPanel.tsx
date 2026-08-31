@@ -64,7 +64,7 @@ export function parseFailureStack(
  * never drifts from JobsPro on what's legal, and routes every mutation through
  * the parent's act() (which handles the status line + reload). Active jobs only
  * expose progress: state-changing controls cannot cancel the running worker in
- * v2.9.0 and could otherwise create duplicate processing side effects.
+ * v2.9.2 and could otherwise create duplicate processing side effects.
  */
 export function JobActionsPanel({ job, busy, act }: { job: JobFull; busy: boolean; act: Act }) {
   const gates = actionGates(job.state);

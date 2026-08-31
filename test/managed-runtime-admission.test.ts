@@ -55,7 +55,11 @@ describe('managed SDK runtime admission', () => {
 
     const status = await handle(new Request(`${agentTarget()}/control/status`));
     expect(status.status).toBe(200);
-    expect(await status.json()).toMatchObject({ db: null });
+    expect(await status.json()).toMatchObject({
+      db: null,
+      storageMode: 'postgres',
+      postgresNamespace: 'default',
+    });
     for (const path of ['/db/info', '/backup/status']) {
       const response = await handle(new Request(`${agentTarget()}${path}`));
       expect(response.status).toBe(409);

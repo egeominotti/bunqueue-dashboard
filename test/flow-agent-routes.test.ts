@@ -80,7 +80,7 @@ describe('Flow agent target and query boundary', () => {
     ).rejects.toThrow('ttl must be from 1 to 60000');
   });
 
-  test('normalizes both Bunqueue 2.9.0 progress contracts without losing numeric messages', () => {
+  test('normalizes both Bunqueue 2.9.2 progress contracts without losing numeric messages', () => {
     expect(normalizeFlowProgressPayload({ progress: 42, message: 'indexing' })).toEqual({
       progress: 42,
       message: 'indexing',

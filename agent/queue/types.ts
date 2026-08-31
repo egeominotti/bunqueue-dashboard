@@ -8,8 +8,39 @@ export interface QueueLimitSnapshot {
   maxed: boolean;
 }
 
+export interface QueueGroupSnapshot {
+  jobs: number;
+  active: number;
+  totalGrouped: number;
+  rateLimit: { max: number; duration: number } | null;
+  rateLimitTtl: number;
+  concurrency: number | null;
+}
+
 export interface QueueOperationsPort {
   limits(config: ServerConfig, queue: string, maxJobs?: number): Promise<QueueLimitSnapshot>;
+  group(
+    config: ServerConfig,
+    queue: string,
+    groupId: string,
+    maxJobs?: number,
+    maxCount?: number
+  ): Promise<QueueGroupSnapshot>;
+  setGroupRateLimit(
+    config: ServerConfig,
+    queue: string,
+    groupId: string,
+    max: number,
+    duration: number
+  ): Promise<void>;
+  removeGroupRateLimit(config: ServerConfig, queue: string, groupId: string): Promise<number>;
+  setGroupConcurrency(
+    config: ServerConfig,
+    queue: string,
+    groupId: string,
+    concurrency: number
+  ): Promise<void>;
+  removeGroupConcurrency(config: ServerConfig, queue: string, groupId: string): Promise<number>;
   deduplicationJobId(
     config: ServerConfig,
     queue: string,

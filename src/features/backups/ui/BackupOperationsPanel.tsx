@@ -123,7 +123,7 @@ export function BackupOperationsPanel({
         <div>
           <h2 className="text-sm font-semibold text-fg">Live backup operations</h2>
           <p className="mt-1 text-xs text-faint">
-            Official Bunqueue 2.9.0 backup CLI, executed by the local control agent.
+            Official Bunqueue 2.9.2 backup CLI, executed by the local control agent.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

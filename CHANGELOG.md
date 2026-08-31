@@ -15,6 +15,21 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+### Changed
+
+- Added the complete Bunqueue 2.9.2 group operations surface to Queue Control:
+  group and aggregate counts, active count, rate-limit read/set/remove/TTL, and
+  concurrency read/set/remove, with target pinning and live E2E coverage.
+- Pinned the managed server, installable client, demo, package validators, and
+  E2E contract to Bunqueue 2.9.2, including the PostgreSQL schema-19 upgrade
+  boundary for multi-broker deployments.
+
+### Fixed
+
+- PostgreSQL mode now fails before spawning without a connection URL and reports
+  its effective storage backend and namespace in Server Control while keeping
+  SQLite-only database and backup operations unavailable.
+
 ## [0.0.39] - 2026-08-31
 
 ### Added

@@ -151,10 +151,10 @@ export const api = {
   // strict:false — `ok` here is a semantic status flag (disk-full → ok:false at
   // HTTP 200 is data, not a request failure), so it must not throw.
   storage: () => request<{ ok: boolean; data: StorageStatus }>('/storage', undefined, false),
-  // Disk-full is a diagnostic state, not a transport failure: bunqueue v2.9.0
+  // Disk-full is a diagnostic state, not a transport failure: bunqueue v2.9.2
   // returns its structured health payload with HTTP 503 in that state.
   health: () => request<Record<string, unknown>>('/health', undefined, false, [503]),
-  // Bunqueue 2.9.0 exposes both unauthenticated liveness aliases as plain
+  // Bunqueue 2.9.2 exposes both unauthenticated liveness aliases as plain
   // text. Keep their raw response so callers can distinguish the exact "OK"
   // contract from a reverse-proxy fallback page that merely returned HTTP 200.
   healthz: () => request<string>('/healthz', undefined, true, [], 'text'),
@@ -185,7 +185,7 @@ export const api = {
     post(`/queues/${q(queue)}/clean`, { grace, limit }),
   retryCompleted: (_queue: string): never => {
     throw new TypeError(
-      'Completed-job requeue is unavailable in Bunqueue v2.9.0 because flow dependency registration is not rebuilt.'
+      'Completed-job requeue is unavailable in Bunqueue v2.9.2 because flow dependency registration is not rebuilt.'
     );
   },
 
@@ -206,7 +206,7 @@ export const api = {
     request<{ ok: boolean; stats: DlqStats }>(`/queues/${q(queue)}/dlq/stats`),
   retryDlq: (_queue: string): never => {
     throw new TypeError(
-      'DLQ retry is unavailable in Bunqueue v2.9.0 because the endpoint has no atomic flow-safety precondition.'
+      'DLQ retry is unavailable in Bunqueue v2.9.2 because the endpoint has no atomic flow-safety precondition.'
     );
   },
   purgeDlq: (queue: string) => post(`/queues/${q(queue)}/dlq/purge`),

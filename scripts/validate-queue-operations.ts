@@ -38,6 +38,7 @@ try {
   await waitForServer(httpPort, server);
   await queue.waitUntilReady();
   await validateLimits();
+  await validateGroups();
   await validateDeduplication();
   const failedJobId = await validateMaxedAndMetrics();
   await validateDlqRemoval(failedJobId);
@@ -45,13 +46,23 @@ try {
   console.log(
     JSON.stringify(
       {
-        bunqueue: '2.9.0',
+        bunqueue: '2.9.2',
         queue: queueName,
         verified: [
           'getGlobalRateLimit',
           'getGlobalConcurrency',
           'getRateLimitTtl',
           'isMaxed',
+          'getGroupJobsCount',
+          'getGroupsJobsCount',
+          'getGroupActiveCount',
+          'setGroupRateLimit',
+          'getGroupRateLimit',
+          'removeGroupRateLimit',
+          'getGroupRateLimitTtl',
+          'setGroupConcurrency',
+          'getGroupConcurrency',
+          'removeGroupConcurrency',
           'getDeduplicationJobId',
           'removeDeduplicationKey',
           'removeDlqJob',
@@ -115,6 +126,26 @@ async function validateDeduplication(): Promise<void> {
     (await runtime.deduplicationJobId(config, queueName, deduplicationId)) === null,
     'removed deduplication key remained visible'
   );
+}
+
+async function validateGroups(): Promise<void> {
+  const groupId = `tenant-${Date.now()}`;
+  await queue.add('grouped', { source: 'dashboard-e2e' }, { delay: 60_000, group: { id: groupId } });
+  await runtime.setGroupRateLimit(config, queueName, groupId, 5, 60_000);
+  await runtime.setGroupConcurrency(config, queueName, groupId, 2);
+  const configured = await runtime.group(config, queueName, groupId, 1, 100);
+  assert(configured.jobs === 1, 'group job count was not readable');
+  assert(configured.totalGrouped >= 1, 'all-groups job count was not readable');
+  assert(configured.active === 0, 'group active count was not readable');
+  assert(configured.rateLimit?.max === 5, 'group rate limit was not readable');
+  assert(configured.rateLimit?.duration === 60_000, 'group rate duration was not readable');
+  assert(configured.rateLimitTtl >= -2, 'group rate TTL returned an invalid sentinel');
+  assert(configured.concurrency === 2, 'group concurrency was not readable');
+  assert((await runtime.removeGroupRateLimit(config, queueName, groupId)) === 1, 'group rate removal failed');
+  assert((await runtime.removeGroupConcurrency(config, queueName, groupId)) === 1, 'group concurrency removal failed');
+  const removed = await runtime.group(config, queueName, groupId);
+  assert(removed.rateLimit === null, 'removed group rate limit remained visible');
+  assert(removed.concurrency === null, 'removed group concurrency remained visible');
 }
 
 async function validateMaxedAndMetrics(): Promise<string> {

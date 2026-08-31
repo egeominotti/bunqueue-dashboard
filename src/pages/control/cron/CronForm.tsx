@@ -87,7 +87,7 @@ export function CronForm({
     }
     if (
       !window.confirm(
-        `Submit an upsert for cron "${built.body.name}"? Bunqueue v2.9.0 has no atomic create-only condition. The dashboard will recheck immediately before writing, but another client using the same name at the same time could still be replaced. Continue only if you authorize last-writer-wins behavior for this globally unique name.`
+        `Submit an upsert for cron "${built.body.name}"? Bunqueue v2.9.2 has no atomic create-only condition. The dashboard will recheck immediately before writing, but another client using the same name at the same time could still be replaced. Continue only if you authorize last-writer-wins behavior for this globally unique name.`
       )
     ) {
       return;

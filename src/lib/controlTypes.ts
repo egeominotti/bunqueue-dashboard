@@ -42,6 +42,10 @@ export interface ServerStatus {
   externalUrl?: string;
   healthStatus?: number | null;
   healthError?: string;
+  /** Effective backend selected for the managed Bunqueue process. */
+  storageMode?: 'memory' | 'sqlite' | 'postgres';
+  /** Effective Bunqueue PostgreSQL namespace; present only in PostgreSQL mode. */
+  postgresNamespace?: string;
   config: ServerConfig;
   /** Config the live process was launched with (null when stopped). */
   runningConfig?: ServerConfig | null;

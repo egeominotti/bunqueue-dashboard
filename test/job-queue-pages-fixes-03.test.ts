@@ -17,7 +17,7 @@ installTestHooks();
 describe('JobInspector — a fetch failure is never rendered as a fact', () => {
   const job = { id: 'j1', queue: 'q', state: 'completed', maxAttempts: 1 };
 
-  test('uses Bunqueue 2.9.0 embedded returnvalue without a second result request', async () => {
+  test('uses Bunqueue 2.9.2 embedded returnvalue without a second result request', async () => {
     let resultGets = 0;
     globalThis.fetch = ((input: RequestInfo | URL) => {
       const url = String(input);

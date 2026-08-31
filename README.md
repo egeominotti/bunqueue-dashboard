@@ -96,7 +96,7 @@ server *process* through a separate guarded agent.
 
 It uses Bunqueue's public HTTP API (`:6790`) for ordinary remote observability and a small local
 **control agent** for process, FlowProducer, Workflow Engine, database, and backup operations. The
-agent is pinned to the server it manages and uses the exact installable Bunqueue 2.9.0 npm client
+agent is pinned to the server it manages and uses the exact installable Bunqueue 2.9.2 npm client
 contracts; it never patches Bunqueue internals.
 
 ## Features
@@ -117,7 +117,7 @@ contracts; it never patches Bunqueue internals.
 | **S3 backup** | Management ▸ S3 Backup | Configure, inspect, list, create and guarded-restore official snapshots |
 | **Browse** | Queues / Jobs / DLQ / Cron / Metrics / Workers / Logs | Read-only browsing with basic actions |
 
-> Job actions are gated by the v2.9.0 flow contract. Every DLQ retry and completed-job requeue is
+> Job actions are gated by the v2.9.2 flow contract. Every DLQ retry and completed-job requeue is
 > unavailable: the DLQ GET + POST sequence has no atomic generation/state/topology precondition and
 > can target a job recreated under the same ID, while `retryCompleted` does not rebuild dependency
 > registration or flow order. Cancel, Discard, Drain, Clean, Obliterate and DLQ Purge also fail
@@ -299,7 +299,7 @@ The canonical gate must be green before a change is considered done; CI runs the
 bun run quality   # architecture, lint/build, size, docs, coverage, real E2E, packed-bin smoke, audit
 ```
 
-The E2E stage starts disposable Bunqueue 2.9.0 processes and exercises the complete FlowProducer,
+The E2E stage starts disposable Bunqueue 2.9.2 processes and exercises the complete FlowProducer,
 Workflow Engine, and Queue SDK operator bridges. Run it alone with `bun run test:e2e`.
 
 The blocking browser job builds the production bundle under `/e2e/dashboard`, starts an

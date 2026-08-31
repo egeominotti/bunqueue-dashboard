@@ -40,6 +40,22 @@ export function optionalMaxJobs(query: URLSearchParams): number | undefined {
   return raw === null ? undefined : boundedInteger(raw, 'maxJobs', 0, 1_000_000);
 }
 
+export function optionalMaxCount(query: URLSearchParams): number | undefined {
+  const raw = query.get('maxCount');
+  return raw === null ? undefined : boundedInteger(raw, 'maxCount', 1, 1_000_000);
+}
+
+export function requiredGroupId(value: unknown): string {
+  if (typeof value !== 'string' || !value || value.length > 256 || value.includes('\0')) {
+    throw new Error('groupId must be a non-empty string of at most 256 characters without NUL');
+  }
+  return value;
+}
+
+export function positiveSafeInteger(value: unknown, label: string): number {
+  return bodyInteger(value, label, 1, Number.MAX_SAFE_INTEGER);
+}
+
 export function metricsRange(query: URLSearchParams): { start: number; end: number } {
   const start = optionalInteger(query.get('start'), 'start', 0, MAX_PAGE_INDEX, 0);
   const rawEnd = query.get('end');

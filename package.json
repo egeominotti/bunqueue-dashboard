@@ -123,7 +123,7 @@
     "postcss": "^8.5.25"
   },
   "dependencies": {
-    "bunqueue": "2.9.0",
+    "bunqueue": "2.9.2",
     "msgpackr": "^1.11.8"
   }
 }

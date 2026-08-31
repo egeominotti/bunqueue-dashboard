@@ -11,8 +11,27 @@ export interface QueueMetricsSnapshot {
   count: number;
 }
 
+export interface QueueGroupSnapshot {
+  jobs: number;
+  active: number;
+  totalGrouped: number;
+  rateLimit: { max: number; duration: number } | null;
+  rateLimitTtl: number;
+  concurrency: number | null;
+}
+
 export interface QueueOperationsRepository {
   limits(queue: string, maxJobs?: number): Promise<QueueLimitSnapshot>;
+  group(
+    queue: string,
+    groupId: string,
+    maxJobs?: number,
+    maxCount?: number
+  ): Promise<QueueGroupSnapshot>;
+  setGroupRateLimit(queue: string, groupId: string, max: number, duration: number): Promise<void>;
+  removeGroupRateLimit(queue: string, groupId: string): Promise<number>;
+  setGroupConcurrency(queue: string, groupId: string, concurrency: number): Promise<void>;
+  removeGroupConcurrency(queue: string, groupId: string): Promise<number>;
   deduplicationJobId(queue: string, deduplicationId: string): Promise<string | null>;
   removeDeduplicationKey(queue: string, deduplicationId: string): Promise<number>;
   metrics(

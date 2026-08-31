@@ -74,7 +74,7 @@ export function createJobLookup(state: InspectorState, setParams: SetSearchParam
         return;
       }
 
-      // Bunqueue 2.9.0 embeds terminal values in canonical reads. Keep the
+      // Bunqueue 2.9.2 embeds terminal values in canonical reads. Keep the
       // legacy result endpoint fallback for older compatible servers.
       let resultResponse: { result: unknown } | null = null;
       let resultError: string | null = null;

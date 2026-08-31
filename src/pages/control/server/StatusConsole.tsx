@@ -225,8 +225,19 @@ export function StatusConsole({
         <Vital label="Control agent" title={agentBase}>
           {agentBase.replace(/^https?:\/\//, '')}
         </Vital>
-        <Vital label={external ? 'Supervisor' : 'Launch command'} title={cfg?.command}>
-          {external ? 'managed elsewhere' : (cfg?.command ?? '—')}
+        <Vital
+          label={external ? 'Supervisor' : 'Storage'}
+          title={
+            status?.storageMode === 'postgres'
+              ? `PostgreSQL namespace: ${status.postgresNamespace ?? 'default'}`
+              : status?.storageMode
+          }
+        >
+          {external
+            ? 'managed elsewhere'
+            : status?.storageMode === 'postgres'
+              ? `postgres · ${status.postgresNamespace ?? 'default'}`
+              : (status?.storageMode ?? '—')}
         </Vital>
       </div>
     </section>

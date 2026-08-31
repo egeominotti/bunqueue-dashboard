@@ -12,6 +12,26 @@ export function managedStorageMode(config: ServerConfig): ManagedStorageMode {
   return config.dataPath ? 'sqlite' : 'memory';
 }
 
+export function managedPostgresUrl(config: ServerConfig): string | undefined {
+  return (config.extraEnv.BUNQUEUE_POSTGRES_URL ?? process.env.BUNQUEUE_POSTGRES_URL)?.trim() || undefined;
+}
+
+export function managedPostgresNamespace(config: ServerConfig): string {
+  return (
+    (config.extraEnv.BUNQUEUE_POSTGRES_NAMESPACE ?? process.env.BUNQUEUE_POSTGRES_NAMESPACE)?.trim() ||
+    'default'
+  );
+}
+
+/** Fail before spawning when Bunqueue would reject an incomplete PostgreSQL config. */
+export function validateManagedStorage(config: ServerConfig): ManagedStorageMode {
+  const mode = managedStorageMode(config);
+  if (mode === 'postgres' && !managedPostgresUrl(config)) {
+    throw new Error('PostgreSQL storage requires BUNQUEUE_POSTGRES_URL');
+  }
+  return mode;
+}
+
 /** Non-SQLite drivers cannot be combined with Bunqueue's legacy SQLite path aliases. */
 export function removeSqlitePaths(env: Record<string, string>): void {
   delete env.BUNQUEUE_DATA_PATH;

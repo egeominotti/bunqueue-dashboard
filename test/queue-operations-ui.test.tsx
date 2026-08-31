@@ -38,6 +38,20 @@ describe('Queue SDK operations UI', () => {
     expect(host.textContent).toContain('Global concurrency');
     expect(host.textContent).toContain('Available');
 
+    click(host, 'Read group');
+    await settle(5);
+    expect(host.textContent).toContain('All grouped');
+    expect(host.textContent).toContain('5/1000ms');
+
+    click(host, 'Set rate limit');
+    await settle(5);
+    click(host, 'Clear rate limit');
+    await settle(5);
+    click(host, 'Set concurrency');
+    await settle(5);
+    click(host, 'Clear concurrency');
+    await settle(5);
+
     setValue(input(host, 'queue-sdk-deduplication-id'), 'invoice:7');
     click(host, 'Find owner');
     await settle(5);
@@ -57,8 +71,13 @@ describe('Queue SDK operations UI', () => {
     click(host, 'Trim journal');
     await settle(5);
     expect(host.textContent).toContain('3 lifecycle events removed');
-    expect(applied).toBe(2);
+    expect(applied).toBe(6);
     expect(calls).toContain('limits:orders:undefined');
+    expect(calls).toContain('group:orders:default:undefined:100');
+    expect(calls).toContain('group-rate:orders:default:100:60000');
+    expect(calls).toContain('group-rate-remove:orders:default');
+    expect(calls).toContain('group-concurrency:orders:default:1');
+    expect(calls).toContain('group-concurrency-remove:orders:default');
     expect(calls).toContain('dedup:orders:invoice:7');
     expect(calls).toContain('remove:orders:invoice:7');
     expect(calls).toContain('metrics:orders:completed:0:29');
@@ -151,6 +170,31 @@ function repositoryOf(calls: string[]): QueueOperationsRepository {
         rateLimitTtl: 0,
         maxed: false,
       };
+    },
+    group: async (queue, groupId, maxJobs, maxCount) => {
+      calls.push(`group:${queue}:${groupId}:${maxJobs}:${maxCount}`);
+      return {
+        jobs: 2,
+        active: 1,
+        totalGrouped: 4,
+        rateLimit: { max: 5, duration: 1000 },
+        rateLimitTtl: 25,
+        concurrency: 3,
+      };
+    },
+    setGroupRateLimit: async (queue, groupId, max, duration) => {
+      calls.push(`group-rate:${queue}:${groupId}:${max}:${duration}`);
+    },
+    removeGroupRateLimit: async (queue, groupId) => {
+      calls.push(`group-rate-remove:${queue}:${groupId}`);
+      return 1;
+    },
+    setGroupConcurrency: async (queue, groupId, concurrency) => {
+      calls.push(`group-concurrency:${queue}:${groupId}:${concurrency}`);
+    },
+    removeGroupConcurrency: async (queue, groupId) => {
+      calls.push(`group-concurrency-remove:${queue}:${groupId}`);
+      return 1;
     },
     deduplicationJobId: async (queue, id) => {
       calls.push(`dedup:${queue}:${id}`);

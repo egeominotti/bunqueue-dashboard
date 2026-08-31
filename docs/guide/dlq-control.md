@@ -1,12 +1,12 @@
 ---
 title: DLQ Control
-description: "Pick one queue to inspect and export failed jobs; all retry and purge mutations fail closed under the v2.9.0 contract."
+description: "Pick one queue to inspect and export failed jobs; all retry and purge mutations fail closed under the v2.9.2 contract."
 ---
 
 # DLQ Control
 
 Pick one queue to inspect and export the jobs that failed for good. All row,
-bulk and queue-wide retry mutations are unavailable under the v2.9.0
+bulk and queue-wide retry mutations are unavailable under the v2.9.2
 fail-closed policy.
 
 **Where:** open `/dlq-control` from the sidebar.
@@ -43,7 +43,7 @@ request. Export is a browser-side download and does not change the queue.
 
 ::: warning An exact ID is not an atomic identity
 Between `GET /jobs/:id` and `POST /queues/:q/dlq/retry`, the observed job can be
-removed and a new job created under the same ID. Bunqueue v2.9.0 gives the POST
+removed and a new job created under the same ID. Bunqueue v2.9.2 gives the POST
 no generation/state/topology precondition, so even an exact, fresh,
 topology-empty snapshot cannot make row retry safe.
 :::

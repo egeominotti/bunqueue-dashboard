@@ -12,6 +12,42 @@ export const queueOperationsApi = {
       `/queue-operations/${queueHttpPathSegment(queue)}/limits?target=${targetQuery()}${suffix}`
     );
   },
+  group: (
+    queue: string,
+    groupId: string,
+    maxJobs?: number,
+    maxCount?: number
+  ): Promise<unknown> => {
+    const query = new URLSearchParams({ target: getBaseUrl(), groupId });
+    if (maxJobs !== undefined) query.set('maxJobs', String(maxJobs));
+    if (maxCount !== undefined) query.set('maxCount', String(maxCount));
+    return agentRequest(`/queue-operations/${queueHttpPathSegment(queue)}/groups?${query}`);
+  },
+  setGroupRateLimit: (
+    queue: string,
+    groupId: string,
+    max: number,
+    duration: number
+  ): Promise<unknown> =>
+    agentRequest(
+      `/queue-operations/${queueHttpPathSegment(queue)}/groups/rate-limit?target=${targetQuery()}`,
+      body('POST', { groupId, max, duration })
+    ),
+  removeGroupRateLimit: (queue: string, groupId: string): Promise<unknown> =>
+    agentRequest(
+      `/queue-operations/${queueHttpPathSegment(queue)}/groups/rate-limit/remove?target=${targetQuery()}`,
+      body('POST', { groupId })
+    ),
+  setGroupConcurrency: (queue: string, groupId: string, concurrency: number): Promise<unknown> =>
+    agentRequest(
+      `/queue-operations/${queueHttpPathSegment(queue)}/groups/concurrency?target=${targetQuery()}`,
+      body('POST', { groupId, concurrency })
+    ),
+  removeGroupConcurrency: (queue: string, groupId: string): Promise<unknown> =>
+    agentRequest(
+      `/queue-operations/${queueHttpPathSegment(queue)}/groups/concurrency/remove?target=${targetQuery()}`,
+      body('POST', { groupId })
+    ),
   deduplicationJobId: (queue: string, deduplicationId: string): Promise<unknown> =>
     agentRequest(
       `/queue-operations/${queueHttpPathSegment(queue)}/deduplication?${new URLSearchParams({ target: getBaseUrl(), deduplicationId })}`

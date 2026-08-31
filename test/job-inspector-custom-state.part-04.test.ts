@@ -125,7 +125,7 @@ describe('Job Inspector custom-id lookup', () => {
       expect(discards).toBe(0);
       expect(dataUpdates).toBe(0);
       expect(currentSearch).toBe('?id=waiting-job');
-      expect(host.textContent).toContain('Cancel/delete/discard: Unavailable in Bunqueue v2.9.0');
+      expect(host.textContent).toContain('Cancel/delete/discard: Unavailable in Bunqueue v2.9.2');
       expect(host.textContent).not.toContain('Discard (to DLQ)');
       expect(host.textContent).not.toContain('Save data');
       expect(host.textContent).toContain('Data is read-only for Flow jobs');

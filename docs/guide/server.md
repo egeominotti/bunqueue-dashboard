@@ -34,7 +34,7 @@ The **Configuration** card holds the settings the server will launch with next t
 
 | Element | What it tells you |
 | --- | --- |
-| **Command** | The command the agent runs to launch bunqueue (default `bunx bunqueue@2.9.0 start`). |
+| **Command** | The command the agent runs to launch bunqueue (default `bunx bunqueue@2.9.2 start`). |
 | **HTTP port** | The dashboard API and live-update port (1 to 65535). |
 | **TCP port** | The binary-protocol port. Must differ from the HTTP port. |
 | **Data path** | Where the SQLite database file lives. |
@@ -86,12 +86,14 @@ Both **Save config** and **Save & restart** validate your ports first: each must
 ## Good to know
 
 - **Configuration never applies in place.** Changes to the command, ports, or data path only take effect on the **next start or restart**, the running server keeps what it launched with. Use **Save & restart** to apply immediately. When your saved config is ahead of the running one, a "Restart to apply changes" hint appears next to the buttons.
-- **The default command resolves Bunqueue 2.9.0 through `bunx`.** For offline or source-checkout workflows, point **Command** at a local entry instead, for example `bun run /path/to/bunqueue/src/main.ts`.
+- **The default command resolves Bunqueue 2.9.2 through `bunx`.** For offline or source-checkout workflows, point **Command** at a local entry instead, for example `bun run /path/to/bunqueue/src/main.ts`.
 - **PostgreSQL multi-broker mode:** add `BUNQUEUE_STORAGE_DRIVER=postgres` and
   `BUNQUEUE_POSTGRES_URL=…` under Environment variables. Keep **Data path** on a durable location
   if you use the dashboard Workflow Engine: the agent retains it for Workflow state but removes
   every SQLite path alias from the PostgreSQL broker environment. Database inspection and S3
   snapshots remain SQLite-only and return a clear unavailable response while PostgreSQL is active.
+  Bunqueue 2.9.2 uses PostgreSQL schema 19: upgrade every broker sharing the namespace together;
+  a broker that supports only an older schema cannot join the database after migration to schema 19.
 - **The data path's folder must already exist.** The server creates the database *file* but not its parent *folder*. A start that fails with a "cannot open" error usually means the directory isn't there yet, create it, or pick a path whose folder already exists.
 - **Logs don't keep forever.** Only the most recent ~800 lines are held, so older output scrolls off. Use **Download** to save a copy you want to keep.
 - **When the agent can't be reached**, the page tells you plainly. If it was never reachable, you'll see how to start it. If it stops responding after working, an amber banner shows the last known state and the Start/Stop/Restart buttons are disabled until it answers again, this is intentional, so the page never claims a dead server is "healthy." It reconnects on its own once the agent is back; no reload needed. See [Known issues](/known-issues).

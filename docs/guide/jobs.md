@@ -62,7 +62,7 @@ bulk action is exposed.
 **Export CSV**, download the rows on the current page.
 
 ::: warning Unsafe lifecycle transitions fail closed
-The dashboard never exposes `DELETE /jobs/:id`. Bunqueue v2.9.0 cannot reveal
+The dashboard never exposes `DELETE /jobs/:id`. Bunqueue v2.9.2 cannot reveal
 every reverse flow dependency, so deleting an apparently standalone job can
 permanently strand another queue's parent. DLQ retry is also unavailable because
 its GET + POST sequence has no atomic generation/state/topology precondition and

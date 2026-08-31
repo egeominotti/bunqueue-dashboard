@@ -1,13 +1,13 @@
 ---
 title: Dead Letter Queue
-description: "Inspect, filter and export failed jobs while every DLQ retry and purge path fails closed under the v2.9.0 contract."
+description: "Inspect, filter and export failed jobs while every DLQ retry and purge path fails closed under the v2.9.2 contract."
 ---
 
 # Dead Letter Queue
 
 This screen is where jobs land after they fail and run out of retries. You can
 inspect, filter and export failures; every manual, bulk and queue-wide retry
-control is unavailable under the v2.9.0 fail-closed policy.
+control is unavailable under the v2.9.2 fail-closed policy.
 
 **Where:** open `/dlq` from the sidebar.
 

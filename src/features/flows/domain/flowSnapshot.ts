@@ -119,7 +119,7 @@ export interface FlowRootResolution {
   hops: number;
   /** Complete validated path in seed-to-root order (both endpoints included). */
   path: JobFull[];
-  /** A legitimate removed ancestor that v2.9.0 can no longer return over HTTP. */
+  /** A legitimate removed ancestor that v2.9.2 can no longer return over HTTP. */
   missingParent?: string;
 }
 
@@ -128,7 +128,7 @@ export function flowJobIdError(id: string): string | null {
   return error ? `Job ID: ${error}` : null;
 }
 
-/** Climb the complete v2.9.0 parent chain; never claim a partial subtree is the root. */
+/** Climb the complete v2.9.2 parent chain; never claim a partial subtree is the root. */
 export async function resolveFlowRoot(
   id: string,
   options: FlowTraversalOptions = {}
@@ -176,7 +176,7 @@ export async function resolveFlowRoot(
     }
     if (hops >= MAX_PARENT_HOPS) {
       throw new FlowSnapshotError(
-        `Flow parent chain exceeds the Bunqueue 2.9.0 limit of ${MAX_PARENT_HOPS} levels`
+        `Flow parent chain exceeds the Bunqueue 2.9.2 limit of ${MAX_PARENT_HOPS} levels`
       );
     }
     seen.add(parent);

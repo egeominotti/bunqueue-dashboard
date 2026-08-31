@@ -1,7 +1,7 @@
 import { Queue, type QueueMetricType, type QueueMetrics } from 'bunqueue/client';
 import { managedAuthToken } from '../managedTarget';
 import type { ServerConfig } from '../manager';
-import type { QueueLimitSnapshot, QueueOperationsPort } from './types';
+import type { QueueGroupSnapshot, QueueLimitSnapshot, QueueOperationsPort } from './types';
 import { QueueOperationsUnavailableError } from './types';
 
 export type QueueOperationsClient = Pick<
@@ -11,6 +11,16 @@ export type QueueOperationsClient = Pick<
   | 'getGlobalConcurrency'
   | 'getRateLimitTtl'
   | 'isMaxed'
+  | 'getGroupJobsCount'
+  | 'getGroupsJobsCount'
+  | 'getGroupActiveCount'
+  | 'setGroupRateLimit'
+  | 'getGroupRateLimit'
+  | 'removeGroupRateLimit'
+  | 'getGroupRateLimitTtl'
+  | 'setGroupConcurrency'
+  | 'getGroupConcurrency'
+  | 'removeGroupConcurrency'
   | 'getDeduplicationJobId'
   | 'removeDeduplicationKey'
   | 'removeDlqJob'
@@ -40,6 +50,57 @@ export class QueueOperationsRuntime implements QueueOperationsPort {
       ]);
       return { rateLimit, concurrency, rateLimitTtl, maxed };
     });
+  }
+
+  group(
+    config: ServerConfig,
+    queue: string,
+    groupId: string,
+    maxJobs?: number,
+    maxCount?: number
+  ): Promise<QueueGroupSnapshot> {
+    return this.withQueue(config, queue, async (client) => {
+      const [jobs, active, totalGrouped, rateLimit, rateLimitTtl, concurrency] = await Promise.all([
+        client.getGroupJobsCount(groupId),
+        client.getGroupActiveCount(groupId),
+        client.getGroupsJobsCount(maxCount),
+        client.getGroupRateLimit(groupId),
+        client.getGroupRateLimitTtl(groupId, maxJobs),
+        client.getGroupConcurrency(groupId),
+      ]);
+      return { jobs, active, totalGrouped, rateLimit, rateLimitTtl, concurrency };
+    });
+  }
+
+  setGroupRateLimit(
+    config: ServerConfig,
+    queue: string,
+    groupId: string,
+    max: number,
+    duration: number
+  ): Promise<void> {
+    return this.withQueue(config, queue, (client) =>
+      client.setGroupRateLimit(groupId, max, duration)
+    );
+  }
+
+  removeGroupRateLimit(config: ServerConfig, queue: string, groupId: string): Promise<number> {
+    return this.withQueue(config, queue, (client) => client.removeGroupRateLimit(groupId));
+  }
+
+  setGroupConcurrency(
+    config: ServerConfig,
+    queue: string,
+    groupId: string,
+    concurrency: number
+  ): Promise<void> {
+    return this.withQueue(config, queue, (client) =>
+      client.setGroupConcurrency(groupId, concurrency)
+    );
+  }
+
+  removeGroupConcurrency(config: ServerConfig, queue: string, groupId: string): Promise<number> {
+    return this.withQueue(config, queue, (client) => client.removeGroupConcurrency(groupId));
   }
 
   deduplicationJobId(

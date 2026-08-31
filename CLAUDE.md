@@ -189,7 +189,7 @@ Full threat model in `agent/server.ts` and `scripts/serve.ts`; verified limits i
 - Jobs use **`startedAt` / `completedAt`** (not `processedOn` / `finishedOn`). `timeline[]` is persisted
   and capped at 20 entries. Since v2.8.59, reads also expose first-class `name`, terminal
   `returnvalue`, and `failedReason` fields.
-- bunqueue v2.9.0 `PUT /queues/:q/rate-limit` takes **`{ limit, duration?, ttl? }`**; concurrency takes `{ concurrency }` (or `{ limit }`).
+- bunqueue v2.9.2 `PUT /queues/:q/rate-limit` takes **`{ limit, duration?, ttl? }`**; concurrency takes `{ concurrency }` (or `{ limit }`).
 - Cron definitions expose **`jobName`** for spawned jobs, separate from cron definition names.
 - `bq.ts`'s `call()` throws on HTTP-200-with-`{ok:false}` too (many mutating endpoints use this for logical
   failure) — except `health()`, which passes `strict:false` because `/health`'s `ok` is a health flag, not a

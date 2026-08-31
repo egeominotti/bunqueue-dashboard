@@ -1,8 +1,22 @@
+import {
+  bodyInteger,
+  deduplicationId,
+  exactBody,
+  exactQuery,
+  groupFor,
+  groupId,
+  messageOf,
+  metricSnapshot,
+  metricType,
+  notFound,
+  optionalInteger,
+  positiveSafeInteger,
+  type QueueState,
+  type RateLimit,
+  validQueue,
+} from './queueOperationHelpers';
 import { jsonResponse } from './responses';
 import type { Json } from './shared';
-
-type MetricType = 'completed' | 'failed';
-type RateLimit = { max: number; duration: number } | null;
 
 interface QueueSeed {
   rateLimit: RateLimit;
@@ -14,10 +28,6 @@ interface QueueSeed {
   completed: readonly number[];
   failed: readonly number[];
   deduplications: readonly (readonly [string, string])[];
-}
-
-interface QueueState extends Omit<QueueSeed, 'deduplications'> {
-  deduplications: Map<string, string>;
 }
 
 const QUEUES: Readonly<Record<string, QueueSeed>> = {
@@ -79,10 +89,8 @@ const EMPTY_QUEUE: QueueSeed = {
   deduplications: [],
 };
 
-const MAX_BODY_BYTES = 8 * 1024;
 const MAX_PAGE_INDEX = 10_000;
 const MAX_EVENT_RETENTION = 1_000_000;
-const METRIC_TIMESTAMP = 1_783_035_039_000;
 
 export type DemoQueueOperations = (request: Request, path: string) => Promise<Response>;
 
@@ -93,7 +101,7 @@ export function createDemoQueueOperations(): DemoQueueOperations {
     const existing = states.get(queue);
     if (existing) return existing;
     const seed = QUEUES[queue] ?? EMPTY_QUEUE;
-    const state = { ...seed, deduplications: new Map(seed.deduplications) };
+    const state = { ...seed, deduplications: new Map(seed.deduplications), groups: new Map() };
     states.set(queue, state);
     return state;
   };
@@ -138,6 +146,30 @@ async function routeRequest(
       },
     };
   }
+  if (request.method === 'GET' && operation === 'groups') {
+    const query = exactQuery(request, ['target', 'groupId', 'maxJobs', 'maxCount']);
+    const id = groupId(query.get('groupId'));
+    const maxJobs = optionalInteger(query.get('maxJobs'), 'maxJobs', 0, 1_000_000);
+    optionalInteger(query.get('maxCount'), 'maxCount', 1, 1_000_000);
+    const group = groupFor(state, id);
+    const rateLimitTtl =
+      group.rateLimit === null
+        ? -2
+        : maxJobs !== undefined && group.consumedJobs < maxJobs
+          ? 0
+          : group.cooldownMs;
+    return {
+      ok: true,
+      group: {
+        jobs: group.jobs,
+        active: group.active,
+        totalGrouped: [...state.groups.values()].reduce((sum, item) => sum + item.jobs, 0),
+        rateLimit: group.rateLimit,
+        rateLimitTtl,
+        concurrency: group.concurrency,
+      },
+    };
+  }
   if (request.method === 'GET' && operation === 'deduplication') {
     const query = exactQuery(request, ['target', 'deduplicationId']);
     const id = deduplicationId(query.get('deduplicationId'));
@@ -157,6 +189,33 @@ async function routeRequest(
     const id = deduplicationId(body.deduplicationId);
     return { ok: true, removed: state.deduplications.delete(id) ? 1 : 0 };
   }
+  if (request.method === 'POST' && operation.startsWith('groups/')) {
+    exactQuery(request, ['target']);
+    const remove = operation.endsWith('/remove');
+    const rateLimit = operation.includes('/rate-limit');
+    const allowed = remove
+      ? ['groupId']
+      : rateLimit
+        ? ['groupId', 'max', 'duration']
+        : ['groupId', 'concurrency'];
+    const body = await exactBody(request, allowed);
+    const group = groupFor(state, groupId(body.groupId));
+    if (remove) {
+      const existed = rateLimit ? group.rateLimit !== null : group.concurrency !== null;
+      if (rateLimit) group.rateLimit = null;
+      else group.concurrency = null;
+      return { ok: true, removed: existed ? 1 : 0 };
+    }
+    if (rateLimit) {
+      group.rateLimit = {
+        max: positiveSafeInteger(body.max, 'max'),
+        duration: positiveSafeInteger(body.duration, 'duration'),
+      };
+    } else {
+      group.concurrency = positiveSafeInteger(body.concurrency, 'concurrency');
+    }
+    return { ok: true, applied: true };
+  }
   if (request.method === 'POST' && operation === 'events/trim') {
     exactQuery(request, ['target']);
     const body = await exactBody(request, ['maxLength']);
@@ -167,103 +226,3 @@ async function routeRequest(
   }
   return null;
 }
-
-function metricSnapshot(data: readonly number[], start: number, end: number): Json {
-  const exclusiveEnd = end === -1 ? data.length : Math.min(data.length, end + 1);
-  return {
-    meta: {
-      count: data.reduce((total, value) => total + value, 0),
-      prevTS: data.length ? METRIC_TIMESTAMP : 0,
-      prevCount: data[0] ?? 0,
-    },
-    data: start >= exclusiveEnd ? [] : data.slice(start, exclusiveEnd),
-    count: data.length,
-  };
-}
-
-function exactQuery(request: Request, allowed: readonly string[]): URLSearchParams {
-  const query = new URL(request.url).searchParams;
-  for (const key of query.keys()) {
-    if (!allowed.includes(key)) throw new Error(`Unknown Queue operation option: ${key}`);
-    if (query.getAll(key).length !== 1) throw new Error(`Duplicate Queue operation option: ${key}`);
-  }
-  if (!query.get('target')) throw new Error('Queue operation target is required');
-  return query;
-}
-
-async function exactBody(
-  request: Request,
-  allowed: readonly string[]
-): Promise<Record<string, unknown>> {
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
-    throw new Error('Queue operation request body exceeds 8 KiB');
-  }
-  let value: unknown;
-  try {
-    value = JSON.parse(raw);
-  } catch {
-    throw new Error('Queue operation request must be valid JSON');
-  }
-  if (!isRecord(value)) throw new Error('Queue operation request must be an object');
-  const unknown = Object.keys(value).find((key) => !allowed.includes(key));
-  if (unknown) throw new Error(`Unknown Queue operation body field: ${unknown}`);
-  return value;
-}
-
-function validQueue(queue: string): string {
-  if (
-    !queue ||
-    queue.length > 256 ||
-    queue === '.' ||
-    queue === '..' ||
-    !/^[\w.:-]+$/.test(queue)
-  ) {
-    throw new Error(
-      'Queue name must contain 1-256 letters, numbers, underscores, dashes, dots or colons'
-    );
-  }
-  return queue;
-}
-
-function deduplicationId(value: unknown): string {
-  if (typeof value !== 'string' || !value || value.length > 1024) {
-    throw new Error('Deduplication ID must contain 1-1024 characters');
-  }
-  return value;
-}
-
-function metricType(value: string | null): MetricType {
-  if (value !== 'completed' && value !== 'failed') {
-    throw new Error('Metrics type must be completed or failed');
-  }
-  return value;
-}
-
-function optionalInteger(
-  raw: string | null,
-  label: string,
-  minimum: number,
-  maximum: number
-): number | undefined {
-  if (raw === null) return undefined;
-  if (!/^-?\d+$/.test(raw)) throw new Error(`${label} must be an integer`);
-  return bodyInteger(Number(raw), label, minimum, maximum);
-}
-
-function bodyInteger(value: unknown, label: string, minimum: number, maximum: number): number {
-  if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > maximum) {
-    throw new Error(`${label} must be an integer from ${minimum} to ${maximum}`);
-  }
-  return value as number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function notFound(): Response {
-  return jsonResponse({ ok: false, error: 'Unknown Queue operation' }, 404);
-}
-
-const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));

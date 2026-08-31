@@ -8,6 +8,7 @@ import type {
 } from '../application/QueueOperationsRepository';
 import { bqQueueOperationsRepository } from '../infrastructure/bqQueueOperationsRepository';
 import { QueueDeduplicationConsole } from './QueueDeduplicationConsole';
+import { QueueGroupConsole } from './QueueGroupConsole';
 import { QueueLimitReadback } from './QueueLimitReadback';
 import { QueueTelemetryConsole } from './QueueTelemetryConsole';
 
@@ -117,8 +118,8 @@ export function QueueOperationsPanel({
         action={busy ? <span className="font-mono text-xs text-accent">{busy}...</span> : undefined}
       />
       <p className="mb-5 max-w-3xl text-xs leading-5 text-faint">
-        Live Bunqueue 2.9.0 limit, deduplication, metric, and event-journal contracts. Requests are
-        pinned to the server managed by this control agent.
+        Live Bunqueue 2.9.2 limit, group, deduplication, metric, and event-journal contracts.
+        Requests are pinned to the server managed by this control agent.
       </p>
       <div className="mb-5 flex flex-wrap items-end gap-3 border-b border-line pb-5">
         <div className="w-48">
@@ -150,6 +151,13 @@ export function QueueOperationsPanel({
         </p>
       )}
       <div className="mt-6 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+        <QueueGroupConsole
+          key={`${queue}:groups`}
+          queue={queue}
+          repository={repository}
+          busy={busy}
+          run={run}
+        />
         <QueueDeduplicationConsole
           key={`${queue}:deduplication`}
           queue={queue}

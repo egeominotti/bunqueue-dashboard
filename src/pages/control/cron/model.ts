@@ -66,7 +66,7 @@ export function assertCronCreateResponse(response: unknown, expected: CreateCron
 }
 
 const cronAlreadyExistsMessage = (name: string) =>
-  `Cron "${name}" already exists. Bunqueue v2.9.0 does not return complete cron definitions, so editing could reset hidden options. Delete it explicitly, wait for the list to refresh, then create the replacement as a separate action.`;
+  `Cron "${name}" already exists. Bunqueue v2.9.2 does not return complete cron definitions, so editing could reset hidden options. Delete it explicitly, wait for the list to refresh, then create the replacement as a separate action.`;
 
 export function existingCronNameError(
   name: string,

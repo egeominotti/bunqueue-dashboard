@@ -46,7 +46,7 @@ src/features/<capability>/
 Workflow, Job Flow, Queue SDK, and S3 operations follow this boundary. Tests
 inject repository ports into the UI and fake runtime ports into agent routes;
 real E2E scripts exercise the same adapters against a disposable Bunqueue
-2.9.0 process. Non-idempotent commands use synchronous leases, while reads
+2.9.2 process. Non-idempotent commands use synchronous leases, while reads
 carry a target/request generation so a late response cannot cross a server,
 queue, workflow, or form retarget.
 

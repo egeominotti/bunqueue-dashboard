@@ -45,7 +45,7 @@ Each row in the table is one worker:
 Workers aren't created or edited here; they're started by your own consumer processes and register themselves. This screen is for monitoring them and cleaning up records only after the corresponding process has stopped.
 
 ::: warning
-Registry cleanup **does not stop the worker process**. In Bunqueue v2.9.0, a running worker does not automatically re-register after its heartbeat record is removed. Stop and verify the process first; use this action only for stale, idle records.
+Registry cleanup **does not stop the worker process**. In Bunqueue v2.9.2, a running worker does not automatically re-register after its heartbeat record is removed. Stop and verify the process first; use this action only for stale, idle records.
 :::
 
 ## Good to know

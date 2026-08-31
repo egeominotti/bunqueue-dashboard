@@ -6,7 +6,7 @@ description: Visualize a bunqueue job flow as an interactive DAG in the dashboar
 # Flows
 
 The **Job Flows** page is both an interactive DAG explorer and an operator
-console for Bunqueue 2.9.0's official `FlowProducer` and Flow Job contracts.
+console for Bunqueue 2.9.2's official `FlowProducer` and Flow Job contracts.
 
 The URL preserves the loaded root, selected DAG node, and active Explore/Create/
 Job methods tool. Back/Forward restores that context, while an invalid root or
@@ -39,7 +39,7 @@ the request started, even if the form is edited while the request is in flight.
 It renders both a compact state-aware tree and the complete raw agent JSON;
 `flow: null` is shown as an explicit not-found result.
 
-`Job.updateProgress` follows both Bunqueue 2.9.0 forms. Numeric progress is
+`Job.updateProgress` follows both Bunqueue 2.9.2 forms. Numeric progress is
 bounded to 0-100 and may carry an optional message. Object progress is strict,
 bounded JSON and uses Bunqueue's canonical wire representation: numeric
 progress `0` with the serialized object in the progress-message field. A
@@ -57,27 +57,27 @@ Jobs/Job Inspector portable even when the local control agent is unavailable:
 1. Paste any job ID, or open a job that is part of a flow in the
    [Job Inspector](/guide/job-inspector) and choose **View flow**.
 2. The page climbs `parentId` to the flow's root, following up to the 100 levels
-   supported by the v2.9.0 flow planner.
+   supported by the v2.9.2 flow planner.
 3. From the root it walks `childrenIds` (solid edges) and non-structural
    `dependsOn` links (dashed edges), up to 500 nodes.
 4. It lays the graph out in columns by dependency depth and colours every node by
    state, including `waiting-children` for a parent blocked on its children.
 
-Job IDs must also be addressable by v2.9.0's non-decoding `/jobs/:id` HTTP
+Job IDs must also be addressable by v2.9.2's non-decoding `/jobs/:id` HTTP
 route. Path-safe punctuation such as `:`, `@`, and `+` is preserved exactly;
 spaces, slashes, percent signs, and the exact dot segments `.` / `..` are
 rejected before a request is sent. The same validation is applied to parent,
 child, and dependency IDs returned by the server, so malformed topology cannot
 be normalized by the browser into a different URL.
 
-Every v2.9.0 job snapshot must explicitly contain all three topology fields:
+Every v2.9.2 job snapshot must explicitly contain all three topology fields:
 `parentId` as a string or `null`, plus `childrenIds` and `dependsOn` as arrays.
 An absent field is not interpreted as an empty relationship. A partial root or
 seed stops the traversal with an error; a partial referenced node is shown as
 unavailable with the malformed-field reason.
 
 ::: warning Destructive operations outside Flow Job methods
-Bunqueue v2.9.0 does not expose reverse-dependency inspection or
+Bunqueue v2.9.2 does not expose reverse-dependency inspection or
 topology-aware Cancel, Drain, Clean, Obliterate, DLQ Retry, or DLQ Purge.
 Deleting a referenced job can strand a parent in `waiting-children`, while a
 DLQ retry POST cannot atomically require the generation, state and topology
@@ -98,7 +98,7 @@ processor transitions into generic operator buttons. `discard()` is also
 process-local and non-awaitable. Use these inside the actual Worker processor;
 the page states this boundary beside the methods it can execute safely.
 
-v2.9.0 stores every canonical child in both the parent's `childrenIds` and
+v2.9.2 stores every canonical child in both the parent's `childrenIds` and
 `dependsOn`. The dashboard collapses that symmetric metadata into one solid
 parent-to-child edge; otherwise every normal relationship would be drawn twice
 in opposite directions and create an artificial cycle. Dashed edges therefore

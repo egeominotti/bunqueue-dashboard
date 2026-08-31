@@ -56,7 +56,7 @@ describe('ProcessManager', () => {
     await m.stop();
   });
 
-  test('PostgreSQL mode does not leak a conflicting SQLite data path to Bunqueue 2.9', async () => {
+  test('PostgreSQL mode does not leak a conflicting SQLite data path to Bunqueue 2.9.2', async () => {
     const m = new ProcessManager();
     m.setConfig({
       command: 'env',
@@ -75,6 +75,17 @@ describe('ProcessManager', () => {
     expect(output).toContain('BUNQUEUE_STORAGE_DRIVER=postgres');
     expect(output.some((line) => line.startsWith('BUNQUEUE_DATA_PATH='))).toBe(false);
     await m.stop();
+  });
+
+  test('PostgreSQL mode fails before spawn without a connection URL', async () => {
+    const m = new ProcessManager();
+    m.setConfig({
+      command: 'sleep 30',
+      extraEnv: { BUNQUEUE_STORAGE_DRIVER: 'postgres', BUNQUEUE_POSTGRES_URL: '' },
+    });
+
+    await expect(m.start()).rejects.toThrow('PostgreSQL storage requires BUNQUEUE_POSTGRES_URL');
+    expect(m.getStatus()).toMatchObject({ status: 'stopped', pid: null });
   });
 
   test('memory mode removes every inherited SQLite path alias', async () => {

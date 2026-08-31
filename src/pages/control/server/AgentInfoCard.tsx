@@ -33,7 +33,7 @@ export function AgentInfoCard({ agentBase }: { agentBase: string }) {
               <Code>HTTP_PORT</Code> and <Code>TCP_PORT</Code>, plus <Code>BUNQUEUE_DATA_PATH</Code>{' '}
               only for SQLite. Memory and PostgreSQL modes remove every SQLite path alias before
               launch. Any <span className="text-fg">Environment variables</span> you add are
-              included too. The default <Code>bunx bunqueue@2.9.0 start</Code> resolves the verified
+              included too. The default <Code>bunx bunqueue@2.9.2 start</Code> resolves the verified
               release; pointing the command at a local entry (e.g.{' '}
               <Code>bun run /path/to/bunqueue/src/main.ts</Code>) works without one.
             </p>

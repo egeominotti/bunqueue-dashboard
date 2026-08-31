@@ -1,5 +1,6 @@
 import { bq } from '@/lib/bq';
 import type {
+  QueueGroupSnapshot,
   QueueLimitSnapshot,
   QueueMetricsSnapshot,
   QueueOperationsRepository,
@@ -7,6 +8,18 @@ import type {
 
 export const bqQueueOperationsRepository: QueueOperationsRepository = {
   limits: async (queue, maxJobs) => parseLimits(await bq.queueOperations.limits(queue, maxJobs)),
+  group: async (queue, groupId, maxJobs, maxCount) =>
+    parseGroup(await bq.queueOperations.group(queue, groupId, maxJobs, maxCount)),
+  setGroupRateLimit: async (queue, groupId, max, duration) => {
+    parseApplied(await bq.queueOperations.setGroupRateLimit(queue, groupId, max, duration));
+  },
+  removeGroupRateLimit: async (queue, groupId) =>
+    parseRemoved(await bq.queueOperations.removeGroupRateLimit(queue, groupId)),
+  setGroupConcurrency: async (queue, groupId, concurrency) => {
+    parseApplied(await bq.queueOperations.setGroupConcurrency(queue, groupId, concurrency));
+  },
+  removeGroupConcurrency: async (queue, groupId) =>
+    parseRemoved(await bq.queueOperations.removeGroupConcurrency(queue, groupId)),
   deduplicationJobId: async (queue, id) =>
     parseJobId(await bq.queueOperations.deduplicationJobId(queue, id)),
   removeDeduplicationKey: async (queue, id) =>
@@ -16,6 +29,27 @@ export const bqQueueOperationsRepository: QueueOperationsRepository = {
   trimEvents: async (queue, maxLength) =>
     parseRemoved(await bq.queueOperations.trimEvents(queue, maxLength)),
 };
+
+function parseGroup(value: unknown): QueueGroupSnapshot {
+  const group = record(okRecord(value, 'Queue group').group, 'Queue group');
+  const rate = group.rateLimit;
+  if (
+    !integerAtLeast(group.jobs, 0) ||
+    !integerAtLeast(group.active, 0) ||
+    !integerAtLeast(group.totalGrouped, 0) ||
+    (rate !== null &&
+      (!isRecord(rate) || !positiveInteger(rate.max) || !positiveInteger(rate.duration))) ||
+    !integerAtLeast(group.rateLimitTtl, -2) ||
+    (group.concurrency !== null && !positiveInteger(group.concurrency))
+  ) {
+    throw malformed('Queue group');
+  }
+  return group as unknown as QueueGroupSnapshot;
+}
+
+function parseApplied(value: unknown): void {
+  if (okRecord(value, 'Queue mutation').applied !== true) throw malformed('Queue mutation');
+}
 
 function parseLimits(value: unknown): QueueLimitSnapshot {
   const root = okRecord(value, 'Queue limits');

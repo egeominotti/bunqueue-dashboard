@@ -102,12 +102,12 @@ single-queue triage surface.
 | --- | --- | --- |
 | `/` | `OverviewPro` | Connection banner (host · uptime · RAM) that flips to an amber "Connection lost, showing last known data / Stale" state when a poll fails after the first success; two rows of stat cards, a Queue Health grid, and a live Recent Activity feed from `useActivityStream()`. |
 | `/server` | `ServerControl` | Start/Stop/Restart via the control agent (amber "agent unreachable" banner + disabled lifecycle buttons when the agent poll dies); storage row (SQLite main/WAL/total-on-disk/last-modified); always-editable config form with port validation, a "Save & restart" shortcut and a "restart to apply" hint; colour-coded live process-log tail (`stdout`/`stderr`/`sys`). |
-| `/add-job` | `AddJob` | Enqueue with the complete v2.9.0 single-push options, including tags/group/dependencies, structured backoff and repeat policy; single or repeated copies via a `Count` field (validated, ≤10000). |
-| `/jobs/bulk-add` | `BulkAddJobs` | Bulk enqueue: paste a JSON array or NDJSON (one JSON value per line). Spec mode preserves the full v2.9.0 bulk `JobInput` surface and maps `jobId`/`customId` correctly; raw mode keeps the whole item as data. |
+| `/add-job` | `AddJob` | Enqueue with the complete v2.9.2 single-push options, including tags/group/dependencies, structured backoff and repeat policy; single or repeated copies via a `Count` field (validated, ≤10000). |
+| `/jobs/bulk-add` | `BulkAddJobs` | Bulk enqueue: paste a JSON array or NDJSON (one JSON value per line). Spec mode preserves the full v2.9.2 bulk `JobInput` surface and maps `jobId`/`customId` correctly; raw mode keeps the whole item as data. |
 | `/job` | `JobInspector` | Look up a job by ID (deep-linkable via `?id=`). Kv overview, editable Data, separately fetched Result, Error + stacktrace, Timeline, Backoff preview, logs and children. Promote and eligible metadata/progress writes are state-gated; DLQ retry and completed-job requeue are unavailable. 404 ("Job not found") is distinguished from network/5xx errors. |
 | `/queue-control` | `QueueControl` | Per-queue counts; guarded pause/resume and promote-delayed, with retry-completed and flow-unsafe Drain/Clean visible but disabled; blind desired-state rate/concurrency controls with explicit window/TTL, typed clear and receipts; Stall/DLQ forms where auto-retry can only be disabled and `maxAge`/`maxEntries` are read-only and omitted from saves. |
-| `/cron` | `CronManager` | Create a schedule (cron expression *or* interval-in-ms, live next-runs preview) with v2.9.0 dedup and complete spawned-job options, then list/delete schedules. |
-| `/dlq-control` | `DlqControl` | Single-queue DLQ triage. Removal, row retry, Retry-all and Purge are unavailable under the v2.9.0 atomicity policy. |
+| `/cron` | `CronManager` | Create a schedule (cron expression *or* interval-in-ms, live next-runs preview) with v2.9.2 dedup and complete spawned-job options, then list/delete schedules. |
+| `/dlq-control` | `DlqControl` | Single-queue DLQ triage. Removal, row retry, Retry-all and Purge are unavailable under the v2.9.2 atomicity policy. |
 | `/dlq` | `DlqPro` | Cross-queue DLQ dashboard with filters, pagination and CSV export. Individual removal, row/global/queue retry and Purge are unavailable. |
 | `/webhooks` | `Webhooks` | Create (URL, optional queue scope, optional HMAC secret, event checkboxes from `WEBHOOK_EVENTS`), list with success/failure counts and last-triggered, enable/disable toggle, delete (confirmed). |
 | `/diagnostics` | `Diagnostics` | Health/version/uptime/disk cards, a manual Ping button (round-trip ms), WS/SSE client counts, storage error, memory (heap/RSS), lifetime totals. |
@@ -128,7 +128,7 @@ single-queue triage surface.
 | `/logs` | `LogsPro` | Paginated, filterable (queue/status/search) view over the same live SSE stream `useActivityStream` drives on `OverviewPro`, a fuller UI over the identical 250-event ring buffer, not a separate data source. |
 | `/workers` | `WorkersPro` | Registered-workers table over `bq.workers()`, with active/stale status and confirmed registry cleanup only for stale workers reporting zero active jobs. The cleanup does not stop the process. Caps at 100 rows with a truncation hint. |
 | `/usage` | `UsagePro` | Cumulative totals, error rate, runtime, and an honest Storage health card from `bq.storage()` (red "Disk full, writes suspended" when `diskFull`). Renders uptime correctly (`stats.uptime` is ms). |
-| `/s3` | `S3BackupPro` | S3-compatible environment builder plus live Bunqueue 2.9.0 CLI status/list/backup operations. The agent applies only whitelisted `S3_*` keys and permits restore only while stopped with typed confirmation and an unchanged database snapshot. |
+| `/s3` | `S3BackupPro` | S3-compatible environment builder plus live Bunqueue 2.9.2 CLI status/list/backup operations. The agent applies only whitelisted `S3_*` keys and permits restore only while stopped with typed confirmation and an unchanged database snapshot. |
 
 ## Alerts (client-side)
 

@@ -40,7 +40,7 @@ afterEach(() => {
   useConnectionStore.setState({ baseUrl: '/api', token: '', agentToken: '', refreshMs: 3000 });
 });
 
-describe('Bunqueue 2.9.0 diagnostic endpoint client', () => {
+describe('Bunqueue 2.9.2 diagnostic endpoint client', () => {
   test('preserves plaintext liveness and structured readiness/metrics contracts', async () => {
     const calls: string[] = [];
     globalThis.fetch = ((input: RequestInfo | URL) => {
@@ -133,7 +133,7 @@ describe('Diagnostics endpoint UI', () => {
             {
               ok: false,
               status: 'degraded',
-              version: '2.9.0',
+              version: '2.9.2',
               uptime: 120,
               memory: { heapUsed: 3, heapTotal: 4, rss: 68 },
               connections: { tcp: 1, ws: 0, sse: 0 },

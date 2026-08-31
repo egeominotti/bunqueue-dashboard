@@ -1,7 +1,7 @@
 export interface JobFull {
   id: string;
   queue?: string;
-  /** First-class job name (Bunqueue protocol v3 / v2.9.0). */
+  /** First-class job name (Bunqueue protocol v3 / v2.9.2). */
   name?: string;
   data?: unknown;
   /** Terminal value embedded by current job read/list endpoints. */
@@ -190,7 +190,7 @@ export type {
   ServerStatus,
 } from './controlTypes';
 
-// ---- Workflow Engine observability (Bunqueue 2.9.0 persisted contract) ----
+// ---- Workflow Engine observability (Bunqueue 2.9.2 persisted contract) ----
 export type WorkflowExecutionState =
   | 'running'
   | 'waiting'

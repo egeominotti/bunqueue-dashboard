@@ -53,7 +53,7 @@ The four summary cards always add up **every** queue, even while you're searchin
 After each pause or resume you'll see a one-line result above the table: a green confirmation (for example, `payments paused ✓`) on success, or a red message explaining what went wrong. Only the row you clicked is disabled while it's working, every other row stays usable.
 
 ::: warning
-Pause and resume act **immediately**, there's no confirmation prompt. A single mis-click can pause a live queue, so check the row's **Status** pill afterward. Flow-destructive Drain/Clean/Obliterate controls are visible but disabled on the detail/control pages because v2.9.0 cannot inspect reverse dependencies.
+Pause and resume act **immediately**, there's no confirmation prompt. A single mis-click can pause a live queue, so check the row's **Status** pill afterward. Flow-destructive Drain/Clean/Obliterate controls are visible but disabled on the detail/control pages because v2.9.2 cannot inspect reverse dependencies.
 :::
 
 ## Good to know

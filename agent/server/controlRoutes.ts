@@ -1,4 +1,4 @@
-import { managedStorageMode, type ProcessManager, validateConfigPatch } from '../manager';
+import { type ProcessManager, validateConfigPatch } from '../manager';
 import { safeErrorMessage } from '../errorMessage';
 import {
   WorkflowRuntimeUnavailableError,
@@ -7,92 +7,13 @@ import {
 import { readLimitedJsonBody } from './jsonBody';
 import {
   MANAGED_CONTROL_TARGET,
-  probeExternalHealth,
   type ServerControlTarget,
 } from './controlTarget';
+import { statusWithHealth } from './controlStatus';
 import type { AgentLifecyclePort } from './lifecycle';
 import type { RouteResponse } from './types';
 
 const MAX_CONFIG_BODY_BYTES = 64 * 1024;
-
-async function statusWithHealth(
-  manager: ProcessManager,
-  controlTarget: ServerControlTarget,
-  retryOnProcessChange = true
-) {
-  const snapshot = manager.getStatus();
-  const configRevision = snapshot.configRevision ?? manager.getConfigRevision?.() ?? 0;
-  if (controlTarget.mode === 'external') {
-    const health = await probeExternalHealth(controlTarget);
-    return {
-      ...snapshot,
-      configRevision,
-      managementMode: 'external' as const,
-      healthy: health.healthy,
-      version: health.version,
-      reachable: health.reachable,
-      externalUrl: controlTarget.url,
-      healthStatus: health.statusCode,
-      healthError: health.error,
-      db: null,
-    };
-  }
-  let healthy = false;
-  let version: string | undefined;
-  if (snapshot.status === 'running') {
-    const port = snapshot.runningConfig?.httpPort ?? snapshot.config.httpPort;
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/health`, {
-        signal: AbortSignal.timeout(1500),
-      });
-      if (response.ok) {
-        const body: unknown = await response.json();
-        if (body !== null && typeof body === 'object' && !Array.isArray(body)) {
-          const health = body as Record<string, unknown>;
-          healthy = health.ok === true;
-          if (typeof health.version === 'string') version = health.version;
-        }
-      }
-    } catch {
-      // The managed process is not healthy yet.
-    }
-  }
-  const effectiveConfig = snapshot.runningConfig ?? snapshot.config;
-  const database = await statusDatabase(manager, effectiveConfig);
-  const current = manager.getStatus();
-  if (!sameProcessSnapshot(snapshot, current)) {
-    if (retryOnProcessChange) return statusWithHealth(manager, controlTarget, false);
-    const currentConfig = current.runningConfig ?? current.config;
-    return {
-      ...current,
-      configRevision: current.configRevision ?? manager.getConfigRevision?.() ?? 0,
-      managementMode: 'managed' as const,
-      healthy: false,
-      version: undefined,
-      db: await statusDatabase(manager, currentConfig),
-    };
-  }
-  return {
-    ...snapshot,
-    configRevision,
-    managementMode: 'managed' as const,
-    healthy,
-    version,
-    db: database,
-  };
-}
-
-async function statusDatabase(
-  manager: ProcessManager,
-  config: ReturnType<ProcessManager['getConfig']>
-) {
-  try {
-    return managedStorageMode(config) === 'sqlite' ? await manager.dbStats(config.dataPath) : null;
-  } catch {
-    // Status must remain reachable so an invalid desired storage driver can be corrected.
-    return null;
-  }
-}
 
 export async function routeControlRequest(
   request: Request,
@@ -260,18 +181,6 @@ function coordinatedLease<T>(
   operation: () => Promise<T>
 ): Promise<T> {
   return lifecycle ? lifecycle.lease(operation) : operation();
-}
-
-function sameProcessSnapshot(
-  initial: ReturnType<ProcessManager['getStatus']>,
-  current: ReturnType<ProcessManager['getStatus']>
-): boolean {
-  return (
-    initial.status === current.status &&
-    initial.generation === current.generation &&
-    initial.pid === current.pid &&
-    initial.configRevision === current.configRevision
-  );
 }
 
 type SettledOperation = { ok: true } | { ok: false; error: unknown };
