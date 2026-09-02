@@ -35,7 +35,7 @@ export function WorkflowPage({
   const { pathname } = useLocation();
   const section = workflowSectionFor(pathname);
   const view = useWorkflowUrlState(section);
-  const { kind, workflowName, state, offset, selected } = view;
+  const { kind, workflowName, state, offset, selected, update, select } = view;
 
   const query = {
     kind,
@@ -59,9 +59,9 @@ export function WorkflowPage({
     const lastPage =
       total === 0 ? 0 : Math.floor((total - 1) / WORKFLOW_PAGE_SIZE) * WORKFLOW_PAGE_SIZE;
     if (offset > lastPage) {
-      view.update({ offset: lastPage, executionId: null, tab: 'summary' }, true);
+      update({ offset: lastPage, executionId: null, tab: 'summary' }, true);
     }
-  }, [data?.page.total, offset, view.update]);
+  }, [data?.page.total, offset, update]);
 
   useEffect(() => {
     const rows = data?.page.executions;
@@ -71,9 +71,9 @@ export function WorkflowPage({
           ? rows.filter((row) => ['waiting', 'failed', 'compensation-stuck'].includes(row.state))
           : rows;
       const next = reconcileWorkflowSelection(selected, selectable);
-      if (next?.id !== selected?.id) view.select(next, true);
+      if (next?.id !== selected?.id) select(next, true);
     }
-  }, [data?.page.executions, section.id, selected, view.select]);
+  }, [data?.page.executions, section.id, selected, select]);
   const stats = data?.stats;
   const page = data?.page;
 

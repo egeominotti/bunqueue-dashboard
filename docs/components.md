@@ -16,13 +16,11 @@ under `src/lib/`, the pieces every page is built from. See
   `Sidebar` + a column of `Topbar` and a scrollable `<main>` holding
   `<Outlet/>`. Every route in `App.tsx` renders inside this one shell.
 - **`Sidebar.tsx`**, the `NAV` constant (a `NavGroup[]`) is the single source
-  of truth for what's navigable; a route with no entry here (and no entry in
-  `App.tsx`) is unreachable (see `Alerts.tsx` in
-  [pages.md](pages.md#not-part-of-the-router)). Renders four sections
-  (Queues / Monitoring / Control / Management) plus a floating Overview link.
-  Below the nav: `ConnectionBadge` (a tiny dot + host, polls `api.health()`
-  every `refreshMs`, note this is the **classic** client, independent of
-  whatever `bq` calls the current page is making), `ThemeToggle` (flips
+  of truth for what's navigable and for the command palette. It renders root
+  Overview/Fleet links plus Queues, Workflow, Monitoring, Control, and
+  Management sections. Below the nav, `ConnectionBadge` is a live profile
+  selector and health indicator; changing it atomically retargets the whole
+  app. `ThemeToggle` (flips
   `themeStore`), and `SidebarFooter`.
 - **`SidebarFooter.tsx`**, identity card at the very bottom (bq logo badge +
   current host from `connectionStore` + a settings shortcut).
@@ -56,22 +54,22 @@ All four stores use `zustand/middleware`'s `persist` to `localStorage`, so
 settings survive a refresh. `test/setup.ts` shims `localStorage` so these
 import cleanly under `bun test`.
 
-- **`connectionStore.ts`**, `{ baseUrl, token, refreshMs }`. `baseUrl`
-  defaults to `/api` (the Vite dev proxy target, see `vite.config.ts`) or
-  `VITE_BUNQUEUE_URL` if set at build time. Exposes two **non-reactive**
-  accessors, `getBaseUrl()`/`getAuthHeaders()`, used by `lib/api.ts` and
-  `lib/bq.ts` outside of React (so a plain async function can read the
-  current connection without being a hook). Both API clients re-read these on
-  every call, changing the connection in Settings takes effect on the very
-  next request, no reload needed.
+- **`connectionStore.ts`**, named profiles containing Bunqueue API and paired
+  agent URLs, an active profile id, two memory-only credentials per profile,
+  and `refreshMs`. Up to 32 canonical, credential-free profile records persist
+  in schema v4; v1-v3 blobs migrate without restoring tokens. Server/agent
+  clients and SSE re-read the active identity on every request. Captured target
+  clients freeze one profile and its exact credentials for multi-step commands,
+  while `usePolledData` treats any profile/URL/token change as a new generation
+  and aborts obsolete work.
 - **`themeStore.ts`**, `{ theme: 'dark'|'light' }`. `applyTheme()` sets
   `document.documentElement.dataset.theme` (which Tailwind's `light:` variant
   keys off, see architecture.md) and the native `color-scheme` CSS property.
   `initTheme()` is called once from `main.tsx` **before** the first render so
   there's no flash-of-wrong-theme; `onRehydrateStorage` re-applies it after
   the persisted value loads.
-- **`alertsStore.ts`**, `{ channels, rules }`, local-only. See
-  [known-issues.md](known-issues.md) for the fact that its page isn't routed.
+- **`alertsStore.ts`**, `{ channels, rules }`, local-only; the routed Alerts
+  page evaluates enabled rules against the active profile.
 - **`s3Store.ts`**, S3 connection-settings draft for `S3BackupPro`, local
   only, never sent to the server (see [pages.md](pages.md)).
 

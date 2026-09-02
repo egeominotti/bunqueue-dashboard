@@ -71,6 +71,7 @@ const Workflows = lazy(() =>
   import('./pages/control/Workflows').then((m) => ({ default: m.Workflows }))
 );
 const Alerts = lazy(() => import('./pages/Alerts').then((m) => ({ default: m.Alerts })));
+const Fleet = lazy(() => import('./pages/Fleet').then((m) => ({ default: m.Fleet })));
 const Cron = lazy(() => import('./pages/Cron').then((m) => ({ default: m.Cron })));
 const Dlq = lazy(() => import('./pages/Dlq').then((m) => ({ default: m.Dlq })));
 const Jobs = lazy(() => import('./pages/Jobs').then((m) => ({ default: m.Jobs })));
@@ -91,6 +92,7 @@ export function App() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<OverviewPro />} />
+        <Route path="/fleet" element={<Fleet />} />
         <Route path="/overview-classic" element={<Overview />} />
         <Route path="/queues" element={<QueuesOverview />} />
         <Route path="/queues-classic" element={<Queues />} />

@@ -23,6 +23,25 @@ export function managedPostgresNamespace(config: ServerConfig): string {
   );
 }
 
+/** Credential-free PostgreSQL cluster label safe to expose to authenticated operators. */
+export function managedPostgresTarget(config: ServerConfig): string | undefined {
+  const configured = managedPostgresUrl(config);
+  if (!configured) return undefined;
+  try {
+    const parsed = new URL(configured);
+    if (
+      (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') ||
+      !parsed.hostname
+    ) {
+      return undefined;
+    }
+    const database = decodeURIComponent(parsed.pathname.replace(/^\/+/, '')) || 'postgres';
+    return `${parsed.hostname}:${parsed.port || '5432'}/${database}`;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Fail before spawning when Bunqueue would reject an incomplete PostgreSQL config. */
 export function validateManagedStorage(config: ServerConfig): ManagedStorageMode {
   const mode = managedStorageMode(config);

@@ -12,9 +12,10 @@
  *
  * Honest limitation: the denominator is whatever lcov reports, i.e. only the
  * modules the test run actually imported. A source file no test ever touches is
- * absent from the report and therefore does NOT drag the percentage down —
- * deleting the only test for a module RAISES the reported number. Treat these
- * floors as "don't erode what is covered", not as "X% of the codebase".
+ * absent from the report and therefore does NOT drag the percentage down.
+ * `check-test-inventory.ts`, run immediately after this script, closes that
+ * loophole by requiring every application module to be covered or explicitly
+ * classified as a type-only file or externally exercised entrypoint.
  *
  * SCOPE: the floors are enforced on the LOGIC layer only — `.tsx` records are
  * summed and reported but excluded from the enforced totals. A JSX module lands

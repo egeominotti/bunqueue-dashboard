@@ -8,12 +8,14 @@ import { Pagination } from '@/components/ui/Pagination';
 import { bq } from '@/lib/bq';
 import { downloadCsv } from '@/lib/exportFile';
 import { FLOW_BULK_RETRY_UNAVAILABLE } from '@/lib/flowMutationSafety';
+import type { QueueSummary } from '@/lib/types';
 import { usePolledData } from '@/lib/usePolledData';
 import { DlqFilters, DlqQueueGrid, DlqSummary } from './dlq/DlqProControls';
 import { DlqProTable } from './dlq/DlqProTable';
 import { loadAllQueuePages } from './QueueControl';
 
 const PAGE_SIZE = 25;
+const EMPTY_QUEUES: QueueSummary[] = [];
 
 export function DlqPro() {
   const [params, setParams] = useSearchParams();
@@ -32,7 +34,7 @@ export function DlqPro() {
     loading: discoveryLoading,
     refetch: refetchQueues,
   } = usePolledData(loadAllQueuePages, [], { intervalMs: 10000 });
-  const queues = qs?.queues ?? [];
+  const queues = qs?.queues ?? EMPTY_QUEUES;
   const total = qs ? queues.reduce((a, q) => a + q.dlq, 0) : null;
 
   // Fast poll: only the selected queue's paginated /dlq page + /dlq/stats.

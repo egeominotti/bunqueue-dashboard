@@ -27,6 +27,8 @@ component → API-client table, see [Pages & routes](/pages).
 
 - [**Overview**](/guide/overview), the landing page: connection banner, headline
   stat cards, per-queue health grid, and a live activity feed.
+- [**Fleet**](/guide/fleet), health and lifecycle control for multiple Bunqueue
+  brokers, paired agents, and shared PostgreSQL topology.
 
 ## Queues
 
@@ -74,7 +76,8 @@ component → API-client table, see [Pages & routes](/pages).
 - [**Usage**](/guide/usage), cumulative usage totals and runtime/storage facts.
 - [**S3 Backup**](/guide/s3), live configuration, status, listing, on-demand
   snapshots, and guarded restore through the local control agent.
-- [**Settings**](/guide/settings), connection target, polling interval, theme, and agent token.
+- [**Settings**](/guide/settings), named broker/agent profiles, isolated
+  session credentials, polling interval, and theme.
 
 ## Appendix
 

@@ -59,6 +59,7 @@ describe('managed SDK runtime admission', () => {
       db: null,
       storageMode: 'postgres',
       postgresNamespace: 'default',
+      postgresTarget: 'example.invalid:5432/bunqueue',
     });
     for (const path of ['/db/info', '/backup/status']) {
       const response = await handle(new Request(`${agentTarget()}${path}`));

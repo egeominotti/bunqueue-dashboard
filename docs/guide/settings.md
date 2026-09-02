@@ -1,54 +1,78 @@
 ---
 title: Settings
-description: "Point the dashboard at your bunqueue server and choose how it looks and how often it refreshes."
+description: "Configure named Bunqueue broker and control-agent profiles, credentials, theme, and polling."
 ---
 
 # Settings
 
-Point the dashboard at your bunqueue server and choose how it looks and how often it refreshes.
+Settings owns the Dashboard's complete connection fleet. Each named profile
+pairs one Bunqueue HTTP API with the control agent responsible for that broker.
 
 **Where:** open `/settings` from the sidebar.
 
 ![Settings](../screenshots/settings.png)
 
-## What you'll see
+## Connection profiles
 
-One simple page with two cards: **Connection** (which server the dashboard talks to) and **Appearance & refresh** (how it looks and how fast it updates).
-
-| Element | What it tells you |
+| Element | Purpose |
 | --- | --- |
-| **Server URL** | The address of the bunqueue server every page reads from. Use `/api` during local development, or the full server address (like `https://queue.example.com`) in production. |
-| **Bearer token (optional)** | A secret token sent with each request, only needed if your server requires one. Shown as dots; use the eye button to reveal it. |
-| **Agent token (optional)** | The independent `AGENT_TOKEN` used by Server Control and the SQLite inspector. It is never sent to the bunqueue server. |
-| **Theme** | Switch between **Dark** and **Light**. |
-| **Refresh interval** | How often the live pages reload their data: 1, 2, 3, 5, or 10 seconds. |
+| **Active node** | Select the broker every ordinary Dashboard page currently drives. The same selector is always available under the sidebar. |
+| **Add node / Remove** | Create a profile (up to 32) or remove the selected one. The final profile cannot be removed. |
+| **Node name** | Human-readable fleet identity, for example `broker-eu-1`. |
+| **Server URL** | Bunqueue HTTP API, such as `/api` or `https://broker-1.example/api`. |
+| **Control agent URL** | The agent paired with this exact broker, such as `/agent` or `https://broker-1.example/agent`. |
+| **Bearer token** | Optional Bunqueue/bridge server credential for this profile only. |
+| **Agent token** | Independent `AGENT_TOKEN` for this profile's control agent. It is never sent to Bunqueue's HTTP API. |
 
-Small messages appear next to the buttons: a green **Saved ✓** after you save, a green or red result after you test a connection, and a red note under the URL box if what you typed isn't a valid address.
+Click **Save** to validate and apply the complete draft atomically. Invalid,
+credential-bearing, protocol-relative, query-bearing, fragment-bearing, or
+non-HTTP(S) targets fail closed. Relative mount paths such as `/api` and
+`/agent` are supported.
 
-## What you can do
+**Test connection** probes the Bunqueue `/health` endpoint currently typed in
+the form and checks its complete health/version shape. **Test agent** probes
+the typed `/control/status` target and checks its lifecycle response. Both use
+the unsaved draft credentials, have a ten-second deadline, and are cancelled
+when the draft, profile, or page changes.
 
-- **Save your connection.** Type a Server URL (and tokens if needed), then click **Save**. The dashboard validates and applies the three fields as one update. It shows **Saved ✓** when the non-secret settings were persisted, or an explicit session-only warning if browser storage is blocked/full. If the address isn't valid, it shows an error and keeps your old settings.
-- **Test a connection.** Click **Test connection** to probe the URL and bearer token currently in the form. On success you'll see how fast it replied and the Bunqueue version (for example, *Connected in 12ms · bunqueue v…*); a reachable degraded server is labelled as such. Starting another test, editing/saving the draft, changing the active connection, or leaving the page cancels the obsolete probe. While a probe runs, the button reads **Restart test**.
-- **Show or hide the token.** Use the eye button to reveal or mask the token field.
-- **Change the theme.** Pick Dark or Light, it applies instantly and is remembered.
-- **Change the refresh interval.** Pick a speed, it applies instantly and is remembered.
+Switching the active profile changes the server URL, agent URL, and both token
+scopes in one state transition. Every poller, live stream, Flow/Workflow/Queue
+adapter, Database/S3 request, benchmark, alert read, and Copilot command follows
+the new identity. In-flight work is aborted or sequence-discarded, so rows from
+one node cannot remain actionable against another.
 
-::: tip Test before you save
-**Test connection** deliberately checks the URL and bearer token currently typed in the form, so you can verify a new target before applying it to every dashboard page.
-:::
+## Three brokers on PostgreSQL
 
-## Good to know
+Create three profiles and pair each Bunqueue API with its own agent. Configure
+all brokers with the same `BUNQUEUE_POSTGRES_URL` and
+`BUNQUEUE_POSTGRES_NAMESPACE`, then open [Fleet](/guide/fleet). Fleet verifies
+the topology and lets you operate any node without first making it active.
 
-- **Server URL and token only take effect when you Save.** Typing alone changes nothing, the dashboard keeps using the last saved values until you click **Save**. This is deliberate, so it never tries to reload data from a half-typed address.
-- **Tokens are not remembered after you reload.** For security, both the bunqueue bearer and agent token are kept in memory only and cleared when you refresh or close the tab. Re-enter them each session.
-- **Theme and refresh interval are remembered.** They persist across reloads automatically.
-- **This is the only place to set the connection.** Every page, classic and Pro, uses the server, theme, and refresh speed you choose here. There's no per-page override.
-- **Starting or stopping the server lives elsewhere.** This page only chooses which running server to read from. To start, stop, or restart the server process, use **Control ▸ Server**.
-- **Nothing here breaks when the server is offline.** If the server is unreachable, Test simply reports the failure; the connection status shown around the rest of the dashboard is what tells you something's wrong.
+PostgreSQL shares queue state; it does not make process lifecycle, process
+logs, in-memory webhooks, or the agent's Workflow Engine SQLite store global.
+The Fleet guide lists every shared and node-local boundary.
 
-::: details Under the hood (for developers)
-- **Test connection** is the page's only network call: a cancellable, deadline-bounded `GET /health`. A successful response must carry Bunqueue's coherent `ok`, `status`, `uptime`, and semantic `version` fingerprint; HTTP 503 with `status: "degraded"` remains a reachable diagnostic response.
-- **No polling or SSE** originates here, the page renders instantly from local stores and fetches nothing on mount.
-- **Persistence:** the connection store saves only the canonical base URL and refresh interval (clamped to 500–60,000 ms); theme is saved separately and re-applied on load. Both tokens are deliberately excluded, and legacy blobs are rewritten without secrets during hydration. Defaults: URL = a validated `VITE_BUNQUEUE_URL` or `/api`, refresh = 3000 ms.
-- The control agent target is resolved separately from a validated runtime `/agent` injection, a validated `VITE_BUNQUEUE_AGENT_URL`, or the safe development default `http://localhost:6800`. Its independent token is configured on this screen.
+## Appearance and refresh
+
+- **Theme** switches between Dark and Light immediately and persists.
+- **Refresh interval** controls ordinary polling at 1, 2, 3, 5, or 10 seconds.
+  Feature-specific intervals still apply where documented (Fleet uses 10s,
+  alerts use 15s, and the throughput sampler uses 1s).
+
+## Persistence and security
+
+- Profile names, canonical server/agent URLs, active profile id, theme, and
+  refresh interval persist in browser storage.
+- Server and agent tokens are stored only in module memory, isolated by profile,
+  never serialized, and erased on reload or tab close.
+- Legacy v1-v3 connection blobs are sanitized into schema v4 and immediately
+  rewritten without legacy token fields or unsafe authorities.
+- A blocked/full browser store does not lose the live edit: Settings reports
+  that it was saved for this session only.
+- Fleet probing applies each inactive profile's own credentials directly and
+  never temporarily retargets the active Dashboard.
+
+::: tip Test before saving
+Both connection tests use the fields currently typed in the form. This lets
+you verify a new broker and its agent before applying the pair globally.
 :::

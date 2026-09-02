@@ -9,6 +9,21 @@ description: "Every bunqueue HTTP endpoint the dashboard drives, with verified r
 against the exact [bunqueue v2.9.2 server release](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.2)
 (`c39facb`) and the installable 2.9.2 client; several differ from older dashboard assumptions.
 
+## Fleet and connection profiles
+
+`/fleet` does not use one mutable global request while iterating nodes. It
+captures each profile's Bunqueue URL/token and paired agent URL/token, then
+issues independent `GET /health` and `GET /control/status` probes. A failure on
+one endpoint does not discard the other nodes. `POST /control/start|stop|restart`
+is sent directly to the card's captured agent identity, even when that profile
+is not the active Dashboard node.
+
+The agent status exposes `storageMode`, `postgresNamespace`, and a
+credential-free `postgresTarget` (`host:port/database`). Fleet groups only exact
+target + namespace matches; usernames, passwords, URL query parameters, and
+fragments never enter the response. Selecting a profile changes the server,
+agent, and both token scopes as one connection generation.
+
 ## Workflow Engine
 
 Workflow Engine is a Bunqueue client-library API, not part of the Bunqueue HTTP
@@ -215,6 +230,13 @@ are Promote, Pause and Resume; DLQ retry and completed-job requeue are absent.
 | Retry DLQ | `POST /queues/:q/dlq/retry` | Upstream accepts `{ jobId? }`; the dashboard never calls either the exact-ID or retry-all form because the mutation has no atomic generation/state/topology precondition |
 | Create/upsert cron | `POST /crons` | Last-writer-wins upsert `{ name, jobName?, queue, data?, schedule? \| repeatEvery?, priority?, timezone?, dedup?, jobOptions? }`; `jobName` is assigned to every spawned job and defaults to `default`; there is no atomic create-only precondition |
 | Add webhook | `POST /webhooks` | `{ url, events[], queue?, secret? }` (events ∈ `job.pushed/started/completed/failed/progress`) |
+
+Benchmark workers call `pull-batch` with an explicit per-run owner and require
+one non-empty lease token per returned job. The same tokens are forwarded to
+heartbeat, batch acknowledgement, and pre-ACK move-to-wait compensation. This
+is required by Bunqueue 2.9.2's PostgreSQL lease contract and keeps benchmark
+completion portable across brokers instead of relying on process-local lock
+ownership.
 
 ## Live stream
 

@@ -9,11 +9,11 @@ type HealthResponse = {
 
 const BUNQUEUE_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 
-export async function fetchHealthWithTimeout(
+export async function fetchJsonWithTimeout(
   input: RequestInfo | URL,
   init: RequestInit = {},
   timeoutMs = SETTINGS_TEST_TIMEOUT_MS
-): Promise<{ response: Response; health: HealthResponse }> {
+): Promise<{ response: Response; value: unknown }> {
   const timeoutController = new AbortController();
   const callerSignal = init.signal;
   const signal = callerSignal
@@ -45,24 +45,7 @@ export async function fetchHealthWithTimeout(
   try {
     const request = (async () => {
       const response = await fetch(input, { ...init, signal });
-      if (!response.ok && response.status !== 503) throw new Error(`HTTP ${response.status}`);
-      const value = (await response.json()) as unknown;
-      if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-        throw new Error('Malformed health response');
-      }
-      const candidate = value as Record<string, unknown>;
-      if (
-        typeof candidate.ok !== 'boolean' ||
-        (candidate.status !== 'healthy' && candidate.status !== 'degraded') ||
-        !Number.isSafeInteger(candidate.uptime) ||
-        (candidate.uptime as number) < 0 ||
-        typeof candidate.version !== 'string' ||
-        !BUNQUEUE_VERSION.test(candidate.version) ||
-        candidate.ok !== (candidate.status === 'healthy')
-      ) {
-        throw new Error('Malformed health response');
-      }
-      return { response, health: candidate as HealthResponse };
+      return { response, value: (await response.json()) as unknown };
     })();
     return await Promise.race(
       callerCancellation ? [request, deadline, callerCancellation] : [request, deadline]
@@ -76,4 +59,29 @@ export async function fetchHealthWithTimeout(
     if (timer !== undefined) clearTimeout(timer);
     removeCallerAbort?.();
   }
+}
+
+export async function fetchHealthWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = SETTINGS_TEST_TIMEOUT_MS
+): Promise<{ response: Response; health: HealthResponse }> {
+  const { response, value } = await fetchJsonWithTimeout(input, init, timeoutMs);
+  if (!response.ok && response.status !== 503) throw new Error(`HTTP ${response.status}`);
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Malformed health response');
+  }
+  const candidate = value as Record<string, unknown>;
+  if (
+    typeof candidate.ok !== 'boolean' ||
+    (candidate.status !== 'healthy' && candidate.status !== 'degraded') ||
+    !Number.isSafeInteger(candidate.uptime) ||
+    (candidate.uptime as number) < 0 ||
+    typeof candidate.version !== 'string' ||
+    !BUNQUEUE_VERSION.test(candidate.version) ||
+    candidate.ok !== (candidate.status === 'healthy')
+  ) {
+    throw new Error('Malformed health response');
+  }
+  return { response, health: candidate as HealthResponse };
 }

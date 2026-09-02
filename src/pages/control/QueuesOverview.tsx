@@ -18,6 +18,7 @@ import { type QueueSortKey, QueuesTable } from './queues/QueuesTable';
 const FANOUT_LIMIT = 6;
 
 const PAGE_SIZE = 15;
+const EMPTY_QUEUES: QueueSummaryFull[] = [];
 
 /**
  * All queues with per-state counts and inline pause/resume. Backed by a single
@@ -46,7 +47,7 @@ export function QueuesOverview() {
   }, [actionGuard.scopeKey]);
 
   const { data, error, loading, refetch } = usePolledData(() => bq.queuesSummary(), []);
-  const all = data ?? [];
+  const all = data ?? EMPTY_QUEUES;
 
   // Header click cycles desc → asc → off (back to the alphabetical default).
   const cycleSort = (k: QueueSortKey) => {

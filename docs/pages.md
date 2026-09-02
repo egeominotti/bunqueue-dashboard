@@ -19,15 +19,17 @@ Two page families coexist by design (see [architecture.md](architecture.md)):
 - **Classic** (`src/pages/*`, first-gen), the original read-mostly view pages.
   Uses `lib/api.ts`. Kept intact per the additive rule; not actively extended.
 
-Every nav-reachable route now serves a Pro page except `/settings` (the only
-settings page, shared by both families) and `/alerts` (client-side alert
-rules). Each classic page remains routable at a `-classic` suffix.
+Every nav-reachable single-node operation uses the Pro client except the shared
+`/settings` page and browser-local `/alerts`; `/fleet` intentionally uses
+captured direct targets so it can probe inactive profiles. Each classic page
+remains routable at a `-classic` suffix.
 
 ## Route table (from `src/App.tsx`)
 
 | Path | Component | Family | Client |
 | --- | --- | --- | --- |
 | `/` | `control/OverviewPro` | Pro | `bq` |
+| `/fleet` | `Fleet` | Multi-node operations | direct target-pinned server + agent probes |
 | `/overview-classic` | `Overview` | Classic | `api` |
 | `/queues` | `control/QueuesOverview` | **Pro** | `bq` |
 | `/queues/:name` | `control/QueueDetailPro` | **Pro** | `bq` |
@@ -78,8 +80,9 @@ keep working.
 ## Sidebar → page mapping
 
 `src/components/layout/Sidebar.tsx` (`NAV`, also consumed by the Cmd/Ctrl-K
-command palette) groups nav items into four sections plus the root Overview:
+command palette) groups nav items into five sections plus root Overview/Fleet:
 
+- **Root**: Overview · Fleet.
 - **Queues**: Queues (QueuesOverview) · Jobs (JobsPro) · Dead Letter Queue
   (DlqPro) · Cron Jobs (CronManager).
 - **Workflow**: Overview · Job Flows · Executions · Waiting & Signals ·
@@ -101,6 +104,7 @@ single-queue triage surface.
 | Route | Page | Behaviour |
 | --- | --- | --- |
 | `/` | `OverviewPro` | Connection banner (host · uptime · RAM) that flips to an amber "Connection lost, showing last known data / Stale" state when a poll fails after the first success; two rows of stat cards, a Queue Health grid, and a live Recent Activity feed from `useActivityStream()`. |
+| `/fleet` | `Fleet` | Polls every configured Bunqueue API and paired agent independently, groups matching PostgreSQL target/namespace members, drives per-node Start/Stop/Restart, and atomically selects the node used by every other page. |
 | `/server` | `ServerControl` | Start/Stop/Restart via the control agent (amber "agent unreachable" banner + disabled lifecycle buttons when the agent poll dies); storage row (SQLite main/WAL/total-on-disk/last-modified); always-editable config form with port validation, a "Save & restart" shortcut and a "restart to apply" hint; colour-coded live process-log tail (`stdout`/`stderr`/`sys`). |
 | `/add-job` | `AddJob` | Enqueue with every option the v2.9.2 HTTP single-push route forwards, including tags/group/dependencies, structured backoff and interval repeat policy; single or repeated copies via a `Count` field (validated, ≤10000). |
 | `/jobs/bulk-add` | `BulkAddJobs` | Bulk enqueue: paste a JSON array or NDJSON (one JSON value per line). Spec mode preserves the validated operator-safe v2.9.2 `JobInput` subset and maps `jobId`/`customId` correctly; raw mode keeps the whole item as data. Flow topology/failure fields belong to the atomic Flow API, while inert compatibility-only fields are rejected instead of implying support. |
@@ -161,9 +165,11 @@ correct and regression-safe.
 
 ## Settings
 
-`/settings` (`Settings`, classic) is the only settings page, used by both
-families: connection (`baseUrl` buffered until Save, server bearer token,
-agent token, "Test connection" round-trip), theme, and poll-refresh interval.
+`/settings` (`Settings`) is shared by both families. It creates, edits, tests,
+selects, and removes named broker profiles (`baseUrl` + paired `agentBaseUrl`),
+keeps a separate in-memory server/agent token pair per profile, and controls
+theme plus the global poll-refresh interval. Switching profiles retargets all
+clients, streams, pollers, and agent adapters as one connection generation.
 
 ## Layout shell (every route)
 

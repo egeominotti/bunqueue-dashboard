@@ -46,6 +46,8 @@ export interface ServerStatus {
   storageMode?: 'memory' | 'sqlite' | 'postgres';
   /** Effective Bunqueue PostgreSQL namespace; present only in PostgreSQL mode. */
   postgresNamespace?: string;
+  /** Credential-free host:port/database label for fleet topology. */
+  postgresTarget?: string;
   config: ServerConfig;
   /** Config the live process was launched with (null when stopped). */
   runningConfig?: ServerConfig | null;

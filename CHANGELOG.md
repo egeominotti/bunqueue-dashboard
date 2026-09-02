@@ -15,6 +15,42 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.41] - 2026-09-02
+
+### Added
+
+- Added named Bunqueue connection profiles with one paired control agent and
+  isolated in-memory server/agent credentials per node, plus global switching
+  from Settings and the sidebar without stale cross-target data.
+- Added the Fleet operator page for concurrent node/API health, per-broker
+  Start/Stop/Restart, safe PostgreSQL target/namespace grouping, and direct
+  activation of any configured broker.
+- Added a Docker-backed runtime gate that starts three authenticated Bunqueue
+  2.9.2 brokers and three agents on PostgreSQL 18.6, then proves cross-broker
+  jobs, leases, queue state, cron schedules, and rate limits.
+- Added comprehensive API, demo, page, route, worker, mutation-safety, client,
+  inventory, and browser-route tests so every application module has an
+  explicit unit, runtime, or browser test strategy.
+
+### Changed
+
+- Made every server, agent, polling, SSE, Flow, Workflow, Queue, Database, S3,
+  Benchmark, alert, and Copilot identity include the active connection profile
+  and its paired agent target.
+- The canonical real E2E gate now includes the three-broker PostgreSQL topology;
+  documentation distinguishes PostgreSQL-wide queue state from node-local
+  lifecycle, webhooks, process state, and Workflow Engine storage.
+
+### Fixed
+
+- Benchmark workers now request explicit owners and carry Bunqueue 2.9.2 lease
+  tokens through heartbeat, acknowledgement, and pre-ACK compensation, making
+  PostgreSQL claims safe across brokers.
+- PostgreSQL status now exposes only a credential-free topology label, and
+  connection schema-v4 migration strips legacy secrets and unsafe targets.
+- Oxlint policy tests now execute Oxlint and its type-aware tsgolint backend
+  through pinned Bun 1.4.0, without depending on a system Node executable.
+
 ## [0.0.40] - 2026-09-02
 
 ### Changed

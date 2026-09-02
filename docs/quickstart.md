@@ -79,9 +79,10 @@ Two ways, pick either:
 - **Let the agent start one.** Open **Control ▸ Server**, set the launch command,
   and press **Start**. The dashboard manages the process and tails its logs live.
   See [Server Control](/guide/server).
-- **Point at an existing server.** Open **[Settings](/guide/settings)** and set the
-  server URL (and a bearer token if it runs with `AUTH_TOKENS`), or bake it in at
-  build time with `VITE_BUNQUEUE_URL`.
+- **Point at existing servers.** Open **[Settings](/guide/settings)** and add one
+  profile per Bunqueue API + paired agent (with their separate tokens), or seed
+  the first server URL at build time with `VITE_BUNQUEUE_URL`. For multiple
+  PostgreSQL-backed brokers, verify and operate them from [Fleet](/guide/fleet).
 
 When the all-in-one dashboard connects to a broker owned by systemd, Docker or
 Kubernetes, launch it with `BUNQUEUE_MANAGED=0 BUNQUEUE_URL=http://127.0.0.1:6790`.

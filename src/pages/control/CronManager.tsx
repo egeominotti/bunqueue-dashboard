@@ -5,6 +5,7 @@ import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/component
 import { IconCron } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { bq } from '@/lib/bq';
+import type { CronFull } from '@/lib/bqTypes';
 import { usePolledData } from '@/lib/usePolledData';
 import { useServerActionGuard } from '@/lib/useServerActionGuard';
 import { CronForm } from './cron/CronForm';
@@ -22,9 +23,11 @@ export {
   existingCronNameError,
 } from './cron/model';
 
+const EMPTY_CRONS: CronFull[] = [];
+
 export function CronManager() {
   const { data, error, loading, refetch } = usePolledData(() => bq.crons(), []);
-  const crons = data?.crons ?? [];
+  const crons = data?.crons ?? EMPTY_CRONS;
   const existingNames = useMemo(() => new Set(crons.map((cron) => cron.name)), [crons]);
   const pageCount = Math.max(1, Math.ceil(crons.length / CRON_PAGE_SIZE));
   const [safePage, setPage] = useClampedPage(pageCount);

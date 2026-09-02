@@ -43,7 +43,7 @@ describe('late lifecycle failures', () => {
     let acknowledgements = 0;
     let retries = 0;
     const client = {
-      pullBatch: async () => ({ ok: true, jobs: [{ id: 'job-1' }] }),
+      pullBatch: async () => ({ ok: true, jobs: [{ id: 'job-1' }], tokens: ['lock-1'] }),
       heartbeatBatch: () => {
         heartbeatEntered.resolve();
         return heartbeat.promise;
@@ -103,7 +103,7 @@ describe('late lifecycle failures', () => {
     let acknowledgements = 0;
     let retries = 0;
     const client = {
-      pullBatch: async () => ({ ok: true, jobs: [{ id: 'job-1' }] }),
+      pullBatch: async () => ({ ok: true, jobs: [{ id: 'job-1' }], tokens: ['lock-1'] }),
       heartbeatBatch: async () => ({ ok: true, data: { ok: true, count: 1 } }),
       ackBatch: () => {
         acknowledgements += 1;

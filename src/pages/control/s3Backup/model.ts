@@ -21,8 +21,20 @@ export function parseStorageHealthResponse(value: unknown): { diskFull: boolean 
   return { diskFull: (data as { diskFull: boolean }).diskFull };
 }
 
-export const storageTargetIdentity = (state: { baseUrl: string; token: string }) =>
-  JSON.stringify([state.baseUrl, state.token]);
+export const storageTargetIdentity = (state: {
+  activeProfileId?: string;
+  baseUrl: string;
+  agentBaseUrl?: string;
+  token: string;
+  agentToken?: string;
+}) =>
+  JSON.stringify([
+    state.activeProfileId,
+    state.baseUrl,
+    state.agentBaseUrl,
+    state.token,
+    state.agentToken,
+  ]);
 
 const SCHEDULE_INTERVAL: Record<Exclude<BackupSchedule, 'disabled'>, number> = {
   '6h': 6 * 60 * 60 * 1_000,

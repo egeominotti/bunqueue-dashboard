@@ -15,6 +15,9 @@ const STATE_META: Record<ConnectionState, { dot: string; label: string }> = {
 /** Passive, honest health indicator shared by desktop and mobile navigation. */
 export function ConnectionBadge() {
   const baseUrl = useConnectionStore((s) => s.baseUrl);
+  const profiles = useConnectionStore((s) => s.profiles);
+  const activeProfileId = useConnectionStore((s) => s.activeProfileId);
+  const activateProfile = useConnectionStore((s) => s.activateProfile);
   // /health returns HTTP 503 with `ok:false` when the server is reachable but
   // degraded (for example, disk full). That differs from a transport failure.
   const { data, error, loading } = usePolledData(
@@ -39,8 +42,31 @@ export function ConnectionBadge() {
   return (
     <div className="mx-3 mb-4 flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5">
       <span className={cn('size-1.5 rounded-full', meta.dot)} title={meta.label} />
-      <span className="truncate font-mono text-[11px] text-muted" title={baseUrl}>
+      <label className="sr-only" htmlFor="active-bunqueue-node">
+        Active Bunqueue node
+      </label>
+      <select
+        id="active-bunqueue-node"
+        aria-label="Active Bunqueue node"
+        value={activeProfileId}
+        onChange={(event) => activateProfile(event.target.value)}
+        title={`${profiles.length} configured node${profiles.length === 1 ? '' : 's'} · ${baseUrl}`}
+        className="min-w-0 flex-1 truncate bg-transparent text-[11px] font-medium text-muted outline-none"
+      >
+        {profiles.map((profile) => (
+          <option key={profile.id} value={profile.id}>
+            {profile.name}
+          </option>
+        ))}
+      </select>
+      <span className="sr-only" title={baseUrl}>
         {host}
+      </span>
+      <span
+        className="shrink-0 font-mono text-[10px] text-faint"
+        aria-label={`${profiles.length} nodes`}
+      >
+        {profiles.length}×
       </span>
       <span className="sr-only">{meta.label}</span>
     </div>

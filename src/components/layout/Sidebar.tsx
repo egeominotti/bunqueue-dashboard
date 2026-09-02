@@ -30,7 +30,13 @@ export type NavGroup = { section: string | null; items: NavItem[] };
 // The single source of truth for the app's navigation, also consumed by the
 // command palette (Cmd/Ctrl-K) so new sections show up there automatically.
 export const NAV: NavGroup[] = [
-  { section: null, items: [{ to: '/', label: 'Overview', icon: IconOverview, end: true }] },
+  {
+    section: null,
+    items: [
+      { to: '/', label: 'Overview', icon: IconOverview, end: true },
+      { to: '/fleet', label: 'Fleet', icon: IconWorkers, end: true },
+    ],
+  },
   {
     section: 'Queues',
     items: [

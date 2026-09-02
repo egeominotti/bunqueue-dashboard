@@ -36,10 +36,17 @@ export interface ServerTargetClient {
   workers: () => Promise<ReturnType<typeof parseWorkersPayload>>;
   crons: () => Promise<{ ok: true; crons: CronFull[] }>;
   addJobsBulk: (queue: string, jobs: BulkJobBody[]) => Promise<{ ok: boolean; ids: string[] }>;
-  pullBatch: (queue: string, count: number) => Promise<{ ok: boolean; jobs: { id: string }[] }>;
-  heartbeatBatch: (ids: string[]) => Promise<{ ok: boolean; data: { ok: boolean; count: number } }>;
-  ackBatch: (ids: string[]) => Promise<{ ok: boolean }>;
-  retryJob: (id: string) => Promise<unknown>;
+  pullBatch: (
+    queue: string,
+    count: number,
+    owner?: string
+  ) => Promise<{ ok: boolean; jobs: { id: string }[]; tokens?: string[] }>;
+  heartbeatBatch: (
+    ids: string[],
+    tokens?: string[]
+  ) => Promise<{ ok: boolean; data: { ok: boolean; count: number } }>;
+  ackBatch: (ids: string[], tokens?: string[]) => Promise<{ ok: boolean }>;
+  retryJob: (id: string, token?: string) => Promise<unknown>;
   promoteJob: (id: string) => Promise<undefined | { ok: true }>;
   pause: (queue: string) => Promise<undefined | { ok: true }>;
   resume: (queue: string) => Promise<undefined | { ok: true }>;
@@ -206,18 +213,20 @@ export function createServerTargetClient(
         BULK_TIMEOUT_MS
       );
     },
-    pullBatch: (queue: string, count: number) =>
-      at<{ ok: boolean; jobs: { id: string }[] }>(
+    pullBatch: (queue: string, count: number, owner?: string) =>
+      at<{ ok: boolean; jobs: { id: string }[]; tokens?: string[] }>(
         `/queues/${queueHttpPathSegment(queue)}/jobs/pull-batch`,
-        body('POST', { count })
+        body('POST', { count, ...(owner ? { owner } : {}) })
       ),
-    heartbeatBatch: (ids: string[]) =>
+    heartbeatBatch: (ids: string[], tokens?: string[]) =>
       at<{ ok: boolean; data: { ok: boolean; count: number } }>(
         '/jobs/heartbeat-batch',
-        body('POST', { ids })
+        body('POST', { ids, ...(tokens ? { tokens } : {}) })
       ),
-    ackBatch: (ids: string[]) => at<{ ok: boolean }>('/jobs/ack-batch', body('POST', { ids })),
-    retryJob: (id: string) => at(`/jobs/${opaqueHttpPathSegment(id)}/move-to-wait`, body('POST')),
+    ackBatch: (ids: string[], tokens?: string[]) =>
+      at<{ ok: boolean }>('/jobs/ack-batch', body('POST', { ids, ...(tokens ? { tokens } : {}) })),
+    retryJob: (id: string, token?: string) =>
+      at(`/jobs/${opaqueHttpPathSegment(id)}/move-to-wait`, body('POST', token ? { token } : {})),
     promoteJob: async (id: string) =>
       mutationAck(
         await at(`/jobs/${opaqueHttpPathSegment(id)}/promote`, body('POST')),

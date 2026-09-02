@@ -3,6 +3,7 @@ import { OfflineBanner } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
 import { bq } from '@/lib/bq';
+import type { QueueSummaryFull } from '@/lib/bqTypes';
 import { errorRate, formatCompact, formatNumber } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 import { useThroughputSeries } from '@/lib/useThroughputSeries';
@@ -11,6 +12,7 @@ import { OperationLatency, PerQueueMetrics } from './metrics/MetricsTables';
 import { ThroughputCharts } from './metrics/ThroughputCharts';
 
 const PAGE_SIZE = 15;
+const EMPTY_DETAILS: QueueSummaryFull[] = [];
 
 export function MetricsPro() {
   const series = useThroughputSeries(60);
@@ -19,7 +21,7 @@ export function MetricsPro() {
     async () => ({ details: await bq.queuesSummary() }),
     []
   );
-  const details = data?.details ?? [];
+  const details = data?.details ?? EMPTY_DETAILS;
   const pageCount = Math.max(1, Math.ceil(details.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
   const pageRows = useMemo(

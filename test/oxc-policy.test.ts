@@ -3,14 +3,14 @@ import { resolve } from 'node:path';
 import { isIgnoredDirectory } from '../scripts/check-implicit-any-let';
 
 const ROOT = resolve(import.meta.dir, '..');
-const OXLINT = resolve(ROOT, 'node_modules/.bin/oxlint');
+const OXLINT = [process.execPath, 'x', '--bun', '--no-install', 'oxlint'] as const;
 const FIXTURES = 'test/fixtures/oxlint-policy';
 const PROBE_CONFIG = `${FIXTURES}/oxlint-probe.json`;
 const TSCONFIG = `${FIXTURES}/tsconfig.json`;
 
 describe('Oxc policy parity', () => {
   test('promotes the complete recommended correctness category to blocking errors', async () => {
-    const result = await run([OXLINT, '--print-config']);
+    const result = await run([...OXLINT, '--print-config']);
     const config = JSON.parse(result.output) as {
       categories: Record<string, string>;
       rules: Record<string, string | unknown[]>;
@@ -28,7 +28,7 @@ describe('Oxc policy parity', () => {
 
   test('rejects the former Biome error rules, including type-aware rules', async () => {
     const result = await run([
-      OXLINT,
+      ...OXLINT,
       `--config=${PROBE_CONFIG}`,
       `--tsconfig=${TSCONFIG}`,
       `${FIXTURES}/errors.ts`,
@@ -50,7 +50,7 @@ describe('Oxc policy parity', () => {
 
   test('keeps warnings non-blocking and policy fixtures ignored by the project lint', async () => {
     const warning = await run([
-      OXLINT,
+      ...OXLINT,
       `--config=${PROBE_CONFIG}`,
       `--tsconfig=${TSCONFIG}`,
       `${FIXTURES}/warning.tsx`,
@@ -58,14 +58,18 @@ describe('Oxc policy parity', () => {
     expect(warning.exitCode).toBe(0);
     expect(warning.output).toContain('no-array-index-key');
 
-    const ignored = await run([OXLINT, '--no-error-on-unmatched-pattern', `${FIXTURES}/errors.ts`]);
+    const ignored = await run([
+      ...OXLINT,
+      '--no-error-on-unmatched-pattern',
+      `${FIXTURES}/errors.ts`,
+    ]);
     expect(ignored.exitCode).toBe(0);
     expect(ignored.output).not.toContain('no-debugger');
   });
 
   test('rejects stale disable directives', async () => {
     const result = await run([
-      OXLINT,
+      ...OXLINT,
       `--config=${PROBE_CONFIG}`,
       `--tsconfig=${TSCONFIG}`,
       `${FIXTURES}/unused-disable.ts`,

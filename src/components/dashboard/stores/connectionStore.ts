@@ -1,284 +1,274 @@
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
-import { runtimeConfigValue } from '@/lib/runtimeConfig';
-import { createResilientStateStorage } from './resilientStateStorage';
+import { persist } from 'zustand/middleware';
+import {
+  beginConnectionPersistence,
+  CONNECTION_DEFAULTS,
+  CONNECTION_STORAGE_KEY,
+  CONNECTION_STORAGE_VERSION,
+  connectionPersistenceResult,
+  connectionStorage,
+  DEFAULT_CONNECTION_PROFILE,
+  migratePersistedConnectionState,
+  persistedConnectionState,
+  safeRefreshMs,
+  sanitizedPersistedConnectionState,
+} from './connectionPersistence';
+import {
+  type ConnectionProfile,
+  MAX_CONNECTION_PROFILES,
+  type PersistedConnectionState,
+  safeProfileName,
+  uniqueProfileId,
+} from './connectionProfiles';
+import { safeTarget, safeToken } from './connectionTarget';
+
+export {
+  BASE_URL_ERROR,
+  isValidBaseUrl,
+  normalizeBaseUrl,
+  resolveAgentBase,
+  resolveDefaultBaseUrl,
+  SAFE_AGENT_BASE,
+  SAFE_DEFAULT_BASE_URL,
+} from './connectionTarget';
+export type { ConnectionProfile } from './connectionProfiles';
+export {
+  CONNECTION_STORAGE_KEY,
+  CONNECTION_STORAGE_VERSION,
+  migratePersistedConnectionState,
+  persistedConnectionState,
+  sanitizedPersistedConnectionState,
+} from './connectionPersistence';
 
 export interface ConnectionSaveResult {
   persisted: boolean;
   error?: string;
 }
-
 export interface ConnectionDraft {
   baseUrl: string;
   token: string;
   agentToken: string;
+  agentBaseUrl?: string;
+  name?: string;
+}
+export interface ProfileCreateResult extends ConnectionSaveResult {
+  id?: string;
 }
 
-/**
- * Where the dashboard points and how often it polls.
- *
- * `baseUrl` defaults to the Vite dev proxy at `/api` (see vite.config.ts), which
- * forwards to a local bunqueue server on :6790. Override it (Settings page or
- * VITE_BUNQUEUE_URL) to point at a remote server.
- */
 interface ConnectionState {
+  profiles: ConnectionProfile[];
+  activeProfileId: string;
   baseUrl: string;
+  agentBaseUrl: string;
   token: string;
-  /** Bearer token for the control agent when it runs with AGENT_TOKEN set. */
   agentToken: string;
   refreshMs: number;
   saveConnection: (draft: ConnectionDraft) => ConnectionSaveResult;
+  addProfile: (draft: ConnectionDraft) => ProfileCreateResult;
+  activateProfile: (id: string) => boolean;
+  removeProfile: (id: string) => boolean;
   setBaseUrl: (baseUrl: string) => void;
+  setAgentBaseUrl: (agentBaseUrl: string) => void;
   setToken: (token: string) => void;
   setAgentToken: (agentToken: string) => void;
   setRefreshMs: (refreshMs: number) => void;
 }
 
-export const SAFE_DEFAULT_BASE_URL = '/api';
-export const CONNECTION_STORAGE_KEY = 'bq-dash-connection';
-const CONNECTION_STORAGE_VERSION = 3;
-export const BASE_URL_ERROR =
-  "Use an http(s) URL without credentials, query, or fragment, or a non-root path starting with '/'.";
-
-const RELATIVE_URL_ORIGIN = 'https://bunqueue-dashboard.invalid';
-const WHITESPACE = /\s/u;
-
-function hasDisallowedUrlCharacters(value: string): boolean {
-  return [...value].some((character) => {
-    const code = character.charCodeAt(0);
-    return character === '\\' || WHITESPACE.test(character) || code < 32 || code === 127;
-  });
+export interface ConnectionProfileTarget extends ConnectionProfile {
+  readonly token: string;
+  readonly agentToken: string;
 }
 
-/**
- * Parse and canonicalize the only server targets to which credentials may be
- * attached. Returning null is deliberate: callers must never preserve part of
- * an invalid value (especially the authority from a legacy `//host` URL).
- */
-export function normalizeBaseUrl(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const candidate = value.trim();
-  if (
-    !candidate ||
-    candidate.includes('?') ||
-    candidate.includes('#') ||
-    hasDisallowedUrlCharacters(candidate)
-  ) {
-    return null;
-  }
+const credentials = new Map<string, { token: string; agentToken: string }>();
 
-  if (candidate.startsWith('/')) {
-    if (candidate.startsWith('//')) return null;
-    try {
-      const parsed = new URL(candidate, RELATIVE_URL_ORIGIN);
-      const pathname = parsed.pathname.replace(/\/+$/, '');
-      // URL parsing resolves dot segments. Re-check the canonical path because
-      // `/%2e%2e//host` otherwise normalizes into a protocol-relative string.
-      if (
-        parsed.origin !== RELATIVE_URL_ORIGIN ||
-        !pathname ||
-        pathname === '/' ||
-        pathname.startsWith('//')
-      ) {
-        return null;
-      }
-      return pathname;
-    } catch {
-      return null;
-    }
-  }
-
-  // Require the explicit `scheme://authority` spelling. WHATWG URL accepts
-  // ambiguous inputs such as `http:host`, but connection settings should not.
-  const scheme = candidate.match(/^https?:\/\//i)?.[0];
-  if (!scheme) return null;
-  const authorityAndPath = candidate.slice(scheme.length);
-  const authority = authorityAndPath.split('/', 1)[0];
-  if (!authority || authority.includes('@')) return null;
-
-  try {
-    const parsed = new URL(candidate);
-    if (
-      (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
-      !parsed.hostname ||
-      parsed.username ||
-      parsed.password
-    ) {
-      return null;
-    }
-    const pathname = parsed.pathname.replace(/\/+$/, '');
-    if (pathname.startsWith('//')) return null;
-    return `${parsed.origin}${pathname}`;
-  } catch {
-    return null;
-  }
+function activeProfile(
+  state: Pick<ConnectionState, 'profiles' | 'activeProfileId'>
+): ConnectionProfile {
+  return (
+    state.profiles.find((profile) => profile.id === state.activeProfileId) ??
+    state.profiles[0] ??
+    DEFAULT_CONNECTION_PROFILE
+  );
 }
 
-export function isValidBaseUrl(value: unknown): boolean {
-  return normalizeBaseUrl(value) !== null;
+function replaceActiveProfile(state: ConnectionState, patch: Partial<ConnectionProfile>) {
+  const profile = activeProfile(state);
+  const next = { ...profile, ...patch, id: profile.id };
+  return state.profiles.map((candidate) => (candidate.id === profile.id ? next : candidate));
 }
 
-/** Resolve build/runtime defaults without allowing an unsafe target. */
-export function resolveDefaultBaseUrl(value: unknown, runtimeValue?: unknown): string {
-  return normalizeBaseUrl(value) ?? normalizeBaseUrl(runtimeValue) ?? SAFE_DEFAULT_BASE_URL;
+function remember(id: string, token: unknown, agentToken: unknown): void {
+  credentials.set(id, { token: safeToken(token), agentToken: safeToken(agentToken) });
 }
-
-const DEFAULT_BASE_URL = resolveDefaultBaseUrl(
-  import.meta.env.VITE_BUNQUEUE_URL,
-  runtimeConfigValue('__BUNQUEUE_API_URL__')
-);
-const DEFAULT_REFRESH_MS = 3000;
-const MIN_REFRESH_MS = 500;
-const MAX_REFRESH_MS = 60_000;
-
-function safeBaseUrl(value: unknown): string {
-  return normalizeBaseUrl(value) ?? DEFAULT_BASE_URL;
-}
-
-function safeRefreshMs(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_REFRESH_MS;
-  return Math.min(MAX_REFRESH_MS, Math.max(MIN_REFRESH_MS, Math.round(value)));
-}
-
-function safeToken(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-/**
- * What gets persisted to localStorage. Both bearer tokens (server + control
- * agent) are deliberately excluded — an API credential must not sit in
- * plaintext at rest (same tradeoff as the S3 keys in s3Store). They are also
- * never read from VITE_* variables: those values are compiled into public
- * JavaScript and therefore are not a safe secret-delivery mechanism.
- */
-export function persistedConnectionState(s: ConnectionState): {
-  baseUrl: string;
-  refreshMs: number;
-} {
-  return { baseUrl: safeBaseUrl(s.baseUrl), refreshMs: safeRefreshMs(s.refreshMs) };
-}
-
-/** Sanitize an untrusted/stale localStorage payload before it reaches timers or fetch. */
-export function sanitizedPersistedConnectionState(value: unknown): {
-  baseUrl: string;
-  refreshMs: number;
-} {
-  const stored =
-    value !== null && typeof value === 'object' && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : {};
-  return {
-    baseUrl: safeBaseUrl(stored.baseUrl),
-    refreshMs: safeRefreshMs(stored.refreshMs),
-  };
-}
-
-/** Move the historical implicit `/api` default to this deployment's runtime mount. */
-export function migratePersistedConnectionState(
-  value: unknown,
-  storedVersion: number,
-  deploymentDefault: unknown = DEFAULT_BASE_URL
-): { baseUrl: string; refreshMs: number } {
-  const state = sanitizedPersistedConnectionState(value);
-  if (storedVersion < CONNECTION_STORAGE_VERSION && state.baseUrl === SAFE_DEFAULT_BASE_URL) {
-    return {
-      ...state,
-      baseUrl: resolveDefaultBaseUrl(undefined, deploymentDefault),
-    };
-  }
-  return state;
-}
-
-let lastPersistenceError: Error | null = null;
-
-function asError(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
-}
-
-function recordPersistenceError(value: unknown): void {
-  lastPersistenceError = asError(value);
-}
-
-function persistenceResult(): ConnectionSaveResult {
-  if (!lastPersistenceError) return { persisted: true };
-  const name =
-    lastPersistenceError.name && lastPersistenceError.name !== 'Error'
-      ? `${lastPersistenceError.name}: `
-      : '';
-  return { persisted: false, error: `${name}${lastPersistenceError.message}` };
-}
-
-const resilientStateStorage = createResilientStateStorage({
-  key: CONNECTION_STORAGE_KEY,
-  version: CONNECTION_STORAGE_VERSION,
-  sanitizeState: sanitizedPersistedConnectionState,
-  onError: recordPersistenceError,
-  reportMissingWrites: true,
-});
-
-const connectionStorage = createJSONStorage(() => resilientStateStorage);
 
 export const useConnectionStore = create<ConnectionState>()(
-  persist(
-    (set) => ({
-      baseUrl: DEFAULT_BASE_URL,
+  persist<ConnectionState, [], [], PersistedConnectionState>(
+    (set, get) => ({
+      profiles: [DEFAULT_CONNECTION_PROFILE],
+      activeProfileId: DEFAULT_CONNECTION_PROFILE.id,
+      baseUrl: DEFAULT_CONNECTION_PROFILE.baseUrl,
+      agentBaseUrl: DEFAULT_CONNECTION_PROFILE.agentBaseUrl,
       token: '',
       agentToken: '',
-      refreshMs: DEFAULT_REFRESH_MS,
+      refreshMs: CONNECTION_DEFAULTS.refreshMs,
       saveConnection: (draft) => {
-        // One Zustand update is the in-memory commit boundary. Persistence is
-        // best-effort and cannot leave URL/token fields partially updated.
-        lastPersistenceError = null;
+        beginConnectionPersistence();
+        const state = get();
+        const profile = activeProfile(state);
+        const next = {
+          ...profile,
+          name: safeProfileName(draft.name, profile.name),
+          baseUrl: safeTarget(draft.baseUrl, CONNECTION_DEFAULTS.baseUrl),
+          agentBaseUrl: safeTarget(
+            draft.agentBaseUrl ?? profile.agentBaseUrl,
+            CONNECTION_DEFAULTS.agentBaseUrl
+          ),
+        };
+        remember(profile.id, draft.token, draft.agentToken);
         set({
-          baseUrl: safeBaseUrl(draft.baseUrl),
+          profiles: replaceActiveProfile(state, next),
+          baseUrl: next.baseUrl,
+          agentBaseUrl: next.agentBaseUrl,
           token: safeToken(draft.token),
           agentToken: safeToken(draft.agentToken),
         });
-        return persistenceResult();
+        return connectionPersistenceResult();
       },
-      setBaseUrl: (baseUrl) => set({ baseUrl: safeBaseUrl(baseUrl) }),
-      setToken: (token) => set({ token: safeToken(token) }),
-      setAgentToken: (agentToken) => set({ agentToken: safeToken(agentToken) }),
+      addProfile: (draft) => {
+        const state = get();
+        if (state.profiles.length >= MAX_CONNECTION_PROFILES) {
+          return {
+            persisted: false,
+            error: `At most ${MAX_CONNECTION_PROFILES} Bunqueue nodes are supported.`,
+          };
+        }
+        beginConnectionPersistence();
+        const id = uniqueProfileId(state.profiles);
+        const profile: ConnectionProfile = {
+          id,
+          name: safeProfileName(draft.name, `Bunqueue ${state.profiles.length + 1}`),
+          baseUrl: safeTarget(draft.baseUrl, CONNECTION_DEFAULTS.baseUrl),
+          agentBaseUrl: safeTarget(draft.agentBaseUrl, CONNECTION_DEFAULTS.agentBaseUrl),
+        };
+        remember(id, draft.token, draft.agentToken);
+        set({
+          profiles: [...state.profiles, profile],
+          activeProfileId: id,
+          baseUrl: profile.baseUrl,
+          agentBaseUrl: profile.agentBaseUrl,
+          token: safeToken(draft.token),
+          agentToken: safeToken(draft.agentToken),
+        });
+        return { ...connectionPersistenceResult(), id };
+      },
+      activateProfile: (id) => {
+        const state = get();
+        const profile = state.profiles.find((candidate) => candidate.id === id);
+        if (!profile) return false;
+        remember(state.activeProfileId, state.token, state.agentToken);
+        const secret = credentials.get(id) ?? { token: '', agentToken: '' };
+        set({
+          activeProfileId: id,
+          baseUrl: profile.baseUrl,
+          agentBaseUrl: profile.agentBaseUrl,
+          ...secret,
+        });
+        return true;
+      },
+      removeProfile: (id) => {
+        const state = get();
+        if (state.profiles.length === 1 || !state.profiles.some((profile) => profile.id === id)) {
+          return false;
+        }
+        credentials.delete(id);
+        const profiles = state.profiles.filter((profile) => profile.id !== id);
+        if (id !== state.activeProfileId) {
+          set({ profiles });
+          return true;
+        }
+        const profile = profiles[0];
+        const secret = credentials.get(profile.id) ?? { token: '', agentToken: '' };
+        set({
+          profiles,
+          activeProfileId: profile.id,
+          baseUrl: profile.baseUrl,
+          agentBaseUrl: profile.agentBaseUrl,
+          ...secret,
+        });
+        return true;
+      },
+      setBaseUrl: (baseUrl) =>
+        set((state) => {
+          const safe = safeTarget(baseUrl, CONNECTION_DEFAULTS.baseUrl);
+          return { baseUrl: safe, profiles: replaceActiveProfile(state, { baseUrl: safe }) };
+        }),
+      setAgentBaseUrl: (agentBaseUrl) =>
+        set((state) => {
+          const safe = safeTarget(agentBaseUrl, CONNECTION_DEFAULTS.agentBaseUrl);
+          return {
+            agentBaseUrl: safe,
+            profiles: replaceActiveProfile(state, { agentBaseUrl: safe }),
+          };
+        }),
+      setToken: (token) =>
+        set((state) => {
+          const safe = safeToken(token);
+          remember(state.activeProfileId, safe, state.agentToken);
+          return { token: safe };
+        }),
+      setAgentToken: (agentToken) =>
+        set((state) => {
+          const safe = safeToken(agentToken);
+          remember(state.activeProfileId, state.token, safe);
+          return { agentToken: safe };
+        }),
       setRefreshMs: (refreshMs) => set({ refreshMs: safeRefreshMs(refreshMs) }),
     }),
     {
       name: CONNECTION_STORAGE_KEY,
-      // `globalThis` works in browsers and in the Bun test preload. Zustand's
-      // default reaches through `window`, which is absent in non-DOM runtimes
-      // even when a standards-compatible storage adapter is installed.
       storage: connectionStorage,
-      // version+migrate rewrite the stored blob on rehydrate, scrubbing tokens
-      // already persisted by older builds (partialize alone only stops new writes).
       version: CONNECTION_STORAGE_VERSION,
       partialize: persistedConnectionState,
       migrate: migratePersistedConnectionState,
-      // `merge` runs for same-version data too. localStorage is user-controlled
-      // and older/corrupt blobs must not inject NaN/strings into setTimeout or
-      // resurrect bearer-token fields from a historical schema.
-      merge: (persisted, current) => ({
-        ...current,
-        ...sanitizedPersistedConnectionState(persisted),
-        token: '',
-        agentToken: '',
-      }),
+      merge: (persisted, current) => {
+        credentials.clear();
+        const safe = sanitizedPersistedConnectionState(persisted);
+        const profile =
+          safe.profiles.find((candidate) => candidate.id === safe.activeProfileId) ??
+          safe.profiles[0];
+        return {
+          ...current,
+          ...safe,
+          baseUrl: profile.baseUrl,
+          agentBaseUrl: profile.agentBaseUrl,
+          token: '',
+          agentToken: '',
+        };
+      },
     }
   )
 );
 
-/** Non-reactive accessors for the API layer (outside React). */
-export function getBaseUrl(): string {
-  // Defense in depth for direct Zustand state injection or a future migration
-  // regression: no transport may ever consume an unvalidated authority.
-  return safeBaseUrl(useConnectionStore.getState().baseUrl);
+export function captureConnectionProfileTarget(
+  id: string
+): Readonly<ConnectionProfileTarget> | null {
+  const state = useConnectionStore.getState();
+  const profile = state.profiles.find((candidate) => candidate.id === id);
+  if (!profile) return null;
+  const secret =
+    id === state.activeProfileId
+      ? { token: safeToken(state.token), agentToken: safeToken(state.agentToken) }
+      : (credentials.get(id) ?? { token: '', agentToken: '' });
+  return Object.freeze({ ...profile, ...secret });
 }
 
-export function getAuthHeaders(): Record<string, string> {
-  const token = safeToken(useConnectionStore.getState().token);
+export const getBaseUrl = () =>
+  safeTarget(useConnectionStore.getState().baseUrl, CONNECTION_DEFAULTS.baseUrl);
+export const getAgentBaseUrl = () =>
+  safeTarget(useConnectionStore.getState().agentBaseUrl, CONNECTION_DEFAULTS.agentBaseUrl);
+export const getAuthHeaders = () => bearer(useConnectionStore.getState().token);
+export const getAgentAuthHeaders = () => bearer(useConnectionStore.getState().agentToken);
+function bearer(value: unknown): Record<string, string> {
+  const token = safeToken(value);
   return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-/** Auth headers for the control agent (empty unless an AGENT_TOKEN was entered). */
-export function getAgentAuthHeaders(): Record<string, string> {
-  const agentToken = safeToken(useConnectionStore.getState().agentToken);
-  return agentToken ? { Authorization: `Bearer ${agentToken}` } : {};
 }

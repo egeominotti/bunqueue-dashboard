@@ -123,6 +123,15 @@ export async function collectTableExport(
 
 export const dbConnectionIdentity = (state: {
   baseUrl: string;
+  agentBaseUrl: string;
+  activeProfileId: string;
   token: string;
   agentToken: string;
-}) => JSON.stringify([state.baseUrl, state.token, state.agentToken]);
+}) =>
+  JSON.stringify([
+    state.activeProfileId,
+    state.baseUrl,
+    state.agentBaseUrl,
+    state.token,
+    state.agentToken,
+  ]);

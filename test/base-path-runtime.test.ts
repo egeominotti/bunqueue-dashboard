@@ -130,20 +130,32 @@ describe('all-in-one runtime base path', () => {
         2,
         '/internal/queue/api'
       )
-    ).toEqual({ baseUrl: '/internal/queue/api', refreshMs: 3_000 });
+    ).toMatchObject({
+      profiles: [{ baseUrl: '/internal/queue/api' }],
+      activeProfileId: 'default',
+      refreshMs: 3_000,
+    });
     expect(
       migratePersistedConnectionState(
         { baseUrl: 'https://queue.example/api', refreshMs: 3_000 },
         2,
         '/internal/queue/api'
       )
-    ).toEqual({ baseUrl: 'https://queue.example/api', refreshMs: 3_000 });
+    ).toMatchObject({
+      profiles: [{ baseUrl: 'https://queue.example/api' }],
+      activeProfileId: 'default',
+      refreshMs: 3_000,
+    });
     expect(
       migratePersistedConnectionState(
         { baseUrl: '/api', refreshMs: 3_000 },
         3,
         '/internal/queue/api'
       )
-    ).toEqual({ baseUrl: '/api', refreshMs: 3_000 });
+    ).toMatchObject({
+      profiles: [{ baseUrl: '/api' }],
+      activeProfileId: 'default',
+      refreshMs: 3_000,
+    });
   });
 });

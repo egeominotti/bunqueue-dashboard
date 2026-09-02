@@ -143,7 +143,9 @@ describe('Benchmark operation identity and lifecycle', () => {
       }
       if (url.endsWith('/pull-batch')) {
         pulls++;
-        return Promise.resolve(json({ ok: true, jobs: [{ id: 'benchmark-own' }] }));
+        return Promise.resolve(
+          json({ ok: true, jobs: [{ id: 'benchmark-own' }], tokens: ['lock-own'] })
+        );
       }
       if (url.endsWith('/ack-batch')) return Promise.resolve(json({ ok: true }));
       return Promise.resolve(json({ ok: true }));
@@ -187,7 +189,9 @@ describe('Benchmark operation identity and lifecycle', () => {
         return Promise.resolve(json({ ok: true, ids: ['benchmark-own'] }));
       }
       if (url.endsWith('/pull-batch')) {
-        return Promise.resolve(json({ ok: true, jobs: [{ id: 'benchmark-own' }] }));
+        return Promise.resolve(
+          json({ ok: true, jobs: [{ id: 'benchmark-own' }], tokens: ['lock-own'] })
+        );
       }
       if (url.endsWith('/heartbeat-batch')) return heartbeat.promise;
       if (url.endsWith('/ack-batch')) {
@@ -264,7 +268,7 @@ describe('Benchmark operation identity and lifecycle', () => {
     });
     await settle(15);
     hook.unmount();
-    pull.resolve(json({ ok: true, jobs: [{ id: 'foreign-job' }] }));
+    pull.resolve(json({ ok: true, jobs: [{ id: 'foreign-job' }], tokens: ['lock-foreign'] }));
     await run;
 
     expect(pulls).toBe(1);

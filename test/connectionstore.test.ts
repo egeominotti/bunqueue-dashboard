@@ -30,8 +30,8 @@ describe('connectionStore security boundary', () => {
   });
 
   // Security property: neither the server bearer token nor the agent token may
-  // be written to localStorage — the persisted projection keeps only baseUrl +
-  // refreshMs (same secrets-at-rest policy as the S3 keys).
+  // be written to localStorage — the persisted projection keeps only profile
+  // metadata + refreshMs (same secrets-at-rest policy as the S3 keys).
   test('persisted projection excludes both tokens', () => {
     const persisted = persistedConnectionState({
       baseUrl: '/api',
@@ -44,7 +44,18 @@ describe('connectionStore security boundary', () => {
       setAgentToken: () => {},
       setRefreshMs: () => {},
     });
-    expect(persisted).toEqual({ baseUrl: '/api', refreshMs: 3000 });
+    expect(persisted).toEqual({
+      profiles: [
+        {
+          id: 'default',
+          name: 'Local Bunqueue',
+          baseUrl: '/api',
+          agentBaseUrl: 'http://localhost:6800',
+        },
+      ],
+      activeProfileId: 'default',
+      refreshMs: 3000,
+    });
     const serialized = JSON.stringify(persisted);
     expect(serialized).not.toContain('server-secret');
     expect(serialized).not.toContain('agent-secret');
@@ -71,10 +82,18 @@ describe('connectionStore security boundary', () => {
         token: 'old-server-secret',
         agentToken: 'old-agent-secret',
       })
-    ).toEqual({ baseUrl: '/api', refreshMs: 3000 });
+    ).toMatchObject({
+      profiles: [{ baseUrl: '/api', agentBaseUrl: 'http://localhost:6800' }],
+      activeProfileId: 'default',
+      refreshMs: 3000,
+    });
     expect(
       sanitizedPersistedConnectionState({ baseUrl: ' https://queue.example.com/// ', refreshMs: 1 })
-    ).toEqual({ baseUrl: 'https://queue.example.com', refreshMs: 500 });
+    ).toMatchObject({
+      profiles: [{ baseUrl: 'https://queue.example.com' }],
+      activeProfileId: 'default',
+      refreshMs: 500,
+    });
   });
 
   test('one parser canonicalizes safe path prefixes and credential-free HTTP(S) URLs', () => {
@@ -128,8 +147,9 @@ describe('connectionStore security boundary', () => {
       'https://legacy.example?redirect=safe',
       'https://legacy.example#safe',
     ]) {
-      expect(sanitizedPersistedConnectionState({ baseUrl, refreshMs: 3000 })).toEqual({
-        baseUrl: '/api',
+      expect(sanitizedPersistedConnectionState({ baseUrl, refreshMs: 3000 })).toMatchObject({
+        profiles: [{ baseUrl: '/api' }],
+        activeProfileId: 'default',
         refreshMs: 3000,
       });
     }

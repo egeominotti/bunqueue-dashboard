@@ -67,7 +67,7 @@ export function usePolledData<T>(
   // backend credential. Without this dependency, rows from server A remained
   // actionable while bq/api mutations already pointed at server B.
   const connectionIdentity = useConnectionStore((s) =>
-    JSON.stringify([s.baseUrl, s.token, s.agentToken])
+    JSON.stringify([s.activeProfileId, s.baseUrl, s.agentBaseUrl, s.token, s.agentToken])
   );
   const refreshMs = options.intervalMs ?? globalRefresh;
 

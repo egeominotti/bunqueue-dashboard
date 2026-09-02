@@ -18,6 +18,17 @@ const CopilotPanel = lazy(() =>
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+function restoreCopilotFocus(
+  opener: HTMLElement | null,
+  fallback: { readonly current: HTMLButtonElement | null }
+) {
+  requestAnimationFrame(() => {
+    if (!mayRestoreModalFocus('copilot')) return;
+    if (opener?.isConnected) opener.focus();
+    else fallback.current?.focus();
+  });
+}
+
 function isolateSiblings(modalRoot: HTMLElement): () => void {
   // The modal may be the only child of a dedicated layout wrapper. Isolating
   // only its immediate siblings then does nothing, leaving the shell tabbable.
@@ -173,16 +184,12 @@ export function Copilot() {
       }
     };
     document.addEventListener('keydown', onKey);
+    const opener = openerRef.current;
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener('keydown', onKey);
       restoreIsolation();
-      const opener = openerRef.current;
-      requestAnimationFrame(() => {
-        if (!mayRestoreModalFocus('copilot')) return;
-        if (opener?.isConnected) opener.focus();
-        else fabRef.current?.focus();
-      });
+      restoreCopilotFocus(opener, fabRef);
     };
   }, [visible, setOpen]);
 

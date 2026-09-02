@@ -1,5 +1,6 @@
 import {
   managedPostgresNamespace,
+  managedPostgresTarget,
   managedStorageMode,
   type ProcessManager,
 } from '../manager';
@@ -64,6 +65,8 @@ export async function statusWithHealth(
       storageMode: currentStorageMode,
       postgresNamespace:
         currentStorageMode === 'postgres' ? managedPostgresNamespace(currentConfig) : undefined,
+      postgresTarget:
+        currentStorageMode === 'postgres' ? managedPostgresTarget(currentConfig) : undefined,
       db: await statusDatabase(manager, currentConfig),
     };
   }
@@ -76,6 +79,8 @@ export async function statusWithHealth(
     storageMode,
     postgresNamespace:
       storageMode === 'postgres' ? managedPostgresNamespace(effectiveConfig) : undefined,
+    postgresTarget:
+      storageMode === 'postgres' ? managedPostgresTarget(effectiveConfig) : undefined,
     db: database,
   };
 }

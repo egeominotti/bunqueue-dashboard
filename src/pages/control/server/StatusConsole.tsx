@@ -229,7 +229,7 @@ export function StatusConsole({
           label={external ? 'Supervisor' : 'Storage'}
           title={
             status?.storageMode === 'postgres'
-              ? `PostgreSQL namespace: ${status.postgresNamespace ?? 'default'}`
+              ? `PostgreSQL ${status.postgresTarget ?? 'configured'} · namespace ${status.postgresNamespace ?? 'default'}`
               : status?.storageMode
           }
         >

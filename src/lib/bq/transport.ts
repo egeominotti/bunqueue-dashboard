@@ -1,9 +1,10 @@
 import {
   getAgentAuthHeaders,
+  getAgentBaseUrl,
   getAuthHeaders,
   getBaseUrl,
-  normalizeBaseUrl,
 } from '@/components/dashboard/stores/connectionStore';
+export { resolveAgentBase, SAFE_AGENT_BASE } from '@/components/dashboard/stores/connectionTarget';
 import type { JobFull } from '../bqTypes';
 import { opaqueHttpPathSegment } from '../upstreamPaths';
 
@@ -119,26 +120,13 @@ export const srv = <T>(
     timeoutMs
   );
 
-export const SAFE_AGENT_BASE = 'http://localhost:6800';
-export function resolveAgentBase(runtimeValue: unknown, envValue: unknown): string {
-  return normalizeBaseUrl(runtimeValue) ?? normalizeBaseUrl(envValue) ?? SAFE_AGENT_BASE;
-}
-
-function runtimeAgentBase(): unknown {
-  try {
-    return (globalThis as { __BUNQUEUE_AGENT_URL__?: unknown }).__BUNQUEUE_AGENT_URL__;
-  } catch {
-    return undefined;
-  }
-}
-
-const AGENT = resolveAgentBase(runtimeAgentBase(), import.meta.env.VITE_BUNQUEUE_AGENT_URL);
-export const getAgentBase = () => AGENT;
+export const getAgentBase = () => getAgentBaseUrl();
 export const agentRequest = <T>(
   path: string,
   init?: RequestInit,
   timeoutMs = requestTimeoutMs
-): Promise<T> => call<T>(AGENT, path, getAgentAuthHeaders(), init, true, 'agent', [], timeoutMs);
+): Promise<T> =>
+  call<T>(getAgentBase(), path, getAgentAuthHeaders(), init, true, 'agent', [], timeoutMs);
 
 export const body = (method: string, value?: unknown): RequestInit => ({
   method,
@@ -165,7 +153,7 @@ export function captureServerRequestTarget(): ServerRequestTarget {
 }
 
 export function captureAgentRequestTarget(): AgentRequestTarget {
-  const target = Object.freeze({ baseUrl: AGENT });
+  const target = Object.freeze({ baseUrl: getAgentBase() });
   agentHeaders.set(target, Object.freeze({ ...getAgentAuthHeaders() }));
   return target;
 }

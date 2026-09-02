@@ -217,12 +217,12 @@ bunx bunqueue-dashboard
 
 ### Point it at your server
 
-Set the server URL and bearer token from the Settings page (tokens stay in memory, never written to localStorage) or via `BUNQUEUE_URL` / `VITE_BUNQUEUE_URL`.
+Create one or more named server + paired-agent profiles in Settings. Tokens stay in memory and are isolated per profile; defaults may come from `BUNQUEUE_URL` / `VITE_BUNQUEUE_URL`.
 
 </div>
 <div class="lp-step-media">
 
-![The Settings page: server URL, bearer token and refresh interval](./screenshots/settings.png)
+![The Settings page: Bunqueue connection profiles and refresh interval](./screenshots/settings.png)
 
 </div>
 </div>

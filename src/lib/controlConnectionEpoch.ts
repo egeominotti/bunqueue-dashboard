@@ -7,6 +7,8 @@ const listeners = new Set<() => void>();
 useConnectionStore.subscribe((next, previous) => {
   if (
     next.baseUrl === previous.baseUrl &&
+    next.agentBaseUrl === previous.agentBaseUrl &&
+    next.activeProfileId === previous.activeProfileId &&
     next.token === previous.token &&
     next.agentToken === previous.agentToken
   ) {

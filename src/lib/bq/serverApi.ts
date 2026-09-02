@@ -86,12 +86,13 @@ export const jobsApi = {
       BULK_TIMEOUT_MS
     );
   },
-  pullBatch: (queue: string, count: number) =>
-    srv<{ ok: boolean; jobs: { id: string }[] }>(
+  pullBatch: (queue: string, count: number, owner?: string) =>
+    srv<{ ok: boolean; jobs: { id: string }[]; tokens?: string[] }>(
       `/queues/${queueHttpPathSegment(queue)}/jobs/pull-batch`,
-      body('POST', { count })
+      body('POST', { count, ...(owner ? { owner } : {}) })
     ),
-  ackBatch: (ids: string[]) => srv<{ ok: boolean }>('/jobs/ack-batch', body('POST', { ids })),
+  ackBatch: (ids: string[], tokens?: string[]) =>
+    srv<{ ok: boolean }>('/jobs/ack-batch', body('POST', { ids, ...(tokens ? { tokens } : {}) })),
   cancelJob: (id: string) => srv(`/jobs/${opaqueHttpPathSegment(id)}`, { method: 'DELETE' }),
   promoteJob: (id: string) => srv(`/jobs/${opaqueHttpPathSegment(id)}/promote`, body('POST')),
   discardJob: (id: string) => srv(`/jobs/${opaqueHttpPathSegment(id)}/discard`, body('POST')),

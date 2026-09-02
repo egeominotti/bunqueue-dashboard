@@ -30,11 +30,14 @@ export function useBenchmark() {
   phaseRef.current = phase;
 
   useEffect(() => {
+    const mounted = mountedRef;
+    const stop = stopRef;
+    const runGeneration = runGenerationRef;
     mountedRef.current = true;
     return () => {
-      mountedRef.current = false;
-      stopRef.current = true;
-      runGenerationRef.current++;
+      mounted.current = false;
+      stop.current = true;
+      runGeneration.current++;
     };
   }, []);
 

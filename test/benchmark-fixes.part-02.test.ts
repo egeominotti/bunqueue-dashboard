@@ -183,9 +183,9 @@ describe('Benchmark — pre-existing job safety', () => {
         pulls += 1;
         if (pulls === 1) {
           setTimeout(() => resolveBulk?.(json({ ok: true, ids: ['bench-1'] })), 5);
-          return json({ ok: true, jobs: [{ id: 'bench-1' }] });
+          return json({ ok: true, jobs: [{ id: 'bench-1' }], tokens: ['lock-1'] });
         }
-        return json({ ok: true, jobs: [] });
+        return json({ ok: true, jobs: [], tokens: [] });
       }
       if (url.includes('/heartbeat-batch')) return json({ ok: true, data: { ok: true, count: 1 } });
       if (url.includes('/ack-batch')) return json({ ok: true });
@@ -234,6 +234,7 @@ describe('Benchmark — pre-existing job safety', () => {
         return json({
           ok: true,
           jobs: pulls === 1 ? [{ id: 'bench-1' }, { id: 'bench-2' }] : [],
+          tokens: pulls === 1 ? ['lock-1', 'lock-2'] : [],
         });
       }
       if (url.includes('/heartbeat-batch')) {

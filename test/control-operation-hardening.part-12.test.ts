@@ -10,7 +10,10 @@ describe('benchmark compensation pressure', () => {
     const workerCount = 4;
     const jobsPerWorker = 12;
     const batches = Array.from({ length: workerCount }, (_, worker) =>
-      Array.from({ length: jobsPerWorker }, (_, index) => ({ id: `job-${worker}-${index}` }))
+      Array.from({ length: jobsPerWorker }, (_, index) => ({
+        id: `job-${worker}-${index}`,
+        token: `lock-${worker}-${index}`,
+      }))
     );
     const allIds = batches.flat().map((job) => job.id);
     const failedIds = new Set(batches.map((_, worker) => `job-${worker}-0`));
@@ -26,7 +29,7 @@ describe('benchmark compensation pressure', () => {
         const jobs = batches[nextBatch++] ?? [];
         if (nextBatch === workerCount) allPulled.resolve();
         await releasePulls.promise;
-        return { ok: true, jobs };
+        return { ok: true, jobs, tokens: jobs.map((job) => job.token) };
       },
       retryJob: async (id: string) => {
         attempts.push(id);

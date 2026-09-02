@@ -54,8 +54,19 @@ describe('connectionStore security boundary', () => {
       const raw = globalThis.localStorage.getItem(STORAGE_KEY);
       expect(raw, label).not.toBeNull();
       expect(JSON.parse(raw as string), label).toEqual({
-        state: { baseUrl: '/api', refreshMs: 500 },
-        version: 3,
+        state: {
+          profiles: [
+            {
+              id: 'default',
+              name: 'Local Bunqueue',
+              baseUrl: '/api',
+              agentBaseUrl: 'http://localhost:6800',
+            },
+          ],
+          activeProfileId: 'default',
+          refreshMs: 500,
+        },
+        version: 4,
       });
       expect(raw, label).not.toContain('legacy.example');
       expect(raw, label).not.toContain('token');

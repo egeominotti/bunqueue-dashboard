@@ -48,6 +48,9 @@ function DemoCta() {
 /** Bottom-of-sidebar identity/connection card (mirrors the reference layout). */
 export function SidebarFooter() {
   const baseUrl = useConnectionStore((s) => s.baseUrl);
+  const profiles = useConnectionStore((s) => s.profiles);
+  const activeProfileId = useConnectionStore((s) => s.activeProfileId);
+  const profile = profiles.find((candidate) => candidate.id === activeProfileId);
   const host = baseUrl === '/api' ? 'localhost:6790' : baseUrl.replace(/^https?:\/\//, '');
   return (
     <>
@@ -57,9 +60,12 @@ export function SidebarFooter() {
           bq
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-medium text-fg">bunqueue</div>
+          <div className="truncate text-xs font-medium text-fg">{profile?.name ?? 'bunqueue'}</div>
           <div className="truncate font-mono text-[10px] text-faint" title={baseUrl}>
             {host}
+          </div>
+          <div className="text-[9px] text-faint">
+            {profiles.length} configured node{profiles.length === 1 ? '' : 's'}
           </div>
         </div>
         <Link

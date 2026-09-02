@@ -146,7 +146,11 @@ describe('Benchmark operation identity and lifecycle', () => {
       if (url.endsWith('/pull-batch')) {
         pulls++;
         return Promise.resolve(
-          json({ ok: true, jobs: pulls === 1 ? [{ id: 'benchmark-own' }] : [] })
+          json({
+            ok: true,
+            jobs: pulls === 1 ? [{ id: 'benchmark-own' }] : [],
+            tokens: pulls === 1 ? ['lock-own'] : [],
+          })
         );
       }
       if (url.endsWith('/heartbeat-batch')) {

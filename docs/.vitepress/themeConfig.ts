@@ -33,7 +33,10 @@ export function createThemeConfig(base: string): DefaultTheme.Config {
       },
       {
         text: 'Guide · Home',
-        items: [{ text: 'Overview', link: '/guide/overview' }],
+        items: [
+          { text: 'Overview', link: '/guide/overview' },
+          { text: 'Fleet', link: '/guide/fleet' },
+        ],
       },
       {
         text: 'Guide · Queues',

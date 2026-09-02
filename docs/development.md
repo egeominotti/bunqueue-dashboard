@@ -52,6 +52,10 @@ before publishing. It executes, in order:
 - `bun run size`: initial-load and total JavaScript bundle budgets.
 - `bun run docs:build`: the VitePress production build, including dead-link checks.
 - `bun run test:coverage`: the complete Bun test suite plus aggregate coverage floors.
+- `bun run test:e2e`: disposable Bunqueue 2.9.2 Flow/Workflow/Queue contracts
+  plus three authenticated brokers and agents sharing PostgreSQL 18.6 (Docker required).
+- `bun run test:package`: packs, installs, starts, and probes the published binary
+  from a clean temporary consumer.
 - `bun run audit:high`: a blocking dependency audit for HIGH and CRITICAL advisories.
 
 CI also runs `bun run test:e2e:browser` as a separate blocking matrix on Chromium, Firefox, and
@@ -101,10 +105,10 @@ Notes:
    acceptance alone is not authorization: the shared gates intentionally keep
    DLQ retry and completed-job requeue false.
 
-**Both steps 2 and 3 are required**, a route with no nav entry (or vice
-versa) is a dead end. `src/pages/Alerts.tsx` is exactly this: fully built, routed nowhere, findable only by reading the source (see
-[pages.md](pages.md#not-part-of-the-router)). Don't leave a new page in that
-state.
+**Both steps 2 and 3 are required**: a route with no nav entry (or vice versa)
+is a dead end. The route-completeness tests compare the registered routes,
+sidebar destinations, and page-title map; do not leave a new page outside that
+contract.
 
 **Do not rewrite existing pages or the `api.ts` client.** Corrected behaviour goes
 in a new page using `bq`. If you find a live bug while working nearby, check

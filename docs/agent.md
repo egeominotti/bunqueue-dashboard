@@ -177,7 +177,10 @@ preflight ACAO, loopback mutation auth, and all-route auth for network exposure.
 `bun run test:e2e` additionally starts disposable Bunqueue 2.9.2 servers and
 executes every FlowProducer creation mode, every exposed safe Flow Job group,
 Workflow handler discovery/control/compensation/archive, all eight exposed Queue
-SDK operations, and the unexposed `removeDlqJob` compatibility contract. Backup
+SDK operations, and the unexposed `removeDlqJob` compatibility contract. Its
+PostgreSQL stage starts three separately authenticated agents/brokers against one
+disposable PostgreSQL 18.6 namespace and proves cross-broker enqueue, leased
+pull/ack, queue state, cron, and rate-limit visibility. Backup
 worker and compiled-binary behavior are covered by the
 runtime-safety suite and the standalone build smoke test. The deterministic
 lifecycle suite suspends a Workflow request body across stop and restart and

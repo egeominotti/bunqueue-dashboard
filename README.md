@@ -104,6 +104,7 @@ contracts; it never patches Bunqueue internals.
 | Area | Where | What you can do |
 | --- | --- | --- |
 | **Home** | Overview | Live health banner, throughput, queue health, recent activity |
+| **Fleet** | Fleet | Probe and operate multiple Bunqueue APIs + paired agents; verify shared PostgreSQL target/namespace topology |
 | **Server** | Control ▸ Server | **Start / stop / restart** the server process, edit its config, tail process logs |
 | **Enqueue** | Control ▸ Add Job | Add jobs (single or bulk) with every option |
 | **Inspect** | Control ▸ Job Inspector | Look up any job; promote / re-prioritize / delay; view data & result |
@@ -192,14 +193,22 @@ flowchart LR
 - **Writes** through the same HTTP API, with every mutation shape-verified against the live server.
 - **Process lifecycle**, the one thing HTTP can't do, is delegated to the local control agent.
 
+For multiple brokers, create one named Dashboard profile and one paired control
+agent per broker. The Fleet page probes all profiles without retargeting the
+active UI, groups brokers that share an exact PostgreSQL target + namespace,
+and drives each node's Start/Stop/Restart controls. Queue state is shared by
+PostgreSQL; lifecycle, process logs/config, in-memory webhooks, and each agent's
+Workflow Engine store remain node-local. See the
+[Fleet guide](https://egeominotti.github.io/bunqueue-dashboard/docs/guide/fleet).
+
 Two HTTP clients coexist on purpose: `src/lib/api.ts` (first-generation view pages) and
 `src/lib/bq.ts` (the complete, shape-verified client used by every `Control ▸ *` page). See
 [`docs/`](docs/README.md) for the full, source-verified reference.
 
 ## Configuration
 
-The `VITE_*` dashboard defaults are build-time values and can **also** be changed at runtime from
-the in-app **Settings** page. The all-in-one server reads the non-`VITE_*` runtime variables below.
+The `VITE_*` dashboard defaults are build-time values and can **also** seed the first named profile
+in **Settings**. Add up to 32 broker/agent profiles at runtime. The all-in-one server reads the non-`VITE_*` runtime variables below.
 Copy [`.env.example`](.env.example) to `.env` to set defaults.
 
 | Variable | Purpose | Default |
@@ -253,6 +262,8 @@ target-pinned Flow, Workflow, Queue and Backup agent operations.
 | `bun run check` | Oxlint + Oxfmt validation (the CI gate) |
 | `bun run check:fix` | Apply safe Oxlint fixes, then format with Oxfmt |
 | `bun test` | Unit + agent-lifecycle tests |
+| `bun run test:e2e` | Real Flow, Workflow, Queue SDK, and three-broker PostgreSQL runtime tests |
+| `bun run test:e2e:postgres-fleet` | Three authenticated Bunqueue 2.9.2 brokers + three agents sharing disposable PostgreSQL 18.6 |
 
 ## Docker
 
@@ -300,7 +311,10 @@ bun run quality   # architecture, lint/build, size, docs, coverage, real E2E, pa
 ```
 
 The E2E stage starts disposable Bunqueue 2.9.2 processes and exercises the complete FlowProducer,
-Workflow Engine, and Queue SDK operator bridges. Run it alone with `bun run test:e2e`.
+Workflow Engine, and Queue SDK operator bridges. It also starts PostgreSQL 18.6 in Docker with
+three authenticated brokers and paired agents, proving cross-broker enqueue/inspect/leased
+pull+ack, pause/resume, cron, and rate-limit behavior. Run it alone with `bun run test:e2e` (Docker
+is required for the PostgreSQL stage).
 
 The blocking browser job builds the production bundle under `/e2e/dashboard`, starts an
 authenticated disposable Bunqueue server, and drives the UI with Playwright on Chromium, Firefox,

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 
 const TITLES: Record<string, string> = {
   '/': 'Overview',
+  '/fleet': 'Fleet',
   '/queues': 'Queues',
   '/jobs': 'Jobs',
   '/dlq': 'Dead Letter Queue',

@@ -28,6 +28,13 @@ description: "How the bunqueue dashboard fits together: the React SPA, its polli
    └─────────────────┘            └───────────────────────┘
 ```
 
+The single-pair diagram is one connection profile. A production fleet repeats
+that server/agent pair per broker. The Dashboard stores up to 32 named profiles,
+and `/fleet` probes all pairs concurrently while the rest of the UI follows one
+atomic active identity. Brokers reporting the same credential-free PostgreSQL
+target and namespace are grouped as one shared queue topology; their control
+agents remain distinct node-local control planes.
+
 ## Components
 
 ### Feature-slice architecture
@@ -43,7 +50,7 @@ src/features/<capability>/
 └── ui/              # views and interaction state
 ```
 
-Workflow, Job Flow, Queue SDK, and S3 operations follow this boundary. Tests
+Workflow, Job Flow, Queue SDK, S3, and Fleet operations follow this boundary. Tests
 inject repository ports into the UI and fake runtime ports into agent routes;
 real E2E scripts exercise the same adapters against a disposable Bunqueue
 2.9.2 process. Non-idempotent commands use synchronous leases, while reads
@@ -67,10 +74,10 @@ runtime resources after the managed server has transitioned.
   - `src/pages/control/*`, the **Pro**, full-control pages. Use `lib/bq.ts`.
     `pages/control/job/` and `pages/control/queue/` hold page-specific
     subcomponents too small to be their own page (e.g. `JobTimeline`, `JobBackoff`, `QueueActions`, `ConfigForms`).
-  - The two families are not cleanly partitioned by route path, some Pro
-    pages render at the "plain" path with the classic page pushed to
-    `-classic` (`/jobs`, `/dlq`, `/metrics`, `/s3`); others have **no** Pro
-    equivalent at all (`/queues`, `/workers`, `/usage`, `/settings`). See
+  - The two families are not cleanly partitioned by route path. Pro pages
+    render at the plain operational paths and the retained classic pages use
+    `-classic` suffixes. Settings is shared, while Fleet is a direct
+    multi-target operational page. See
     [pages.md](pages.md#route-table-from-srcapptsx) for the authoritative
     table, don't infer family from the URL.
   - One page mixes clients: `LogsPro` calls `bq.queues()` for the queue
@@ -117,6 +124,9 @@ flowchart LR
   generations hide the previous view synchronously, abort obsolete work, and
   discard late results. The last good snapshot remains visible on a same-scope
   refresh error, while identical serialized snapshots avoid a React re-render.
+  Its connection generation includes active profile id, server URL, agent URL,
+  and both credentials; switching nodes therefore hides old data before any
+  action can target the new node.
 - **Live activity.** `useActivityStream(queue?)` streams SSE from `/events`
   (or `/events/queues/:q`) via a fetch-based reader (`lib/sse.ts`) that
   supports a bearer token, unlike `EventSource`. It keeps a bounded ring

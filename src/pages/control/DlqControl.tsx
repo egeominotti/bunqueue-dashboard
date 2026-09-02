@@ -15,6 +15,8 @@ import { DlqRow } from './dlq/DlqRow';
 import { loadAllQueuePages } from './QueueControl';
 
 const PAGE_SIZE = 25;
+const EMPTY_BY_REASON: Record<string, number> = {};
+const EMPTY_ENTRIES: DlqEntryFull[] = [];
 
 const rowKey = (e: DlqEntryFull) => `${e.job.id}-${e.enteredAt}`;
 
@@ -86,14 +88,14 @@ export function DlqControl() {
     setExpanded(new Set());
   }, [queue, page]);
 
-  const byReason = data?.stats?.byReason ?? {};
+  const byReason = data?.stats?.byReason ?? EMPTY_BY_REASON;
   const reasons = useMemo(() => Object.keys(byReason).filter((r) => byReason[r] > 0), [byReason]);
   const topReason = useMemo(
     () => [...reasons].sort((a, b) => (byReason[b] ?? 0) - (byReason[a] ?? 0))[0],
     [reasons, byReason]
   );
 
-  const allEntries = data?.entries ?? [];
+  const allEntries = data?.entries ?? EMPTY_ENTRIES;
   const entries = useMemo(() => {
     let list = allEntries;
     if (reason !== 'all') list = list.filter((e) => e.reason === reason);
