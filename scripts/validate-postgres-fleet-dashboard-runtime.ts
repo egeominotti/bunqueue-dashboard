@@ -1,13 +1,15 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { freePort } from './flowRuntimeSupport';
 import { type NodeRuntime, spawnPostgresFleetNode } from './postgresFleetNode';
 import { runPostgresFleetDashboardBrowserScenario } from './postgresFleetDashboardBrowserScenario';
 
 type Child = ReturnType<typeof Bun.spawn>;
+type DashboardServer = ReturnType<typeof Bun.serve>;
 
 const repository = resolve(import.meta.dir, '..');
+const dashboardDist = join(repository, 'dist');
 const root = await mkdtemp(join(tmpdir(), 'bunqueue-dashboard-postgres-fleet-browser-'));
 const container = `bunqueue-dashboard-postgres-fleet-browser-${process.pid}`;
 const [postgresPort, dashboardPort] = await Promise.all([freePort(), freePort()]);
@@ -18,9 +20,7 @@ const postgresUrl = `postgresql://postgres:${password}@127.0.0.1:${postgresPort}
 const dashboardUrl = `http://127.0.0.1:${dashboardPort}`;
 const cli = join(repository, 'node_modules/bunqueue/dist/cli/index.js');
 const nodes: NodeRuntime[] = [];
-let dashboard: Child | null = null;
-let dashboardStdout: Promise<string> | null = null;
-let dashboardStderr: Promise<string> | null = null;
+let dashboard: DashboardServer | null = null;
 let containerStarted = false;
 let failure: unknown;
 
@@ -60,25 +60,8 @@ try {
     await waitForBroker(node);
   }
 
-  const dashboardChild = Bun.spawn(
-    [
-      'bun',
-      'x',
-      '--bun',
-      '--no-install',
-      'vite',
-      '--host',
-      '127.0.0.1',
-      '--port',
-      String(dashboardPort),
-      '--strictPort',
-    ],
-    { cwd: repository, env: { ...process.env }, stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' }
-  );
-  dashboard = dashboardChild;
-  dashboardStdout = new Response(dashboardChild.stdout).text();
-  dashboardStderr = new Response(dashboardChild.stderr).text();
-  await waitForDashboard(dashboardChild);
+  dashboard = await serveDashboard();
+  await waitForDashboard();
 
   await runPostgresFleetDashboardBrowserScenario({
     dashboardUrl,
@@ -110,7 +93,7 @@ try {
 } catch (error) {
   failure = error;
 } finally {
-  await terminate(dashboard);
+  dashboard?.stop(true);
   for (const node of nodes) {
     await agentRequest(node, '/control/stop', { method: 'POST' }).catch(() => undefined);
   }
@@ -126,16 +109,41 @@ if (failure) {
         `${node.name} stdout:\n${tail(await node.stdout)}\n${node.name} stderr:\n${tail(await node.stderr)}`
     )
   );
-  const dashboardLogs = [
-    `dashboard stdout:\n${tail((await dashboardStdout) ?? '')}`,
-    `dashboard stderr:\n${tail((await dashboardStderr) ?? '')}`,
-  ];
   throw new Error(
-    `PostgreSQL fleet Dashboard browser validation failed: ${message(failure)}\n${[
-      ...dashboardLogs,
-      ...nodeLogs,
-    ].join('\n')}`
+    `PostgreSQL fleet Dashboard browser validation failed: ${message(failure)}\n${nodeLogs.join('\n')}`
   );
+}
+
+async function serveDashboard(): Promise<DashboardServer> {
+  const indexPath = join(dashboardDist, 'index.html');
+  if (!(await Bun.file(indexPath).exists())) {
+    throw new Error('Production Dashboard fixture is missing; run `bun run build` first');
+  }
+  return Bun.serve({
+    hostname: '127.0.0.1',
+    port: dashboardPort,
+    async fetch(request) {
+      if (request.method !== 'GET' && request.method !== 'HEAD') {
+        return new Response('Method not allowed', { status: 405, headers: { Allow: 'GET, HEAD' } });
+      }
+      let pathname: string;
+      try {
+        pathname = decodeURIComponent(new URL(request.url).pathname);
+      } catch {
+        return new Response('Bad request', { status: 400 });
+      }
+      const relative = pathname.replace(/^\/+/, '');
+      const assetPath = resolve(dashboardDist, relative);
+      if (assetPath !== dashboardDist && !assetPath.startsWith(`${dashboardDist}${sep}`)) {
+        return new Response('Bad request', { status: 400 });
+      }
+      const asset = Bun.file(assetPath);
+      const body = relative && (await asset.exists()) ? asset : Bun.file(indexPath);
+      return new Response(request.method === 'HEAD' ? null : body, {
+        headers: { 'Content-Type': body.type || 'application/octet-stream' },
+      });
+    },
+  });
 }
 
 async function waitForPostgres(): Promise<void> {
@@ -179,12 +187,11 @@ async function waitForBroker(node: NodeRuntime): Promise<void> {
   throw new Error(`Timed out waiting for ${node.name}`);
 }
 
-async function waitForDashboard(child: Child): Promise<void> {
+async function waitForDashboard(): Promise<void> {
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) throw new Error(`Dashboard exited with ${child.exitCode}`);
     try {
-      const response = await fetch(dashboardUrl);
+      const response = await fetch(dashboardUrl, { signal: AbortSignal.timeout(1_000) });
       if (response.ok) return;
     } catch {}
     await Bun.sleep(50);

@@ -98,9 +98,11 @@ try {
     method: 'PUT',
     body: JSON.stringify({ limit: 7, duration: 60_000 }),
   });
-  const limits = await agentRequest(
+  const limits = await waitForAgentJson(
     nodes[2],
-    `/queue-operations/${queue}/limits?target=${encodeURIComponent(`http://127.0.0.1:${nodes[2].httpPort}`)}`
+    `/queue-operations/${queue}/limits?target=${encodeURIComponent(`http://127.0.0.1:${nodes[2].httpPort}`)}`,
+    (body) =>
+      (body.limits as { rateLimit?: { max?: number } } | undefined)?.rateLimit?.max === 7
   );
   assert(
     (limits.limits as { rateLimit?: { max?: number } } | undefined)?.rateLimit?.max === 7,
@@ -216,6 +218,23 @@ async function waitForJson(
     await Bun.sleep(50);
   }
   throw new Error(`Timed out waiting for ${node.name}${path}: ${JSON.stringify(last)}`);
+}
+
+async function waitForAgentJson(
+  node: NodeRuntime,
+  path: string,
+  predicate: (body: Record<string, unknown>) => boolean
+): Promise<Record<string, unknown>> {
+  const deadline = Date.now() + 15_000;
+  let last: Record<string, unknown> = {};
+  while (Date.now() < deadline) {
+    try {
+      last = await agentRequest(node, path);
+      if (predicate(last)) return last;
+    } catch {}
+    await Bun.sleep(50);
+  }
+  throw new Error(`Timed out waiting for ${node.name} agent${path}: ${JSON.stringify(last)}`);
 }
 
 async function serverRequest(

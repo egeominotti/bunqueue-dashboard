@@ -21,6 +21,8 @@ export async function runPostgresFleetDashboardBrowserScenario(
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ colorScheme: 'dark', locale: 'en-US' });
   const page = await context.newPage();
+  page.setDefaultTimeout(15_000);
+  page.setDefaultNavigationTimeout(20_000);
   const browserErrors: string[] = [];
   page.on('pageerror', (error) => browserErrors.push(`pageerror: ${error.message}`));
   page.on('console', (entry) => {
@@ -132,8 +134,12 @@ async function runScenario(page: Page, options: DashboardFleetScenarioOptions): 
   await confirm(page, () => page.getByRole('button', { name: 'Replace policy' }).nth(1).click());
   await visible(fact(page, 'Global concurrency', '2'), 'concurrency readback');
   await activate(page, options.nodes[2].name);
-  await page.getByRole('button', { name: 'Refresh limits' }).click();
-  await visible(page.getByText('5 / 60000 ms', { exact: true }), 'shared rate limit');
+  await refreshUntilVisible(
+    page,
+    page.getByRole('button', { name: 'Refresh limits' }),
+    page.getByText('5 / 60000 ms', { exact: true }),
+    'shared rate limit'
+  );
   await visible(fact(page, 'Global concurrency', '2'), 'shared concurrency');
   console.log('PASS limits: rate and concurrency shared B -> C');
 
@@ -189,6 +195,21 @@ async function visible(locator: Locator, description: string): Promise<void> {
   await locator.waitFor({ state: 'visible', timeout: 15_000 }).catch((error) => {
     throw new Error(`Timed out waiting for ${description}: ${String(error)}`);
   });
+}
+
+async function refreshUntilVisible(
+  page: Page,
+  refresh: Locator,
+  target: Locator,
+  description: string
+): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    await refresh.click();
+    if (await target.isVisible()) return;
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`Timed out waiting for ${description} after repeated refreshes`);
 }
 
 async function confirm(page: Page, action: () => Promise<void>): Promise<void> {
