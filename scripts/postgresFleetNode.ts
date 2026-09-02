@@ -21,6 +21,7 @@ export async function spawnPostgresFleetNode(
     cli: string;
     namespace: string;
     postgresUrl: string;
+    corsAllowOrigin?: string;
   }
 ): Promise<NodeRuntime> {
   const [httpPort, tcpPort, agentPort] = await Promise.all([freePort(), freePort(), freePort()]);
@@ -32,7 +33,7 @@ export async function spawnPostgresFleetNode(
     env: {
       ...process.env,
       AGENT_ALLOWED_HOSTS: '',
-      AGENT_ALLOWED_ORIGINS: '',
+      AGENT_ALLOWED_ORIGINS: options.corsAllowOrigin ?? '',
       AGENT_PORT: String(agentPort),
       AGENT_TOKEN: agentToken,
       AUTH_TOKENS: serverToken,
@@ -45,6 +46,7 @@ export async function spawnPostgresFleetNode(
       BUNQUEUE_STORAGE_DRIVER: 'postgres',
       BUNQUEUE_TOKEN: serverToken,
       BUNQUEUE_URL: `http://127.0.0.1:${httpPort}`,
+      ...(options.corsAllowOrigin ? { CORS_ALLOW_ORIGIN: options.corsAllowOrigin } : {}),
       HTTP_PORT: String(httpPort),
       TCP_PORT: String(tcpPort),
     },

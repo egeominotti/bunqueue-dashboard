@@ -77,6 +77,10 @@ jobs:
       - name: Run real-browser E2E
         run: bunx playwright test --project=${{ matrix.browser }}
 
+      - name: Run three-broker PostgreSQL Dashboard E2E
+        if: matrix.browser == 'chromium'
+        run: bun run test:e2e:browser:postgres-fleet
+
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
