@@ -34,9 +34,6 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
-env:
-  BUN_VERSION: 1.4.0
-
 jobs:
   build:
     name: Build
@@ -49,7 +46,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          bun-version-file: .bun-version
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

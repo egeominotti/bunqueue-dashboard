@@ -12,6 +12,9 @@
  */
 import type { Subprocess } from 'bun';
 import { logger } from '../agent/logger';
+import { assertRequiredBunVersion } from './bunVersion';
+
+assertRequiredBunVersion();
 
 // Spawn the real processes directly — NOT through `bun run <script>`: that
 // interposes a wrapper process which does not forward SIGTERM to its child,
@@ -19,7 +22,7 @@ import { logger } from '../agent/logger';
 // (leaving a stale dev server holding :5273 for the next `bun start`).
 const services = [
   { name: 'agent', cmd: ['bun', 'agent/index.ts'] },
-  { name: 'dashboard', cmd: ['node_modules/.bin/vite'] },
+  { name: 'dashboard', cmd: ['bun', 'node_modules/.bin/vite'] },
 ] as const;
 
 // Must exceed the agent's own SIGTERM→SIGKILL escalation window (8s in

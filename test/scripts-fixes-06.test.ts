@@ -26,11 +26,13 @@ describe('serve.ts terminal startup ordering', () => {
 describe('dev.ts spawn failure', () => {
   it('kills already-spawned children when a later spawn throws', async () => {
     const killed: string[] = [];
+    const commands: unknown[] = [];
     const realSpawn = Bun.spawn;
     const realExit = process.exit;
     let calls = 0;
     // @ts-expect-error — test double for Bun.spawn
-    Bun.spawn = mock(() => {
+    Bun.spawn = mock((command: unknown) => {
+      commands.push(command);
       calls += 1;
       if (calls === 2) throw new Error('spawn ENOENT');
       return {
@@ -56,6 +58,10 @@ describe('dev.ts spawn failure', () => {
       process.exit = realExit;
     }
     expect(calls).toBe(2);
+    expect(commands).toEqual([
+      ['bun', 'agent/index.ts'],
+      ['bun', 'node_modules/.bin/vite'],
+    ]);
     expect(killed.length).toBeGreaterThan(0); // the agent child was torn down
     expect(code).toBe(1);
   });

@@ -16,6 +16,7 @@ import {
 } from '../agent/server';
 import { installAgentShutdown } from '../agent/shutdown';
 import { WorkflowRuntime } from '../agent/workflow/runtime';
+import { assertRequiredBunVersion } from './bunVersion';
 import { createServeHandler } from './serveHandler';
 import {
   isLoopbackBind,
@@ -26,6 +27,8 @@ import {
   resolveServeAllowedHosts,
   withSecurityHeaders,
 } from './servePolicy';
+
+assertRequiredBunVersion();
 
 export { createServeHandler } from './serveHandler';
 export {

@@ -15,8 +15,15 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.40] - 2026-09-02
+
 ### Changed
 
+- Pinned the local runtime, package metadata, Bun types, Docker build, every CI
+  workflow, tests, and registry publishing to Bun 1.4.0; npm publication now
+  runs through Bun instead of a separate Node/npm toolchain.
+- The one-command development launcher now starts Vite explicitly through Bun,
+  so it no longer depends on a `node` executable being present on the machine.
 - Added the complete Bunqueue 2.9.2 group operations surface to Queue Control:
   group and aggregate counts, active count, rate-limit read/set/remove/TTL, and
   concurrency read/set/remove, with target pinning and live E2E coverage.
@@ -29,6 +36,11 @@ the GitHub Release body.
 - PostgreSQL mode now fails before spawning without a connection URL and reports
   its effective storage backend and namespace in Server Control while keeping
   SQLite-only database and backup operations unavailable.
+- The packed-package runtime smoke now uses Bun's native pack and install commands,
+  so the Bun-only quality gate no longer fails on machines without Node/npm.
+- Compatibility documentation now states the exact operator-safe Bunqueue 2.9.2
+  bulk enqueue surface instead of implying support for unsafe Flow topology or
+  inert persistence-only fields.
 
 ## [0.0.39] - 2026-08-31
 
@@ -1183,7 +1195,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.39...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.40...HEAD
+[0.0.40]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.39...v0.0.40
 [0.0.39]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.38...v0.0.39
 [0.0.38]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.37...v0.0.38
 [0.0.37]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.36...v0.0.37

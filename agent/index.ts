@@ -12,6 +12,7 @@
  *       BUNQUEUE_START_CMD, BUNQUEUE_MANAGED, BUNQUEUE_URL, BUNQUEUE_TOKEN,
  *       HTTP_PORT, TCP_PORT, BUNQUEUE_DATA_PATH
  */
+import { assertRequiredBunVersion } from '../scripts/bunVersion';
 import { logger } from './logger';
 import { ProcessManager } from './manager';
 import {
@@ -21,6 +22,8 @@ import {
   resolveServerControlTarget,
 } from './server';
 import { installAgentShutdown } from './shutdown';
+
+assertRequiredBunVersion();
 
 const mgr = new ProcessManager();
 const PORT = Number(process.env.AGENT_PORT) || 6800;

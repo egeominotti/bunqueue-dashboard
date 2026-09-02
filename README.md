@@ -128,7 +128,7 @@ contracts; it never patches Bunqueue internals.
 
 ## Quick start
 
-**Prerequisites:** [Bun](https://bun.sh) ≥ 1.4.0 and a reachable bunqueue server (or let the control
+**Prerequisites:** [Bun](https://bun.sh) 1.4.0 and a reachable bunqueue server (or let the control
 agent start one for you from the **Server** page).
 
 ### Run from npm (no clone)
@@ -147,7 +147,7 @@ standalone binaries: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` · `AGENT_PORT` ·
 Install it permanently instead of running via `bunx`:
 
 ```bash
-bun add -g bunqueue-dashboard   # or: npm i -g bunqueue-dashboard (still runs on Bun)
+bun add -g bunqueue-dashboard
 bunqueue-dashboard
 ```
 

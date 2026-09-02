@@ -1,8 +1,9 @@
 {
   "name": "bunqueue-dashboard",
-  "version": "0.0.39",
+  "version": "0.0.40",
   "type": "module",
-  "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun).",
+  "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun 1.4.0).",
+  "packageManager": "bun@1.4.0",
   "bin": {
     "bunqueue-dashboard": "scripts/serve.ts"
   },
@@ -11,6 +12,7 @@
     "scripts/serve.ts",
     "scripts/serveHandler.ts",
     "scripts/servePolicy.ts",
+    "scripts/bunVersion.ts",
     "scripts/embedded.gen.ts",
     "agent"
   ],
@@ -45,10 +47,10 @@
     "react"
   ],
   "engines": {
-    "bun": ">=1.4.0"
+    "bun": "1.4.0"
   },
   "scripts": {
-    "prepack": "bun run build && bun scripts/gen-embed.ts",
+    "prepack": "bun run version:check && bun run build && bun scripts/gen-embed.ts",
     "start": "bun run scripts/dev.ts",
     "dev": "vite",
     "agent": "bun run agent/index.ts",
@@ -56,6 +58,7 @@
     "typecheck": "tsc --noEmit && bun run typecheck:agent",
     "typecheck:agent": "tsc -p tsconfig.agent.json",
     "size": "bun run scripts/check-bundle.ts",
+    "version:check": "bun run scripts/check-bun-version.ts",
     "architecture": "bun run scripts/check-file-size.ts",
     "docs:dev": "vitepress dev docs",
     "docs:build": "bun run scripts/build-docs.ts",
@@ -79,7 +82,7 @@
     "check": "bun run lint && bun run format:check",
     "check:fix": "bun run lint:fix && bun run format",
     "audit:high": "bun audit --audit-level=high --ignore=GHSA-qwww-vcr4-c8h2",
-    "quality": "bun run architecture && bun run check && bun run build && bun run size && bun run docs:build && bun run test:coverage && bun run test:e2e && bun run test:package && bun run audit:high"
+    "quality": "bun run version:check && bun run architecture && bun run check && bun run build && bun run size && bun run docs:build && bun run test:coverage && bun run test:e2e && bun run test:package && bun run audit:high"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^4.0.7",
@@ -97,7 +100,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "ai": "^7.0.14",
-    "bun-types": "^1.4.0",
+    "bun-types": "1.4.0",
     "happy-dom": "^20.10.6",
     "mermaid": "^11.16.0",
     "oxfmt": "^0.63.0",

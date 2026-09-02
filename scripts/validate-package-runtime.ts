@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   try {
     await Promise.all([mkdir(packDirectory), mkdir(consumerDirectory)]);
     await runCommand(
-      ['npm', 'pack', '--ignore-scripts=false', '--pack-destination', packDirectory],
+      ['bun', 'pm', 'pack', '--destination', packDirectory],
       repository,
       commandTimeoutMs
     );
@@ -38,13 +38,11 @@ async function main(): Promise<void> {
     );
     await runCommand(
       [
-        'npm',
+        'bun',
         'install',
-        '--ignore-scripts=true',
-        '--omit=dev',
-        '--no-audit',
-        '--no-fund',
-        '--package-lock=false',
+        '--ignore-scripts',
+        '--production',
+        '--no-save',
         tarball,
       ],
       consumerDirectory,
@@ -145,7 +143,7 @@ async function installedPackageDirectory(consumer: string, scratch: string): Pro
   const directory = await realpath(join(consumer, 'node_modules', 'bunqueue-dashboard'));
   assert(
     directory.startsWith(`${scratch}/`),
-    `npm installed the package outside the isolated consumer: ${directory}`
+    `Bun installed the package outside the isolated consumer: ${directory}`
   );
   return directory;
 }

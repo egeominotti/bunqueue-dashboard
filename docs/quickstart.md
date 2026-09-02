@@ -12,7 +12,7 @@ dashboard running on sample data with no server needed.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) 1.4 or newer.
+- [Bun](https://bun.sh) 1.4.0, pinned by the repository, CI and published package.
 - A bunqueue server to drive, or let the control agent start one for you (step 3).
 
 ## The one-liner: run from npm
@@ -39,7 +39,7 @@ reverse-proxy deployments require an explicit Host/origin allowlist plus
 To install it permanently instead of running via `bunx`:
 
 ```bash
-bun add -g bunqueue-dashboard   # or: npm i -g bunqueue-dashboard (still runs on Bun)
+bun add -g bunqueue-dashboard
 bunqueue-dashboard
 ```
 

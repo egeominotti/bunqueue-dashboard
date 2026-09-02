@@ -85,7 +85,7 @@ Typing a queue name that doesn't exist creates a brand-new queue. Double-check t
 ## Good to know
 
 - **Name and ID are separate.** **Job name** classifies the work and defaults to `default`; the optional **Custom job ID** controls its caller-selected identity. User payload remains in JSON data.
-- **Count copies are identical.** Every copy shares the exact same data and options. For different payloads, use **Bulk import**, which accepts JSON array/NDJSON job specs and preserves the full v2.9.2 bulk `JobInput` surface (including structured backoff, tags/groups/dependencies, repeat, dedup, retention and dependency-failure controls).
+- **Count copies are identical.** Every copy shares the exact same data and options. For different payloads, use **Bulk import**, which accepts JSON array/NDJSON job specs and preserves the operator-safe v2.9.2 fields: structured backoff, tags/groups/dependencies, interval repeat, dedup, stall timeout, stack-trace limit and timestamp, in addition to the single-add options.
 - **The complete bulk request is bounded.** Bunqueue limits data per job but not
   data multiplied by Count. The dashboard measures the exact translated JSON
   envelope without constructing it and refuses submissions above 64 MiB, so a
@@ -94,8 +94,12 @@ Typing a queue name that doesn't exist creates a brand-new queue. Double-check t
 - **Bulk plus a custom ID collapses into one job.** If you set **Count** above 1 *and* a **Custom job ID**, every copy shares that ID, so the server dedupes them into a single job. The result line honestly reports how many distinct jobs were actually created, often just one. See [Known issues](/known-issues).
 - **Fire-and-forget.** This page reports the new job ID but doesn't track the job afterward. Use the Job Inspector or the Jobs page to watch it run.
 - **Rare bulk-only options live in Bulk import.** The friendly form exposes the
-  single-push surface; raw spec mode is the escape hatch for the remaining
-  bulk-only `JobInput` controls.
+  single-push surface; spec mode additionally accepts `stallTimeout`, `dedup`,
+  `stackTraceLimit` and `timestamp`. It rejects `parentId`, `childrenIds` and the
+  dependency-failure flags because those belong to atomic Flow creation. It also
+  rejects Bunqueue's persisted compatibility fields `keepLogs`, `sizeLimit`,
+  `debounceId` and `debounceTtl`, which are not enforceable enqueue controls in
+  v2.9.2.
 - **Autocomplete needs a connection.** Queue suggestions come from your live server. If it's unreachable the field still works as free text, you just won't get suggestions, and submitting shows the error in the result line.
 
 ::: details Under the hood (for developers)

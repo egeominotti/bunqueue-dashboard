@@ -28,9 +28,6 @@ permissions:
   id-token: write # mint the OIDC token for artifact provenance attestation
   attestations: write # write the attestation to the repo
 
-env:
-  BUN_VERSION: 1.4.0
-
 jobs:
   release:
     name: Build & publish release
@@ -47,7 +44,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
+          bun-version-file: .bun-version
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -166,7 +163,7 @@ jobs:
   # job's gate has passed. Independently idempotent: it publishes iff the
   # NPM_TOKEN secret is configured AND package.json's version is not already on
   # the registry — so an un-bumped push or a missing secret is a clean skip,
-  # never a failure. `npm publish` runs the `prepack` script (vite build +
+  # never a failure. `bun publish` runs the `prepack` script (vite build +
   # embed manifest), so the tarball always carries a fresh dist/.
   npm:
     name: Publish to npm
@@ -180,13 +177,7 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Setup Node (npm registry auth)
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
+          bun-version-file: .bun-version
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -203,7 +194,7 @@ jobs:
           fi
           VER=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' package.json | head -1)
           echo "version=${VER}" >> "$GITHUB_OUTPUT"
-          if npm view "bunqueue-dashboard@${VER}" version >/dev/null 2>&1; then
+          if bun info "bunqueue-dashboard@${VER}" version >/dev/null 2>&1; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "bunqueue-dashboard@${VER} already on npm — skipping."
           else
@@ -213,7 +204,5 @@ jobs:
       - name: Publish
         if: steps.pre.outputs.publish == 'true'
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        # --provenance: signed build attestation linking the package to this
-        # workflow run (uses the job's OIDC id-token permission).
-        run: npm publish --provenance --access public
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: bun publish --access public --registry https://registry.npmjs.org

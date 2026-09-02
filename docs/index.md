@@ -271,7 +271,7 @@ Explore jobs, triage the DLQ, schedule cron, watch live activity. Destructive ac
 
 ::: code-group
 
-```bash [npm (recommended)]
+```bash [Bun 1.4 (recommended)]
 bunx bunqueue-dashboard
 # → http://127.0.0.1:8080, serves the SPA plus the /api proxy and control agent
 ```
