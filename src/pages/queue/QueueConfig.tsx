@@ -12,7 +12,7 @@ export function QueueConfig({ queue }: { queue: string }) {
     <div className="mt-8">
       <h2 className="mb-3 text-lg font-semibold text-fg">Configuration</h2>
       <p className="mb-4 text-xs text-warning">
-        Bunqueue v2.9.2 cannot read either current policy. Every command below is an explicit blind
+        Bunqueue v2.9.3 cannot read either current policy. Every command below is an explicit blind
         desired-state write; a receipt proves only what this dashboard applied at that time.
       </p>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

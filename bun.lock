@@ -5,7 +5,7 @@
     "": {
       "name": "bunqueue-dashboard",
       "dependencies": {
-        "bunqueue": "2.9.2",
+        "bunqueue": "2.9.3",
         "msgpackr": "^1.11.8",
       },
       "devDependencies": {
@@ -25,6 +25,7 @@
         "@vitejs/plugin-react": "^6.0.3",
         "ai": "^7.0.14",
         "bun-types": "1.4.0",
+        "bunqueue-v2-9-2": "npm:bunqueue@2.9.2",
         "happy-dom": "^20.10.6",
         "mermaid": "^11.16.0",
         "oxfmt": "^0.63.0",
@@ -488,7 +489,9 @@
 
     "bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
-    "bunqueue": ["bunqueue@2.9.2", "", { "dependencies": { "msgpackr": "^1.11.8" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.26.0" }, "optionalPeers": ["@modelcontextprotocol/sdk"], "bin": { "bunqueue": "dist/cli/index.js", "bunqueue-mcp": "dist/mcp/index.js" } }, "sha512-AwfmruUNUxIzANhv8I+/mNV9yclfoeB+QpqLs660THrfKQJxe9mpcMwajrAkLl35JcI5dvklwRuxMnm7OQZdlQ=="],
+    "bunqueue": ["bunqueue@2.9.3", "", { "dependencies": { "msgpackr": "^1.11.8" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.26.0" }, "optionalPeers": ["@modelcontextprotocol/sdk"], "bin": { "bunqueue": "dist/cli/index.js", "bunqueue-mcp": "dist/mcp/index.js" } }, "sha512-i/5QxFpxfAfx8xpkop4TFxhkMgP9/7lIPG3cC9rcl9O5mil87m/qbmo3QeejcQJ3sgdPiaCIo/I71CtmbF0rrg=="],
+
+    "bunqueue-v2-9-2": ["bunqueue@2.9.2", "", { "dependencies": { "msgpackr": "^1.11.8" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.26.0" }, "optionalPeers": ["@modelcontextprotocol/sdk"], "bin": { "bunqueue": "dist/cli/index.js", "bunqueue-mcp": "dist/mcp/index.js" } }, "sha512-AwfmruUNUxIzANhv8I+/mNV9yclfoeB+QpqLs660THrfKQJxe9mpcMwajrAkLl35JcI5dvklwRuxMnm7OQZdlQ=="],
 
     "ccount": ["ccount@2.0.1", "", {}, "sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg=="],
 

@@ -26,7 +26,7 @@ The page is a single form with two cards and a submit row, no live counters or t
 
 | Element | What it's for |
 | --- | --- |
-| **Priority** | Order in the queue. Lower numbers run first. |
+| **Priority / Group priority** | Order in the queue. With a Group ID it becomes the 2.9.3 intra-group priority (`0` is highest, maximum `2,097,151`). |
 | **Delay (ms)** | Hold the job for this long before it can run. |
 | **Max attempts** | How many tries before the job is exhausted and sent to the dead-letter queue. |
 | **Backoff (ms)** | Wait time between retries. |
@@ -37,8 +37,9 @@ The page is a single form with two cards and a submit row, no live counters or t
 | **durable** | Keep the job persisted. |
 | **lifo** | Add to the front of the queue instead of the back. |
 | **Tags / Group ID / Depends on / Unique key** | Group, dependency and deduplication metadata for advanced workflows. |
+| **Group max size** | Atomic cap on pending jobs in the selected group. Requires a Group ID; an enqueue beyond the cap is rejected. |
 | **Job name** | The first-class worker routing name. It is separate from the JSON payload and defaults to `default`. |
-| **Repeat policy (JSON)** | The safe v2.9.2 interval form: `{"every":60000,"limit":10}`. Create cron-expression schedules in **Cron Manager**. |
+| **Repeat policy (JSON)** | The safe v2.9.3 interval form: `{"every":60000,"limit":10}`. Create cron-expression schedules in **Cron Manager**. |
 
 **Submit row**
 
@@ -53,7 +54,7 @@ The four toggles (removeOnComplete, removeOnFail, durable, lifo) all start off. 
 
 ## What you can do
 
-**Add one job.** Pick a queue, edit the JSON, adjust any options, and press **Add job**. On success you'll see `Created job <id>`.
+**Add one job.** Pick a queue, edit the JSON, adjust any options, and press **Add job**. On success the accepted ID or distinct-ID count is shown.
 
 **Add many jobs at once.** Set **Count** above 1 to enqueue that many copies of the same job in one go. The result line tells you how many were created.
 
@@ -72,7 +73,7 @@ Nothing is sent until you press **Add job**, and there's no confirmation step, t
    accepted by this dashboard.
 
 ::: warning
-Do not send `repeat.pattern` through the v2.9.2 push route. That release stores
+Do not send `repeat.pattern` through the v2.9.3 push route. That release stores
 the pattern but continues the repeat with `every ?? 0`, which can create an
 immediate hot loop instead of following the cron expression. Use **Cron Manager**
 for cron-expression schedules; it uses the dedicated `/crons` API.
@@ -85,7 +86,11 @@ Typing a queue name that doesn't exist creates a brand-new queue. Double-check t
 ## Good to know
 
 - **Name and ID are separate.** **Job name** classifies the work and defaults to `default`; the optional **Custom job ID** controls its caller-selected identity. User payload remains in JSON data.
-- **Count copies are identical.** Every copy shares the exact same data and options. For different payloads, use **Bulk import**, which accepts JSON array/NDJSON job specs and preserves the operator-safe v2.9.2 fields: structured backoff, tags/groups/dependencies, interval repeat, dedup, stall timeout, stack-trace limit and timestamp, in addition to the single-add options.
+- **Group admission stays atomic.** Bunqueue 2.9.3's single HTTP add route does
+  not forward `groupMaxSize`. When **Group max size** is filled, the Dashboard
+  transparently sends a one-entry bulk request, which does preserve the field;
+  it never silently submits an uncapped group job.
+- **Count copies are identical.** Every copy shares the exact same data and options. For different payloads, use **Bulk import**, which accepts JSON array/NDJSON job specs and preserves the operator-safe v2.9.3 fields: structured backoff, tags/groups/dependencies, interval repeat, dedup, stall timeout, stack-trace limit and timestamp, in addition to the single-add options.
 - **The complete bulk request is bounded.** Bunqueue limits data per job but not
   data multiplied by Count. The dashboard measures the exact translated JSON
   envelope without constructing it and refuses submissions above 64 MiB, so a
@@ -99,14 +104,14 @@ Typing a queue name that doesn't exist creates a brand-new queue. Double-check t
   dependency-failure flags because those belong to atomic Flow creation. It also
   rejects Bunqueue's persisted compatibility fields `keepLogs`, `sizeLimit`,
   `debounceId` and `debounceTtl`, which are not enforceable enqueue controls in
-  v2.9.2.
+  v2.9.3.
 - **Autocomplete needs a connection.** Queue suggestions come from your live server. If it's unreachable the field still works as free text, you just won't get suggestions, and submitting shows the error in the result line.
 
 ::: details Under the hood (for developers)
 - Uses the **`bq`** client throughout (never `api.ts`).
 - Queue autocomplete: `GET /dashboard/queues`, polled every **30 s**.
-- Single add (Count = 1): `POST /queues/:q/jobs`.
-- Bulk add (Count > 1): `POST /queues/:q/jobs/bulk` with N copies of the body,
+- Single add (Count = 1 without Group max size): `POST /queues/:q/jobs`.
+- Bulk add (Count > 1 or Group max size is set): `POST /queues/:q/jobs/bulk` with N copies of the body,
   after enforcing the 64 MiB aggregate UTF-8 envelope budget.
 - The client treats an HTTP 200 carrying `{ ok: false }` as an error, so logical failures surface in the red result line instead of being swallowed.
 :::

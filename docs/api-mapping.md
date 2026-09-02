@@ -6,8 +6,24 @@ description: "Every bunqueue HTTP endpoint the dashboard drives, with verified r
 # API mapping & shape gotchas
 
 `bq` (`src/lib/bq.ts`) targets bunqueue's HTTP API. Shapes below were verified
-against the exact [bunqueue v2.9.2 server release](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.2)
-(`c39facb`) and the installable 2.9.2 client; several differ from older dashboard assumptions.
+against the exact [bunqueue v2.9.3 server release](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.3)
+(`3fbfde2`) and the installable 2.9.3 client; several differ from older dashboard assumptions.
+
+## Bunqueue 2.9.3 compatibility boundary
+
+The Dashboard exposes the 2.9.3 operational additions: group admission
+(`maxSize`), group priority, group pause/resume, bounded group-job listing and
+per-priority counts; completed-history retention is configurable from Server
+Control. SQLite is migrated to schema 37 and PostgreSQL to schema 20 by the
+upstream server. PostgreSQL members sharing a namespace must be upgraded as one
+unit, and a SQLite backup must be taken before the first 2.9.3 start because a
+partially started migration cannot be downgraded safely.
+
+Native Worker batches, processor `AbortSignal`, Observable processor results,
+and the `QueuePro`/`WorkerPro`/`QueueEventsPro` aliases are application-library
+contracts rather than remote operator commands. They need no separate Dashboard
+transport; the Dashboard continues to display the jobs, workers, events and
+results they produce through the same 2.9.3 server contracts.
 
 ## Fleet and connection profiles
 
@@ -46,7 +62,9 @@ adapter over the official SQLite store with a persistent official `Engine`:
 | `POST /workflows/cleanup?target=` | Permanently delete bounded terminal states by age |
 
 The adapter uses the same structured-clone MessagePack codec as Bunqueue
-2.9.2 and opens the configured `dataPath` read-only. Mutations never edit
+2.9.3 and opens the configured `dataPath` read-only. The published 2.9.2 npm
+package migrates from SQLite schema 35 and PostgreSQL schema 19; 2.9.3 targets
+schema 37 and 20 respectively. Mutations never edit
 SQLite: they execute on the live Engine loaded from an absolute application
 module. Target pinning, stopped-server checks, bounded payloads, terminal-only
 maintenance, serialization, and the agent auth/origin/host gates protect that
@@ -73,7 +91,7 @@ opened. Worker-lease transitions and process-local `discard()` remain inside the
 real Worker process.
 
 For `updateProgress`, numeric values preserve the optional message. Object
-values follow the v2.9.2 Flow Job contract (`progress: 0` plus the serialized
+values follow the v2.9.3 Flow Job contract (`progress: 0` plus the serialized
 object as the message) after strict JSON, prototype, depth, value-count, and
 65,536-byte validation.
 
@@ -81,12 +99,14 @@ object as the message) after strict JSON, prototype, depth, value-count, and
 
 The Bunqueue HTTP server can write rate and concurrency policies but does not
 expose the matching read contracts. Queue Control therefore uses a pinned local
-agent bridge over the official Bunqueue 2.9.2 `Queue` client:
+agent bridge over the official Bunqueue 2.9.3 `Queue` client:
 
 | Agent endpoint | Official Queue contracts |
 | --- | --- |
 | `GET /queue-operations/:queue/limits?target=&maxJobs=` | `getGlobalRateLimit`, `getGlobalConcurrency`, `getRateLimitTtl`, `isMaxed` |
-| `GET /queue-operations/:queue/groups?target=&groupId=&maxJobs=&maxCount=` | `getGroupJobsCount`, `getGroupsJobsCount`, `getGroupActiveCount`, `getGroupRateLimit`, `getGroupRateLimitTtl`, `getGroupConcurrency` |
+| `GET /queue-operations/:queue/groups?target=&groupId=&maxJobs=&maxCount=&start=&end=` | `getGroupJobsCount`, `getGroupsJobsCount`, `getGroupActiveCount`, `getGroupRateLimit`, `getGroupRateLimitTtl`, `getGroupConcurrency`, `isGroupPaused`, `getGroupJobs`, `getCountsPerPriorityForGroup` |
+| `POST /queue-operations/:queue/groups/pause?target=` | `pauseGroup` |
+| `POST /queue-operations/:queue/groups/resume?target=` | `resumeGroup` |
 | `POST /queue-operations/:queue/groups/rate-limit?target=` | `setGroupRateLimit` |
 | `POST /queue-operations/:queue/groups/rate-limit/remove?target=` | `removeGroupRateLimit` |
 | `POST /queue-operations/:queue/groups/concurrency?target=` | `setGroupConcurrency` |
@@ -97,9 +117,11 @@ agent bridge over the official Bunqueue 2.9.2 `Queue` client:
 | `POST /queue-operations/:queue/events/trim?target=` | Bounded `trimEvents` retention mutation |
 
 The agent accepts only the managed server target, exact query/body fields,
-validated queue/group names, positive safe-integer group policies, bounded pagination and retention values. Operations are
-serialized. Deduplication-key removal and journal trimming require explicit UI
-confirmation; trimming lifecycle events does not remove metric buckets.
+validated queue/group names, positive safe-integer group policies, inclusive
+group-job pages of at most 100 entries, and bounded pagination/retention values.
+Operations are serialized. Deduplication-key removal and journal trimming
+require explicit UI confirmation; trimming lifecycle events does not remove
+metric buckets.
 
 The remaining client methods are deliberately not operator commands:
 `removeDlqJob` is E2E-validated but deliberately not exposed: its queue + job ID
@@ -116,7 +138,7 @@ as fire-and-forget controls.
 
 | Agent endpoint | Contract |
 | --- | --- |
-| `GET /backup/status?target=` | Official Bunqueue 2.9.2 CLI JSON status |
+| `GET /backup/status?target=` | Official Bunqueue 2.9.3 CLI JSON status |
 | `GET /backup/list?target=` | Remote object list |
 | `POST /backup/configure?target=` | Atomically replace only whitelisted `S3_*` config keys |
 | `POST /backup/now?target=` | Create a consistent backup |
@@ -158,7 +180,7 @@ plus path/existence/size/WAL/SHM/mtime evidence from `/control/status`.
 - **`backoffConfig`** is `{ type: 'fixed'|'exponential', delay, maxDelay? } |
   null`. `null` doesn't mean "no backoff", it means the job used the plain
   numeric `backoff` field with the server's default strategy (exponential,
-  `job.backoff * 2^attemptsMade`, ±50% jitter, capped at 1h). v2.9.2 accepts
+  `job.backoff * 2^attemptsMade`, ±50% jitter, capped at 1h). v2.9.3 accepts
   both numeric and structured backoff inputs. One upstream readback caveat:
   SQLite's list-row serializer currently restores `backoffConfig` and the
   deduplication detail fields as defaults, so `/jobs/list` can omit those
@@ -189,7 +211,7 @@ health rather than request success.
 The upstream endpoints below still exist, but endpoint availability is not the
 same as dashboard authorization. `lib/jobActions.ts::actionGates(state)` is the
 single client-side model used by `JobInspector` and `JobsPro`; it additionally
-fails closed where v2.9.2 cannot prove worker or reverse-flow safety:
+fails closed where v2.9.3 cannot prove worker or reverse-flow safety:
 
 | Action | Endpoint | Upstream scope | Dashboard exposure |
 | --- | --- | --- | --- |
@@ -214,8 +236,8 @@ are Promote, Pause and Resume; DLQ retry and completed-job requeue are absent.
 
 | Action | Method · Path | Body |
 | --- | --- | --- |
-| Add job | `POST /queues/:q/jobs` | `{ name?, data, priority?, delay?, maxAttempts?, backoff?, timeout?, jobId?, removeOnComplete?, removeOnFail?, durable?, ttl?, uniqueKey?, lifo?, tags?, groupId?, dependsOn?, repeat? }` → `{ ok, id }`. `name` defaults to `default` and is separate from user `data`. The dashboard accepts only interval repeat `{ every, limit? }`: v2.9.2's continuation path treats `pattern` as `every ?? 0`, so cron expressions must use `/crons`. The client validates and sends one captured JSON representation, preventing mutable getters or root `toJSON()` from changing repeat, IDs, dependencies or topology after preflight |
-| Add bulk | `POST /queues/:q/jobs/bulk` | `{ jobs: JobInput[] }` → `{ ok, ids }`; the domain shape calls a custom id `customId`, so the client translates dashboard `jobId` before sending. Bulk spec mode preserves all single-add fields plus `stallTimeout`, `dedup`, `stackTraceLimit` and `timestamp`. It rejects `parentId`, `childrenIds` and the four dependency-failure flags, which require atomic Flow creation, as well as the persisted compatibility fields `keepLogs`, `sizeLimit`, `debounceId` and `debounceTtl`, which v2.9.2 does not enforce as enqueue controls. The dashboard incrementally serializes at most 10,000 jobs, caps the exact translated JSON envelope at 64 MiB, validates repeat/ID/dependency/topology safety from those captured fragments, and sends the same string so getters or `toJSON()` cannot create a second-pass bypass |
+| Add job | `POST /queues/:q/jobs` | `{ name?, data, priority?, delay?, maxAttempts?, backoff?, timeout?, jobId?, removeOnComplete?, removeOnFail?, durable?, ttl?, uniqueKey?, lifo?, tags?, groupId?, dependsOn?, repeat? }` → `{ ok, id }`. `name` defaults to `default` and is separate from user `data`. The upstream single route does not forward 2.9.3 `groupMaxSize`; when that field is set the Dashboard deliberately uses the bulk route even for one job, preventing a silent admission-limit drop. The dashboard accepts only interval repeat `{ every, limit? }`: v2.9.3's continuation path treats `pattern` as `every ?? 0`, so cron expressions must use `/crons`. The client validates and sends one captured JSON representation, preventing mutable getters or root `toJSON()` from changing repeat, IDs, dependencies or topology after preflight |
+| Add bulk | `POST /queues/:q/jobs/bulk` | `{ jobs: JobInput[] }` → `{ ok, ids }`; the domain shape calls a custom id `customId`, so the client translates dashboard `jobId` before sending. Bulk spec mode preserves all single-add fields plus 2.9.3 `groupMaxSize`, grouped priority (`0..2097151`), `stallTimeout`, `dedup`, `stackTraceLimit` and `timestamp`. It rejects `parentId`, `childrenIds` and the four dependency-failure flags, which require atomic Flow creation, as well as the persisted compatibility fields `keepLogs`, `sizeLimit`, `debounceId` and `debounceTtl`, which v2.9.3 does not enforce as enqueue controls. The dashboard incrementally serializes at most 10,000 jobs, caps the exact translated JSON envelope at 64 MiB, validates repeat/ID/dependency/topology safety from those captured fragments, and sends the same string so getters or `toJSON()` cannot create a second-pass bypass |
 | Update data | `PUT /jobs/:id/data` | `{ data }` |
 | Change priority | `PUT /jobs/:id/priority` | `{ priority, lifo? }` |
 | Change/move delay | `PUT /jobs/:id/delay` · `POST /jobs/:id/move-to-delayed` | `{ delay }` (ms) |
@@ -234,7 +256,7 @@ are Promote, Pause and Resume; DLQ retry and completed-job requeue are absent.
 Benchmark workers call `pull-batch` with an explicit per-run owner and require
 one non-empty lease token per returned job. The same tokens are forwarded to
 heartbeat, batch acknowledgement, and pre-ACK move-to-wait compensation. This
-is required by Bunqueue 2.9.2's PostgreSQL lease contract and keeps benchmark
+is required by Bunqueue 2.9.3's PostgreSQL lease contract and keeps benchmark
 completion portable across brokers instead of relying on process-local lock
 ownership.
 

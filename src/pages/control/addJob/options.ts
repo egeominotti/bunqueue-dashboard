@@ -4,6 +4,7 @@ import { queueHttpPathError } from '@/lib/upstreamPaths';
 
 export const MAX_DELAY_MS = 365 * 24 * 60 * 60 * 1000;
 export const MAX_DURATION_MS = 24 * 60 * 60 * 1000;
+export const MAX_GROUP_PRIORITY = 2_097_151;
 
 interface AddJobNumericInput {
   priority: string;
@@ -12,6 +13,7 @@ interface AddJobNumericInput {
   backoff: string;
   timeout: string;
   ttl?: string;
+  groupMaxSize?: string;
 }
 
 interface AddJobNumericOptions {
@@ -21,10 +23,12 @@ interface AddJobNumericOptions {
   backoff?: number;
   timeout?: number;
   ttl?: number;
+  groupMaxSize?: number;
 }
 
 export function parseAddJobNumbers(
-  raw: AddJobNumericInput
+  raw: AddJobNumericInput,
+  grouped = false
 ): { ok: true; options: AddJobNumericOptions } | { ok: false; msg: string } {
   const rules: Array<{
     key: keyof AddJobNumericInput;
@@ -32,12 +36,23 @@ export function parseAddJobNumbers(
     min: number;
     max: number;
   }> = [
-    { key: 'priority', label: 'Priority', min: -1_000_000, max: 1_000_000 },
+    {
+      key: 'priority',
+      label: grouped ? 'Group priority' : 'Priority',
+      min: grouped ? 0 : -1_000_000,
+      max: grouped ? MAX_GROUP_PRIORITY : 1_000_000,
+    },
     { key: 'delay', label: 'Delay', min: 0, max: MAX_DELAY_MS },
     { key: 'maxAttempts', label: 'Max attempts', min: 1, max: 1000 },
     { key: 'backoff', label: 'Backoff', min: 0, max: MAX_DURATION_MS },
     { key: 'timeout', label: 'Timeout', min: 0, max: MAX_DURATION_MS },
     { key: 'ttl', label: 'TTL', min: 0, max: MAX_DELAY_MS },
+    {
+      key: 'groupMaxSize',
+      label: 'Group max size',
+      min: 1,
+      max: Number.MAX_SAFE_INTEGER,
+    },
   ];
   const options: AddJobNumericOptions = {};
   for (const rule of rules) {
@@ -94,7 +109,7 @@ export function parseRepeat(
     if (raw.pattern !== undefined) {
       return {
         ok: false,
-        msg: 'repeat.pattern is unsafe in bunqueue v2.9.2; use repeat.every or a Cron schedule',
+        msg: 'repeat.pattern is unsafe in bunqueue v2.9.3; use repeat.every or a Cron schedule',
       };
     }
     const every = raw.every;

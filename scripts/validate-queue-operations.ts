@@ -5,6 +5,7 @@ import { Queue, Worker, type Job } from 'bunqueue/client';
 import type { ServerConfig } from '../agent/manager';
 import { QueueOperationsRuntime } from '../agent/queue/runtime';
 import { assert, freePort, waitForServer } from './flowRuntimeSupport';
+import { validateGroupScheduling } from './queueOperationsGroupScheduling';
 
 const root = await mkdtemp(join(tmpdir(), 'bunqueue-dashboard-queue-operations-'));
 const httpPort = await freePort();
@@ -39,6 +40,7 @@ try {
   await queue.waitUntilReady();
   await validateLimits();
   await validateGroups();
+  await validateGroupScheduling(queueName, connection, workers);
   await validateDeduplication();
   const failedJobId = await validateMaxedAndMetrics();
   await validateDlqRemoval(failedJobId);
@@ -46,7 +48,7 @@ try {
   console.log(
     JSON.stringify(
       {
-        bunqueue: '2.9.2',
+        bunqueue: '2.9.3',
         queue: queueName,
         verified: [
           'getGlobalRateLimit',
@@ -63,6 +65,13 @@ try {
           'setGroupConcurrency',
           'getGroupConcurrency',
           'removeGroupConcurrency',
+          'pauseGroup',
+          'resumeGroup',
+          'isGroupPaused',
+          'getGroupJobs',
+          'getCountsPerPriorityForGroup',
+          'group.maxSize admission',
+          'group.priority ordering',
           'getDeduplicationJobId',
           'removeDeduplicationKey',
           'removeDlqJob',
@@ -130,22 +139,62 @@ async function validateDeduplication(): Promise<void> {
 
 async function validateGroups(): Promise<void> {
   const groupId = `tenant-${Date.now()}`;
-  await queue.add('grouped', { source: 'dashboard-e2e' }, { delay: 60_000, group: { id: groupId } });
+  const lower = await queue.add(
+    'grouped-low',
+    { source: 'dashboard-e2e' },
+    { delay: 60_000, group: { id: groupId, maxSize: 2, priority: 7 } }
+  );
+  const higher = await queue.add(
+    'grouped-high',
+    { source: 'dashboard-e2e' },
+    { delay: 60_000, group: { id: groupId, maxSize: 2, priority: 2 } }
+  );
+  await expectRejection(
+    queue.add(
+      'group-overflow',
+      { source: 'dashboard-e2e' },
+      { delay: 60_000, group: { id: groupId, maxSize: 2, priority: 0 } }
+    ),
+    'maximum size of 2'
+  );
   await runtime.setGroupRateLimit(config, queueName, groupId, 5, 60_000);
   await runtime.setGroupConcurrency(config, queueName, groupId, 2);
-  const configured = await runtime.group(config, queueName, groupId, 1, 100);
-  assert(configured.jobs === 1, 'group job count was not readable');
-  assert(configured.totalGrouped >= 1, 'all-groups job count was not readable');
+  const configured = await runtime.group(config, queueName, groupId, 1, 100, 0, 1);
+  assert(configured.jobs === 2, 'group job count was not readable');
+  assert(configured.totalGrouped >= 2, 'all-groups job count was not readable');
   assert(configured.active === 0, 'group active count was not readable');
+  assert(!configured.paused, 'new group unexpectedly started paused');
+  assert(configured.entries.length === 2, 'group job range was not applied');
+  const listed = new Map(configured.entries.map((job) => [job.id, job.priority]));
+  assert(listed.get(higher.id) === 2, 'priority 2 group job was not readable');
+  assert(listed.get(lower.id) === 7, 'priority 7 group job was not readable');
+  assert(configured.priorityCounts['2'] === 1, 'priority 2 count was not readable');
+  assert(configured.priorityCounts['7'] === 1, 'priority 7 count was not readable');
+  assert(lower.id !== higher.id, 'grouped jobs did not receive distinct IDs');
   assert(configured.rateLimit?.max === 5, 'group rate limit was not readable');
   assert(configured.rateLimit?.duration === 60_000, 'group rate duration was not readable');
   assert(configured.rateLimitTtl >= -2, 'group rate TTL returned an invalid sentinel');
   assert(configured.concurrency === 2, 'group concurrency was not readable');
+  assert(await runtime.pauseGroup(config, queueName, groupId), 'group pause did not change state');
+  assert((await runtime.group(config, queueName, groupId)).paused, 'group pause was not readable');
+  assert(!(await runtime.pauseGroup(config, queueName, groupId)), 'second group pause was not idempotent');
+  assert(await runtime.resumeGroup(config, queueName, groupId), 'group resume did not change state');
+  assert(!(await runtime.group(config, queueName, groupId)).paused, 'group resume was not readable');
   assert((await runtime.removeGroupRateLimit(config, queueName, groupId)) === 1, 'group rate removal failed');
   assert((await runtime.removeGroupConcurrency(config, queueName, groupId)) === 1, 'group concurrency removal failed');
   const removed = await runtime.group(config, queueName, groupId);
   assert(removed.rateLimit === null, 'removed group rate limit remained visible');
   assert(removed.concurrency === null, 'removed group concurrency remained visible');
+}
+
+async function expectRejection(promise: Promise<unknown>, message: string): Promise<void> {
+  try {
+    await promise;
+  } catch (error) {
+    assert(String((error as Error).message).includes(message), `unexpected rejection: ${String(error)}`);
+    return;
+  }
+  throw new Error(`Expected rejection containing ${message}`);
 }
 
 async function validateMaxedAndMetrics(): Promise<string> {

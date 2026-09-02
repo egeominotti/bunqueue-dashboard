@@ -1,7 +1,7 @@
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Field, Input, Select, Toggle } from '@/components/ui/form';
 import type { AddJobFormValues, SetAddJobValue } from './formModel';
-import { MAX_DELAY_MS, MAX_DURATION_MS } from './options';
+import { MAX_DELAY_MS, MAX_DURATION_MS, MAX_GROUP_PRIORITY } from './options';
 
 export function AddJobOptionsCard({
   values,
@@ -15,11 +15,12 @@ export function AddJobOptionsCard({
       <CardHeader title="Options" />
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         <NumberField
-          label="Priority"
+          label={values.groupId.trim() ? 'Group priority' : 'Priority'}
+          hint={values.groupId.trim() ? '0 is highest within this group' : undefined}
           name="priority"
           value={values.priority}
-          min={-1_000_000}
-          max={1_000_000}
+          min={values.groupId.trim() ? 0 : -1_000_000}
+          max={values.groupId.trim() ? MAX_GROUP_PRIORITY : 1_000_000}
           placeholder="0"
           onChange={(value) => setValue('priority', value)}
         />
@@ -162,6 +163,16 @@ function AdvancedOptions({
           placeholder="—"
           onChange={(value) => setValue('groupId', value)}
         />
+        <NumberField
+          label="Group max size"
+          hint="Atomic pending-job cap (2.9.3)"
+          name="group-max-size"
+          value={values.groupMaxSize}
+          min={1}
+          max={Number.MAX_SAFE_INTEGER}
+          placeholder="—"
+          onChange={(value) => setValue('groupMaxSize', value)}
+        />
         <TextField
           label="Unique key"
           hint="dedup key"
@@ -181,7 +192,7 @@ function AdvancedOptions({
         <div className="col-span-2 md:col-span-3">
           <Field
             label="Repeat policy (JSON)"
-            hint='v2.9.2-safe form: e.g. {"every":60000,"limit":10}. Use Cron Manager for cron patterns.'
+            hint='v2.9.3-safe form: e.g. {"every":60000,"limit":10}. Use Cron Manager for cron patterns.'
           >
             <textarea
               name="repeat-policy"

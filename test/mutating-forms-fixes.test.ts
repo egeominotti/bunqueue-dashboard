@@ -63,7 +63,7 @@ describe('AddJob', () => {
     });
     const pattern = parseRepeat('{"pattern":"0 9 * * *"}');
     expect(pattern.ok).toBe(false);
-    if (!pattern.ok) expect(pattern.msg).toContain('unsafe in bunqueue v2.9.2');
+    if (!pattern.ok) expect(pattern.msg).toContain('unsafe in bunqueue v2.9.3');
     expect(parseRepeat('{"every":60000,"pattern":"0 9 * * *"}').ok).toBe(false);
     expect(parseRepeat('{"every":60000,"startDate":123}').ok).toBe(false);
     expect(parseRepeat('[]').ok).toBe(false);
@@ -113,6 +113,37 @@ describe('AddJob', () => {
         backoff: '',
         timeout: '9007199254740992',
       }).ok
+    ).toBe(false);
+  });
+
+  test('grouped jobs use the 2.9.3 intra-group priority and max-size bounds', () => {
+    expect(
+      parseAddJobNumbers(
+        {
+          priority: '2097151',
+          delay: '',
+          maxAttempts: '',
+          backoff: '',
+          timeout: '',
+          groupMaxSize: '9007199254740991',
+        },
+        true
+      )
+    ).toEqual({
+      ok: true,
+      options: { priority: 2_097_151, groupMaxSize: Number.MAX_SAFE_INTEGER },
+    });
+    expect(
+      parseAddJobNumbers(
+        {
+          priority: '-1',
+          delay: '',
+          maxAttempts: '',
+          backoff: '',
+          timeout: '',
+        },
+        true
+      ).ok
     ).toBe(false);
   });
 

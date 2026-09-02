@@ -141,6 +141,48 @@ describe('non-idempotent form mutexes', () => {
     expect(host.textContent).not.toContain('Created job');
   });
 
+  test('AddJob preserves 2.9.3 group priority and max-size through the bulk wire', async () => {
+    let posted: Record<string, unknown> | null = null;
+    let singlePosts = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/dashboard/queues')) return json(queuePage);
+      if (init?.method === 'POST' && url.endsWith('/queues/orders/jobs/bulk')) {
+        posted = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return json({ ok: true, ids: ['group-job'] });
+      }
+      if (init?.method === 'POST' && url.endsWith('/queues/orders/jobs')) singlePosts += 1;
+      return json({ ok: false, error: 'unexpected request' }, 500);
+    }) as typeof fetch;
+
+    const { host } = render(createElement(MemoryRouter, null, createElement(AddJob)));
+    await settle(3);
+    setValue(host.querySelector<HTMLInputElement>('[name="target-queue"]')!, 'orders');
+    setValue(host.querySelector<HTMLInputElement>('[name="group-id"]')!, 'tenant-a');
+    setValue(host.querySelector<HTMLInputElement>('[name="group-max-size"]')!, '2');
+    setValue(host.querySelector<HTMLInputElement>('[name="priority"]')!, '1');
+    act(() =>
+      host
+        .querySelector('form')!
+        .dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
+    );
+    await settle(8);
+
+    expect(singlePosts).toBe(0);
+    expect(posted).toEqual({
+      jobs: [
+        {
+          name: 'default',
+          data: { hello: 'world' },
+          priority: 1,
+          groupId: 'tenant-a',
+          groupMaxSize: 2,
+        },
+      ],
+    });
+    expect(host.textContent).toContain('Accepted 1 job submission');
+  });
+
   test('BulkAddJobs submits once and treats repeated ids as deduplication ambiguity', async () => {
     const pending = deferred<Response>();
     let posts = 0;

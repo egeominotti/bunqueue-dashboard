@@ -70,7 +70,7 @@ export function AddJob() {
     setBusy(true);
     const { target, body, count } = submission;
     try {
-      if (count === 1) {
+      if (count === 1 && body.groupMaxSize === undefined) {
         const response = await bq.addJob(target, body);
         const id = acceptedJobId(response);
         if (!lease.isCurrent()) return;

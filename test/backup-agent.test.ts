@@ -42,12 +42,12 @@ describe('Bunqueue S3 backup agent', () => {
         message: 'malformed fixture',
         data,
       }));
-      await expect(runner.execute(config, operation)).rejects.toThrow('invalid 2.9.2 contract');
+      await expect(runner.execute(config, operation)).rejects.toThrow('invalid 2.9.3 contract');
       await runner.close();
     }
   });
 
-  test('normalizes the exact 2.9.2 backup list contract', async () => {
+  test('normalizes the exact 2.9.3 backup list contract', async () => {
     const data = [{ key: 'backups/one.db', size: '1.00 MB', date: '2026-08-04T10:00:00.000Z' }];
     const runner = new BunqueueBackupRunner(1_000, async () => ({
       success: true,
@@ -58,7 +58,7 @@ describe('Bunqueue S3 backup agent', () => {
     await runner.close();
   });
 
-  test('executes the official 2.9.2 CLI status contract locally', async () => {
+  test('executes the official 2.9.3 CLI status contract locally', async () => {
     const result = await new BunqueueBackupRunner().execute(config, 'status');
     expect(result.success).toBeTrue();
     expect(result.data).toEqual({

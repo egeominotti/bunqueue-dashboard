@@ -41,11 +41,17 @@ describe('Queue operations client adapter', () => {
             jobs: 2,
             active: 1,
             totalGrouped: 5,
+            paused: false,
+            entries: [{ id: 'group-job', name: 'deliver', priority: 2, delay: 0, timestamp: 100 }],
+            priorityCounts: { '2': 1 },
             rateLimit: { max: 4, duration: 3000 },
             rateLimitTtl: 20,
             concurrency: 2,
           },
         });
+      }
+      if (url.pathname.endsWith('/groups/pause') || url.pathname.endsWith('/groups/resume')) {
+        return Response.json({ ok: true, changed: true });
       }
       if (url.pathname.includes('/groups/') && !url.pathname.endsWith('/remove')) {
         return Response.json({ ok: true, applied: true });
@@ -74,14 +80,17 @@ describe('Queue operations client adapter', () => {
       rateLimitTtl: 40,
       maxed: true,
     });
-    expect(await bqQueueOperationsRepository.group('orders.eu', 'tenant / 1', 2, 50)).toMatchObject(
-      {
-        jobs: 2,
-        active: 1,
-        totalGrouped: 5,
-        concurrency: 2,
-      }
-    );
+    expect(
+      await bqQueueOperationsRepository.group('orders.eu', 'tenant / 1', 2, 50, 10, 19)
+    ).toMatchObject({
+      jobs: 2,
+      active: 1,
+      totalGrouped: 5,
+      paused: false,
+      entries: [{ id: 'group-job', priority: 2 }],
+      priorityCounts: { '2': 1 },
+      concurrency: 2,
+    });
     await bqQueueOperationsRepository.setGroupRateLimit('orders.eu', 'tenant / 1', 4, 3000);
     expect(await bqQueueOperationsRepository.removeGroupRateLimit('orders.eu', 'tenant / 1')).toBe(
       1
@@ -90,6 +99,8 @@ describe('Queue operations client adapter', () => {
     expect(
       await bqQueueOperationsRepository.removeGroupConcurrency('orders.eu', 'tenant / 1')
     ).toBe(1);
+    expect(await bqQueueOperationsRepository.pauseGroup('orders.eu', 'tenant / 1')).toBe(true);
+    expect(await bqQueueOperationsRepository.resumeGroup('orders.eu', 'tenant / 1')).toBe(true);
     expect(await bqQueueOperationsRepository.deduplicationJobId('orders.eu', 'key / 1')).toBe(
       'job-a'
     );
@@ -105,11 +116,13 @@ describe('Queue operations client adapter', () => {
     expect(
       requests.every((request) => request.path.includes('target=http%3A%2F%2Fserver.test'))
     ).toBe(true);
-    expect(requests[7]).toMatchObject({
+    expect(requests[9]).toMatchObject({
       method: 'POST',
       body: { deduplicationId: 'key / 1' },
     });
-    expect(requests[9]).toMatchObject({ method: 'POST', body: { maxLength: 50 } });
+    expect(requests[11]).toMatchObject({ method: 'POST', body: { maxLength: 50 } });
+    expect(requests[1]?.path).toContain('start=10');
+    expect(requests[1]?.path).toContain('end=19');
   });
 
   test('rejects malformed agent payloads instead of rendering guessed state', async () => {

@@ -30,7 +30,7 @@ connection store) and by subscribing to the Server-Sent Events stream
 (`useActivityStream`) for live job activity. It **writes** through the same
 HTTP API (pause, add job, promote, rate-limit, …), with every job action gated
 by the job's actual current state and the atomic guarantees available in the
-v2.9.2 server contract (`lib/jobActions.ts`). DLQ retry and completed-job
+v2.9.3 server contract (`lib/jobActions.ts`). DLQ retry and completed-job
 requeue remain unavailable even when a prior read looks safe; see
 [known-issues.md](known-issues.md). The one thing HTTP cannot do, manage the
 server *process*, is delegated to a tiny local **control agent** (`agent/`)

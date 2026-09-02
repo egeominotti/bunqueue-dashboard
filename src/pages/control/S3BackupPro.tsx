@@ -79,7 +79,7 @@ export function S3BackupPro() {
     <div>
       <PageHeader
         title="S3 Backup Setup"
-        description="Configure and operate Bunqueue 2.9.2 S3 backups."
+        description="Configure and operate Bunqueue 2.9.3 S3 backups."
       />
       <div className="mb-6 flex items-center justify-between rounded-xl border border-line bg-surface px-5 py-4">
         <div className="flex items-center gap-3">

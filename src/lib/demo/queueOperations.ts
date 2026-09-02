@@ -147,10 +147,15 @@ async function routeRequest(
     };
   }
   if (request.method === 'GET' && operation === 'groups') {
-    const query = exactQuery(request, ['target', 'groupId', 'maxJobs', 'maxCount']);
+    const query = exactQuery(request, ['target', 'groupId', 'maxJobs', 'maxCount', 'start', 'end']);
     const id = groupId(query.get('groupId'));
     const maxJobs = optionalInteger(query.get('maxJobs'), 'maxJobs', 0, 1_000_000);
     optionalInteger(query.get('maxCount'), 'maxCount', 1, 1_000_000);
+    const start = optionalInteger(query.get('start'), 'start', 0, 1_000_000) ?? 0;
+    const end = optionalInteger(query.get('end'), 'end', 0, 1_000_000) ?? start + 24;
+    if (end < start || end - start >= 100) {
+      throw new Error('Group jobs page must be an inclusive range of at most 100 jobs');
+    }
     const group = groupFor(state, id);
     const rateLimitTtl =
       group.rateLimit === null
@@ -158,12 +163,20 @@ async function routeRequest(
         : maxJobs !== undefined && group.consumedJobs < maxJobs
           ? 0
           : group.cooldownMs;
+    const priorityCounts: Record<string, number> = {};
+    for (const entry of group.entries) {
+      const priority = String(entry.priority);
+      priorityCounts[priority] = (priorityCounts[priority] ?? 0) + 1;
+    }
     return {
       ok: true,
       group: {
         jobs: group.jobs,
         active: group.active,
         totalGrouped: [...state.groups.values()].reduce((sum, item) => sum + item.jobs, 0),
+        paused: group.paused,
+        entries: group.entries.slice(start, end + 1),
+        priorityCounts,
         rateLimit: group.rateLimit,
         rateLimitTtl,
         concurrency: group.concurrency,
@@ -191,6 +204,14 @@ async function routeRequest(
   }
   if (request.method === 'POST' && operation.startsWith('groups/')) {
     exactQuery(request, ['target']);
+    if (operation === 'groups/pause' || operation === 'groups/resume') {
+      const body = await exactBody(request, ['groupId']);
+      const group = groupFor(state, groupId(body.groupId));
+      const paused = operation === 'groups/pause';
+      const changed = group.paused !== paused;
+      group.paused = paused;
+      return { ok: true, changed };
+    }
     const remove = operation.endsWith('/remove');
     const rateLimit = operation.includes('/rate-limit');
     const allowed = remove

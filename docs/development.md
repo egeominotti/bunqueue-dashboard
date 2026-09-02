@@ -52,7 +52,7 @@ before publishing. It executes, in order:
 - `bun run size`: initial-load and total JavaScript bundle budgets.
 - `bun run docs:build`: the VitePress production build, including dead-link checks.
 - `bun run test:coverage`: the complete Bun test suite plus aggregate coverage floors.
-- `bun run test:e2e`: disposable Bunqueue 2.9.2 Flow/Workflow/Queue contracts
+- `bun run test:e2e`: disposable Bunqueue 2.9.3 Flow/Workflow/Queue contracts
   plus three authenticated brokers and agents sharing PostgreSQL 18.6 (Docker required).
 - `bun run test:package`: packs, installs, starts, and probes the published binary
   from a clean temporary consumer.
@@ -60,7 +60,7 @@ before publishing. It executes, in order:
 
 CI also runs `bun run test:e2e:browser` as a separate blocking matrix on Chromium, Firefox, and
 WebKit. The suite uses the production bundle, a non-root `BASE_PATH`, an authenticated disposable
-Bunqueue 2.9.2 process, and a temporary database. It verifies the token gate, full sidebar
+Bunqueue 2.9.3 process, and a temporary database. It verifies the token gate, full sidebar
 navigation, SSE reconnection after an actual upstream restart, confirmed Cron mutations, and
 automated WCAG A/AA rules. For a local first run:
 

@@ -2,9 +2,20 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { assert, freePort } from './flowRuntimeSupport';
+import {
+  assertPostgresSchema20,
+  validatePostgresFleetGroups,
+} from './postgresFleetGroupScenario';
+import {
+  assertLegacySeedReadable,
+  assertPostgresSchemaVersion,
+  seedLegacyPostgres19,
+} from './postgresFleetMigration';
 import { type NodeRuntime, spawnPostgresFleetNode } from './postgresFleetNode';
 
 type Child = ReturnType<typeof Bun.spawn>;
+const message = (value: unknown) => (value instanceof Error ? value.message : String(value));
+const tail = (value: string) => value.trim().split('\n').slice(-30).join('\n');
 
 const root = await mkdtemp(join(tmpdir(), 'bunqueue-dashboard-postgres-fleet-'));
 const container = `bunqueue-dashboard-postgres-fleet-${process.pid}`;
@@ -36,6 +47,8 @@ try {
   ]);
   containerStarted = true;
   await waitForPostgres();
+  const legacy = await seedLegacyPostgres19(postgresUrl, namespace);
+  await assertPostgresSchemaVersion(container, database, 19);
 
   for (let index = 0; index < 3; index++) {
     nodes.push(
@@ -47,6 +60,8 @@ try {
     await agentRequest(node, '/control/start', { method: 'POST' });
     await waitForBroker(node);
   }
+  await assertPostgresSchema20(container, database);
+  await assertLegacySeedReadable(nodes[2], legacy);
 
   await validateAgentTopology();
   const queue = `dashboard-fleet-${Date.now()}`;
@@ -54,12 +69,12 @@ try {
     method: 'POST',
     body: JSON.stringify({ name: 'cross-broker', data: { source: 'dashboard-postgres-e2e' } }),
   });
-  const jobId = requiredString(created.id, 'created job id');
+  assert(typeof created.id === 'string' && created.id.length > 0, 'created job id is missing');
+  const jobId = created.id;
 
-  const observed = await waitForJson(nodes[1], `/jobs/${encodeURIComponent(jobId)}`, (body) =>
+  await waitForJson(nodes[1], `/jobs/${encodeURIComponent(jobId)}`, (body) =>
     (body.job as { id?: unknown } | undefined)?.id === jobId
   );
-  assert((observed.job as { id?: string }).id === jobId, 'Broker B did not observe broker A job');
 
   const pulled = await serverRequest(nodes[1], `/queues/${queue}/jobs/pull-batch`, {
     method: 'POST',
@@ -98,24 +113,23 @@ try {
     method: 'PUT',
     body: JSON.stringify({ limit: 7, duration: 60_000 }),
   });
-  const limits = await waitForAgentJson(
+  await waitForAgentJson(
     nodes[2],
     `/queue-operations/${queue}/limits?target=${encodeURIComponent(`http://127.0.0.1:${nodes[2].httpPort}`)}`,
     (body) =>
       (body.limits as { rateLimit?: { max?: number } } | undefined)?.rateLimit?.max === 7
   );
-  assert(
-    (limits.limits as { rateLimit?: { max?: number } } | undefined)?.rateLimit?.max === 7,
-    'Broker C agent did not observe broker A rate limit'
-  );
   await serverRequest(nodes[1], `/queues/${queue}/rate-limit`, { method: 'DELETE' });
+
+  await validatePostgresFleetGroups(nodes, queue);
 
   console.log(
     JSON.stringify(
       {
         bun: Bun.version,
-        bunqueue: '2.9.2',
+        bunqueue: '2.9.3',
         postgres: '18.6',
+        postgresSchema: 20,
         target: `127.0.0.1:${postgresPort}/${database}`,
         namespace,
         brokers: nodes.map(({ name, httpPort, tcpPort, agentPort }) => ({
@@ -125,12 +139,15 @@ try {
           agentPort,
         })),
         verified: [
+          'published 2.9.2 schema 19 → 2.9.3 schema 20; legacy job readable on C',
           'three paired control agents',
           'shared PostgreSQL topology discovery',
           'enqueue A → inspect/pull B → acknowledge C → inspect A',
           'pause C → observe A → resume B',
           'create cron A → observe B → delete C',
           'set rate A → inspect with agent C → clear B',
+          'group max-size A/B → inspect priorities C',
+          'pause group A → observe C → resume B → observe A',
         ],
         status: 'ok',
       },
@@ -279,15 +296,4 @@ async function terminate(child: Child): Promise<void> {
   child.kill('SIGTERM');
   await Promise.race([child.exited, Bun.sleep(5_000)]);
   if (child.exitCode === null) child.kill('SIGKILL');
-}
-
-function requiredString(value: unknown, label: string): string {
-  assert(typeof value === 'string' && value.length > 0, `${label} is missing`);
-  return value;
-}
-function message(value: unknown): string {
-  return value instanceof Error ? value.message : String(value);
-}
-function tail(value: string): string {
-  return value.trim().split('\n').slice(-30).join('\n');
 }

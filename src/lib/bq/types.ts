@@ -40,7 +40,7 @@ export interface DbCsvExportResult {
 
 export type Backoff = number | { type: 'fixed' | 'exponential'; delay: number };
 
-/** Safe repeat subset; pattern repeats belong to the Cron API in Bunqueue 2.9.2. */
+/** Safe repeat subset; pattern repeats belong to the Cron API in Bunqueue 2.9.3. */
 export interface RepeatOptions {
   every: number;
   limit?: number;
@@ -75,6 +75,8 @@ export interface AddJobBody {
   lifo?: boolean;
   tags?: string[];
   groupId?: string;
+  /** Atomic pending-depth admission cap for a group (Bunqueue 2.9.3). */
+  groupMaxSize?: number;
   dependsOn?: string[];
   repeat?: RepeatOptions;
 }

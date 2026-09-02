@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { freePort } from './flowRuntimeSupport';
+import { assertPostgresSchema20 } from './postgresFleetGroupScenario';
 import { type NodeRuntime, spawnPostgresFleetNode } from './postgresFleetNode';
 import { runPostgresFleetDashboardBrowserScenario } from './postgresFleetDashboardBrowserScenario';
 
@@ -59,6 +60,7 @@ try {
     await agentRequest(node, '/control/start', { method: 'POST' });
     await waitForBroker(node);
   }
+  await assertPostgresSchema20(container, database);
 
   dashboard = await serveDashboard();
   await waitForDashboard();
@@ -80,8 +82,9 @@ try {
     JSON.stringify(
       {
         bun: Bun.version,
-        bunqueue: '2.9.2',
+        bunqueue: '2.9.3',
         postgres: '18.6',
+        postgresSchema: 20,
         brokers: nodes.length,
         verified: 'real Dashboard UI over a shared PostgreSQL fleet',
         status: 'ok',

@@ -1,6 +1,6 @@
 {
   "name": "bunqueue-dashboard",
-  "version": "0.0.41",
+  "version": "0.0.42",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun 1.4.0).",
   "packageManager": "bun@1.4.0",
@@ -68,9 +68,10 @@
     "test": "bun test",
     "test:e2e:flow": "bun run scripts/validate-flow-runtime.ts",
     "test:e2e:queue-operations": "bun run scripts/validate-queue-operations.ts",
+    "test:e2e:upgrade": "bun run scripts/validate-sqlite-upgrade-runtime.ts",
     "test:e2e:workflow": "bun run scripts/validate-workflow-runtime.ts",
     "test:e2e:postgres-fleet": "bun run scripts/validate-postgres-fleet-runtime.ts",
-    "test:e2e": "bun run test:e2e:flow && bun run test:e2e:workflow && bun run test:e2e:queue-operations && bun run test:e2e:postgres-fleet",
+    "test:e2e": "bun run test:e2e:upgrade && bun run test:e2e:flow && bun run test:e2e:workflow && bun run test:e2e:queue-operations && bun run test:e2e:postgres-fleet",
     "test:e2e:browser:install": "playwright install chromium firefox webkit",
     "test:e2e:browser:serve": "bun e2e/runtime.ts",
     "test:e2e:browser:postgres-fleet": "bun run scripts/validate-postgres-fleet-dashboard-runtime.ts",
@@ -103,6 +104,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "ai": "^7.0.14",
     "bun-types": "1.4.0",
+    "bunqueue-v2-9-2": "npm:bunqueue@2.9.2",
     "happy-dom": "^20.10.6",
     "mermaid": "^11.16.0",
     "oxfmt": "^0.63.0",
@@ -128,7 +130,7 @@
     "postcss": "^8.5.25"
   },
   "dependencies": {
-    "bunqueue": "2.9.2",
+    "bunqueue": "2.9.3",
     "msgpackr": "^1.11.8"
   }
 }

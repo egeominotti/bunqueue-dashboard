@@ -6,7 +6,7 @@ import './domSetup';
 const INSTALL_PATH = `${import.meta.dir}/../src/lib/demo/install.ts`;
 
 describe('demo Queue SDK backend', () => {
-  test('serves all eight agent contracts without escaping to the network', async () => {
+  test('serves every Queue SDK agent contract without escaping to the network', async () => {
     const previousHref = window.location.href;
     const previousWindowFetch = window.fetch;
     const previousGlobalFetch = globalThis.fetch;
@@ -37,6 +37,24 @@ describe('demo Queue SDK backend', () => {
         rateLimitTtl: 0,
         maxed: false,
       });
+      expect(
+        await bqQueueOperationsRepository.group('image-processing', 'tenant-a', 1, 100, 0, 24)
+      ).toMatchObject({
+        jobs: 0,
+        active: 0,
+        paused: false,
+        entries: [],
+        priorityCounts: {},
+      });
+      expect(await bqQueueOperationsRepository.pauseGroup('image-processing', 'tenant-a')).toBe(
+        true
+      );
+      expect((await bqQueueOperationsRepository.group('image-processing', 'tenant-a')).paused).toBe(
+        true
+      );
+      expect(await bqQueueOperationsRepository.resumeGroup('image-processing', 'tenant-a')).toBe(
+        true
+      );
 
       expect(
         await bqQueueOperationsRepository.deduplicationJobId('image-processing', 'asset:hero')

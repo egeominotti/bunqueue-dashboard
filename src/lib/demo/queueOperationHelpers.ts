@@ -11,6 +11,14 @@ export interface GroupState {
   cooldownMs: number;
   rateLimit: RateLimit;
   concurrency: number | null;
+  paused: boolean;
+  entries: Array<{
+    id: string;
+    name: string;
+    priority: number;
+    delay: number;
+    timestamp: number;
+  }>;
 }
 
 export interface QueueState {
@@ -111,6 +119,8 @@ export function groupFor(state: QueueState, id: string): GroupState {
     cooldownMs: 0,
     rateLimit: null,
     concurrency: null,
+    paused: false,
+    entries: [],
   };
   state.groups.set(id, group);
   return group;

@@ -60,7 +60,7 @@ beforeEach(() => {
     const method = init?.method ?? 'GET';
     calls.push({ url, method, auth: new Headers(init?.headers).get('Authorization') });
     if (url.endsWith('/health')) {
-      return Response.json({ ok: true, status: 'healthy', uptime: 1, version: '2.9.2' });
+      return Response.json({ ok: true, status: 'healthy', uptime: 1, version: '2.9.3' });
     }
     if (url.includes('/control/')) {
       const broker = url.includes('b.example') ? 'b' : 'a';

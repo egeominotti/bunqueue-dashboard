@@ -16,11 +16,15 @@ export const queueOperationsApi = {
     queue: string,
     groupId: string,
     maxJobs?: number,
-    maxCount?: number
+    maxCount?: number,
+    start?: number,
+    end?: number
   ): Promise<unknown> => {
     const query = new URLSearchParams({ target: getBaseUrl(), groupId });
     if (maxJobs !== undefined) query.set('maxJobs', String(maxJobs));
     if (maxCount !== undefined) query.set('maxCount', String(maxCount));
+    if (start !== undefined) query.set('start', String(start));
+    if (end !== undefined) query.set('end', String(end));
     return agentRequest(`/queue-operations/${queueHttpPathSegment(queue)}/groups?${query}`);
   },
   setGroupRateLimit: (
@@ -46,6 +50,16 @@ export const queueOperationsApi = {
   removeGroupConcurrency: (queue: string, groupId: string): Promise<unknown> =>
     agentRequest(
       `/queue-operations/${queueHttpPathSegment(queue)}/groups/concurrency/remove?target=${targetQuery()}`,
+      body('POST', { groupId })
+    ),
+  pauseGroup: (queue: string, groupId: string): Promise<unknown> =>
+    agentRequest(
+      `/queue-operations/${queueHttpPathSegment(queue)}/groups/pause?target=${targetQuery()}`,
+      body('POST', { groupId })
+    ),
+  resumeGroup: (queue: string, groupId: string): Promise<unknown> =>
+    agentRequest(
+      `/queue-operations/${queueHttpPathSegment(queue)}/groups/resume?target=${targetQuery()}`,
       body('POST', { groupId })
     ),
   deduplicationJobId: (queue: string, deduplicationId: string): Promise<unknown> =>

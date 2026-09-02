@@ -20,16 +20,27 @@ export function fakeRuntime(calls: string[]): QueueOperationsPort {
         maxed: false,
       };
     },
-    group: async (_config, queue, groupId, maxJobs, maxCount) => {
-      calls.push(`group:${queue}:${groupId}:${maxJobs}:${maxCount}`);
+    group: async (_config, queue, groupId, maxJobs, maxCount, start, end) => {
+      calls.push(`group:${queue}:${groupId}:${maxJobs}:${maxCount}:${start}:${end}`);
       return {
         jobs: 2,
         active: 1,
         totalGrouped: 4,
+        paused: false,
+        entries: [{ id: 'group-job-1', name: 'deliver', priority: 2, delay: 0, timestamp: 100 }],
+        priorityCounts: { '2': 1 },
         rateLimit: { max: 5, duration: 1000 },
         rateLimitTtl: 20,
         concurrency: 3,
       };
+    },
+    pauseGroup: async (_config, queue, groupId) => {
+      calls.push(`group-pause:${queue}:${groupId}`);
+      return true;
+    },
+    resumeGroup: async (_config, queue, groupId) => {
+      calls.push(`group-resume:${queue}:${groupId}`);
+      return true;
     },
     setGroupRateLimit: async (_config, queue, groupId, max, duration) => {
       calls.push(`group-rate:${queue}:${groupId}:${max}:${duration}`);

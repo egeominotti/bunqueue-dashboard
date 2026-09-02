@@ -21,6 +21,11 @@ export type QueueOperationsClient = Pick<
   | 'setGroupConcurrency'
   | 'getGroupConcurrency'
   | 'removeGroupConcurrency'
+  | 'pauseGroup'
+  | 'resumeGroup'
+  | 'isGroupPaused'
+  | 'getGroupJobs'
+  | 'getCountsPerPriorityForGroup'
   | 'getDeduplicationJobId'
   | 'removeDeduplicationKey'
   | 'removeDlqJob'
@@ -57,19 +62,60 @@ export class QueueOperationsRuntime implements QueueOperationsPort {
     queue: string,
     groupId: string,
     maxJobs?: number,
-    maxCount?: number
+    maxCount?: number,
+    start?: number,
+    end?: number
   ): Promise<QueueGroupSnapshot> {
     return this.withQueue(config, queue, async (client) => {
-      const [jobs, active, totalGrouped, rateLimit, rateLimitTtl, concurrency] = await Promise.all([
+      const [
+        jobs,
+        active,
+        totalGrouped,
+        rateLimit,
+        rateLimitTtl,
+        concurrency,
+        paused,
+        groupJobs,
+        priorityCounts,
+      ] = await Promise.all([
         client.getGroupJobsCount(groupId),
         client.getGroupActiveCount(groupId),
         client.getGroupsJobsCount(maxCount),
         client.getGroupRateLimit(groupId),
         client.getGroupRateLimitTtl(groupId, maxJobs),
         client.getGroupConcurrency(groupId),
+        client.isGroupPaused(groupId),
+        client.getGroupJobs(groupId, start, end),
+        client.getCountsPerPriorityForGroup(groupId),
       ]);
-      return { jobs, active, totalGrouped, rateLimit, rateLimitTtl, concurrency };
+      return {
+        jobs,
+        active,
+        totalGrouped,
+        rateLimit,
+        rateLimitTtl,
+        concurrency,
+        paused,
+        entries: groupJobs.map((job) => ({
+          id: job.id,
+          name: job.name,
+          priority: job.priority,
+          delay: job.delay,
+          timestamp: job.timestamp,
+        })),
+        priorityCounts: Object.fromEntries(
+          Object.entries(priorityCounts).map(([priority, count]) => [String(priority), count])
+        ),
+      };
     });
+  }
+
+  pauseGroup(config: ServerConfig, queue: string, groupId: string): Promise<boolean> {
+    return this.withQueue(config, queue, (client) => client.pauseGroup(groupId));
+  }
+
+  resumeGroup(config: ServerConfig, queue: string, groupId: string): Promise<boolean> {
+    return this.withQueue(config, queue, (client) => client.resumeGroup(groupId));
   }
 
   setGroupRateLimit(

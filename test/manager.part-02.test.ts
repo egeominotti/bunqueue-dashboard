@@ -56,7 +56,7 @@ describe('ProcessManager', () => {
     await m.stop();
   });
 
-  test('PostgreSQL mode does not leak a conflicting SQLite data path to Bunqueue 2.9.2', async () => {
+  test('PostgreSQL mode does not leak a conflicting SQLite data path to Bunqueue 2.9.3', async () => {
     const m = new ProcessManager();
     m.setConfig({
       command: 'env',

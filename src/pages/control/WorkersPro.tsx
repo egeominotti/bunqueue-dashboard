@@ -67,7 +67,7 @@ export function WorkersPro() {
   const removeStaleRegistration = async (id: string) => {
     if (
       !window.confirm(
-        `Remove the stale registry record for worker "${id}"? This does not stop the worker process. Continue only after confirming that process is stopped; Bunqueue v2.9.2 workers do not automatically re-register after their heartbeat record is removed.`
+        `Remove the stale registry record for worker "${id}"? This does not stop the worker process. Continue only after confirming that process is stopped; Bunqueue v2.9.3 workers do not automatically re-register after their heartbeat record is removed.`
       )
     )
       return;
@@ -137,7 +137,7 @@ export function WorkersPro() {
         <div role="alert" className="mb-4 rounded-lg border border-danger/30 bg-danger/5 p-4">
           <p className="text-sm font-medium text-danger">
             {quarantinedWorkers.length} worker registration(s) contain values accepted by Bunqueue
-            2.9.2 but unsafe to render. Healthy workers remain available below.
+            2.9.3 but unsafe to render. Healthy workers remain available below.
           </p>
           <p className="mt-1 text-xs text-muted">
             Their status and active-job count are unknown, so this dashboard will not offer the

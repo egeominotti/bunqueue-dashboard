@@ -1,15 +1,24 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
 import type { QueueOperationsRepository } from '../src/features/queue-operations/application/QueueOperationsRepository';
 import { QueueOperationsPanel } from '../src/features/queue-operations/ui/QueueOperationsPanel';
 import { ensureDom, settle } from './domSetup';
+import { repositoryOf } from './queue-operations-ui.repository';
 
 const mounted = new Set<() => void>();
 let originalConfirm: typeof window.confirm;
 
 beforeEach(() => {
   ensureDom();
+  useConnectionStore.setState({
+    baseUrl: 'http://queue-a.test',
+    agentBaseUrl: 'http://agent-a.test',
+    token: '',
+    agentToken: '',
+  });
   originalConfirm = window.confirm;
   window.confirm = () => true;
 });
@@ -17,6 +26,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const unmount of [...mounted]) unmount();
   window.confirm = originalConfirm;
+  useConnectionStore.setState({ baseUrl: '/api', agentBaseUrl: '', token: '', agentToken: '' });
 });
 
 describe('Queue SDK operations UI', () => {
@@ -25,7 +35,7 @@ describe('Queue SDK operations UI', () => {
     let applied = 0;
     const repository = repositoryOf(calls);
     const { host } = render(
-      createElement(QueueOperationsPanel, {
+      panel({
         queue: 'orders',
         repository,
         onApplied: () => {
@@ -42,6 +52,9 @@ describe('Queue SDK operations UI', () => {
     await settle(5);
     expect(host.textContent).toContain('All grouped');
     expect(host.textContent).toContain('5/1000ms');
+    expect(host.textContent).toContain('group-job-1');
+    expect(host.textContent).toContain('2: 1');
+    expect(host.textContent).toContain('PausedNo');
 
     click(host, 'Set rate limit');
     await settle(5);
@@ -51,6 +64,12 @@ describe('Queue SDK operations UI', () => {
     await settle(5);
     click(host, 'Clear concurrency');
     await settle(5);
+    click(host, 'Pause group');
+    await settle(5);
+    expect(host.textContent).toContain('PausedYes');
+    click(host, 'Resume group');
+    await settle(5);
+    expect(host.textContent).toContain('PausedNo');
 
     setValue(input(host, 'queue-sdk-deduplication-id'), 'invoice:7');
     click(host, 'Find owner');
@@ -71,13 +90,15 @@ describe('Queue SDK operations UI', () => {
     click(host, 'Trim journal');
     await settle(5);
     expect(host.textContent).toContain('3 lifecycle events removed');
-    expect(applied).toBe(6);
+    expect(applied).toBe(8);
     expect(calls).toContain('limits:orders:undefined');
-    expect(calls).toContain('group:orders:default:undefined:100');
+    expect(calls).toContain('group:orders:default:undefined:100:0:24');
     expect(calls).toContain('group-rate:orders:default:100:60000');
     expect(calls).toContain('group-rate-remove:orders:default');
     expect(calls).toContain('group-concurrency:orders:default:1');
     expect(calls).toContain('group-concurrency-remove:orders:default');
+    expect(calls).toContain('group-pause:orders:default');
+    expect(calls).toContain('group-resume:orders:default');
     expect(calls).toContain('dedup:orders:invoice:7');
     expect(calls).toContain('remove:orders:invoice:7');
     expect(calls).toContain('metrics:orders:completed:0:29');
@@ -97,7 +118,7 @@ describe('Queue SDK operations UI', () => {
         });
       },
     };
-    const { host } = render(createElement(QueueOperationsPanel, { queue: 'orders', repository }));
+    const { host } = render(panel({ queue: 'orders', repository }));
     await settle(10);
     setValue(input(host, 'queue-sdk-deduplication-id'), 'same-key');
     act(() => {
@@ -125,7 +146,7 @@ describe('Queue SDK operations UI', () => {
               resolveInvoices = resolve;
             }),
     };
-    const view = render(createElement(QueueOperationsPanel, { queue: 'orders', repository }));
+    const view = render(panel({ queue: 'orders', repository }));
     await settle(10);
     setValue(input(view.host, 'queue-sdk-deduplication-id'), 'invoice:7');
     click(view.host, 'Find owner');
@@ -141,7 +162,7 @@ describe('Queue SDK operations UI', () => {
     expect(view.host.textContent).toContain('Total terminal: 9');
     expect(view.host.textContent).toContain('3 lifecycle events removed');
 
-    view.rerender(createElement(QueueOperationsPanel, { queue: 'invoices', repository }));
+    view.rerender(panel({ queue: 'invoices', repository }));
     expect(view.host.textContent).not.toContain('12 / 1000 ms');
     expect(view.host.textContent).not.toContain('Deduplication key removed');
     expect(view.host.textContent).not.toContain('Total terminal: 9');
@@ -158,61 +179,48 @@ describe('Queue SDK operations UI', () => {
     });
     expect(view.host.textContent).toContain('2 / 500 ms');
   });
+
+  test('does not continue a group mutation against a newly selected control target', async () => {
+    let resolvePause!: (value: boolean) => void;
+    let groupReads = 0;
+    let applied = 0;
+    const base = repositoryOf([]);
+    const repository: QueueOperationsRepository = {
+      ...base,
+      pauseGroup: () =>
+        new Promise<boolean>((resolve) => {
+          resolvePause = resolve;
+        }),
+      group: async (...args) => {
+        groupReads += 1;
+        return base.group(...args);
+      },
+    };
+    const { host } = render(
+      panel({
+        queue: 'orders',
+        repository,
+        onApplied: () => {
+          applied += 1;
+        },
+      })
+    );
+    await settle(10);
+    click(host, 'Pause group');
+    act(() => useConnectionStore.setState({ agentBaseUrl: 'http://agent-b.test' }));
+    await act(async () => {
+      resolvePause(true);
+      await Promise.resolve();
+    });
+    await settle(5);
+    expect(groupReads).toBe(0);
+    expect(applied).toBe(0);
+    expect(host.textContent).not.toContain('PausedYes');
+  });
 });
 
-function repositoryOf(calls: string[]): QueueOperationsRepository {
-  return {
-    limits: async (queue, maxJobs) => {
-      calls.push(`limits:${queue}:${maxJobs}`);
-      return {
-        rateLimit: { max: 12, duration: 1000 },
-        concurrency: 5,
-        rateLimitTtl: 0,
-        maxed: false,
-      };
-    },
-    group: async (queue, groupId, maxJobs, maxCount) => {
-      calls.push(`group:${queue}:${groupId}:${maxJobs}:${maxCount}`);
-      return {
-        jobs: 2,
-        active: 1,
-        totalGrouped: 4,
-        rateLimit: { max: 5, duration: 1000 },
-        rateLimitTtl: 25,
-        concurrency: 3,
-      };
-    },
-    setGroupRateLimit: async (queue, groupId, max, duration) => {
-      calls.push(`group-rate:${queue}:${groupId}:${max}:${duration}`);
-    },
-    removeGroupRateLimit: async (queue, groupId) => {
-      calls.push(`group-rate-remove:${queue}:${groupId}`);
-      return 1;
-    },
-    setGroupConcurrency: async (queue, groupId, concurrency) => {
-      calls.push(`group-concurrency:${queue}:${groupId}:${concurrency}`);
-    },
-    removeGroupConcurrency: async (queue, groupId) => {
-      calls.push(`group-concurrency-remove:${queue}:${groupId}`);
-      return 1;
-    },
-    deduplicationJobId: async (queue, id) => {
-      calls.push(`dedup:${queue}:${id}`);
-      return 'job-42';
-    },
-    removeDeduplicationKey: async (queue, id) => {
-      calls.push(`remove:${queue}:${id}`);
-      return 1;
-    },
-    metrics: async (queue, type, start, end) => {
-      calls.push(`metrics:${queue}:${type}:${start}:${end}`);
-      return { meta: { count: 9, prevTS: 100, prevCount: 2 }, data: [2, 1, 0], count: 3 };
-    },
-    trimEvents: async (queue, maxLength) => {
-      calls.push(`trim:${queue}:${maxLength}`);
-      return 3;
-    },
-  };
+function panel(properties: Parameters<typeof QueueOperationsPanel>[0]) {
+  return createElement(MemoryRouter, null, createElement(QueueOperationsPanel, properties));
 }
 
 function render(element: ReturnType<typeof createElement>) {

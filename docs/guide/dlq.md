@@ -1,13 +1,13 @@
 ---
 title: Dead Letter Queue
-description: "Inspect, filter and export failed jobs while every DLQ retry and purge path fails closed under the v2.9.2 contract."
+description: "Inspect, filter and export failed jobs while every DLQ retry and purge path fails closed under the v2.9.3 contract."
 ---
 
 # Dead Letter Queue
 
 This screen is where jobs land after they fail and run out of retries. You can
 inspect, filter and export failures; every manual, bulk and queue-wide retry
-control is unavailable under the v2.9.2 fail-closed policy.
+control is unavailable under the v2.9.3 fail-closed policy.
 
 **Where:** open `/dlq` from the sidebar.
 
@@ -61,7 +61,7 @@ problem that the targeted DLQ can move while the request is in flight.
 **Purge all** is visible but disabled because deletion can strand hidden cross-queue dependents.
 
 ::: warning Atomic safety takes precedence
-[Bunqueue v2.9.2](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.2)
+[Bunqueue v2.9.3](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.3)
 exposes no generation/state/topology-conditional DLQ retry and no
 reverse-dependency-aware purge. A warning, confirmation, pinned target or fresh
 queue/job scan cannot make either mutation atomic, so the dashboard calls none

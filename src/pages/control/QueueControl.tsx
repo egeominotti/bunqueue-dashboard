@@ -198,7 +198,7 @@ export function QueueControl() {
           />
           <LimitsCards key={`${queue}:limits`} queue={queue} busy={busy} run={run} />
           <QueueOperationsPanel
-            key={`${queue}:sdk-operations`}
+            key={`${actionGuard.scopeKey}:${queue}:sdk-operations`}
             queue={queue}
             refreshKey={operationsRevision}
             onApplied={() => setOperationsRevision((revision) => revision + 1)}

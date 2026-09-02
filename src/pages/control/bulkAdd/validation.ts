@@ -1,7 +1,7 @@
 import type { BulkJobBody } from '@/lib/bq';
 import { opaqueHttpIdError } from '@/lib/upstreamPaths';
 import { MAX_JOB_DATA_BYTES, MAX_JOB_DATA_CHARS, utf8ByteLength } from '../addJob/data';
-import { parseRepeat } from '../addJob/options';
+import { MAX_GROUP_PRIORITY, parseRepeat } from '../addJob/options';
 import {
   asBackoff,
   asNum,
@@ -50,7 +50,6 @@ function specOptionError(raw: Record<string, unknown>): string | null {
   if (unknown.length) return `unknown job option(s): ${unknown.join(', ')}`;
 
   const numericChecks: Array<[string, string, number, number]> = [
-    ['priority', 'priority', -1_000_000, 1_000_000],
     ['delay', 'delay', 0, MAX_DELAY_MS],
     ['maxAttempts', 'maxAttempts', 1, 1000],
     ['timeout', 'timeout', 0, MAX_DURATION_MS],
@@ -58,6 +57,7 @@ function specOptionError(raw: Record<string, unknown>): string | null {
     ['stallTimeout', 'stallTimeout', 0, MAX_DURATION_MS],
     ['stackTraceLimit', 'stackTraceLimit', 0, 10_000],
     ['timestamp', 'timestamp', 0, Number.MAX_SAFE_INTEGER],
+    ['groupMaxSize', 'groupMaxSize', 1, Number.MAX_SAFE_INTEGER],
   ];
   for (const [key, label, min, max] of numericChecks) {
     const error = numericError(raw[key], label, min, max);
@@ -112,10 +112,20 @@ function specOptionError(raw: Record<string, unknown>): string | null {
 
   if (raw.groupId !== undefined) {
     const groupId = asStr(raw.groupId);
-    if (groupId === undefined || groupId.length > 256) {
-      return 'groupId must be a non-empty string of at most 256 characters';
+    if (groupId === undefined || groupId.length > 256 || groupId.includes('\0')) {
+      return 'groupId must be a non-empty string of at most 256 characters without NUL';
     }
   }
+  if (raw.groupMaxSize !== undefined && raw.groupId === undefined) {
+    return 'groupMaxSize requires groupId';
+  }
+  const priorityError = numericError(
+    raw.priority,
+    raw.groupId === undefined ? 'priority' : 'group priority',
+    raw.groupId === undefined ? -1_000_000 : 0,
+    raw.groupId === undefined ? 1_000_000 : MAX_GROUP_PRIORITY
+  );
+  if (priorityError) return priorityError;
   for (const key of ['tags', 'dependsOn'] as const) {
     if (raw[key] === undefined) continue;
     const list = asStringList(raw[key]);
@@ -177,6 +187,13 @@ export function validateBulkItems(
       if (error) return { ok: false, msg: `Job ${index + 1}: ${error}` };
     }
     const body = coerceBody(item, defaults, mode);
+    if (body.groupId !== undefined) {
+      const priorityError = numericError(body.priority, 'group priority', 0, MAX_GROUP_PRIORITY);
+      if (priorityError) return { ok: false, msg: `Job ${index + 1}: ${priorityError}` };
+    }
+    if (body.groupMaxSize !== undefined && body.groupId === undefined) {
+      return { ok: false, msg: `Job ${index + 1}: groupMaxSize requires groupId` };
+    }
     let encoded: string | undefined;
     try {
       encoded = JSON.stringify(body.data);

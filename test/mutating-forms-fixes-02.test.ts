@@ -9,6 +9,7 @@ import {
   parseInput,
   specWouldDropValues,
   test,
+  validateBulkItems,
 } from './mutating-forms-fixes.helpers';
 
 describe('BulkAddJobs', () => {
@@ -42,7 +43,7 @@ describe('BulkAddJobs', () => {
     expect(coerceBody({ data: {}, jobId: 1001 }, {}, 'spec').jobId).toBe('1001');
   });
 
-  test('spec mode preserves Bunqueue 2.9.2 first-class job names', () => {
+  test('spec mode preserves Bunqueue 2.9.3 first-class job names', () => {
     expect(coerceBody({ name: 'send-email', data: { userId: 7 } }, {}, 'spec')).toMatchObject({
       name: 'send-email',
       data: { userId: 7 },
@@ -79,6 +80,7 @@ describe('BulkAddJobs', () => {
           customId: 99,
           tags: ['orders'],
           groupId: 'tenant-a',
+          groupMaxSize: '250',
           dependsOn: [1, 'p2'],
           backoff: { type: 'exponential', delay: '250' },
           repeat: { every: 1000 },
@@ -94,6 +96,7 @@ describe('BulkAddJobs', () => {
       jobId: '99',
       tags: ['orders'],
       groupId: 'tenant-a',
+      groupMaxSize: 250,
       dependsOn: ['1', 'p2'],
       backoff: { type: 'exponential', delay: 250 },
       repeat: { every: 1000 },
@@ -102,6 +105,30 @@ describe('BulkAddJobs', () => {
       stackTraceLimit: 25,
       timestamp: 123456789,
     });
+  });
+
+  test('validates Bunqueue 2.9.3 group priority and atomic max-size admission options', () => {
+    const valid = validateBulkItems(
+      [{ data: { order: 1 }, groupId: 'tenant-a', groupMaxSize: 2, priority: 2_097_151 }],
+      {},
+      'spec'
+    );
+    expect(valid.ok).toBe(true);
+    if (valid.ok) {
+      expect(valid.bodies[0]).toMatchObject({
+        groupId: 'tenant-a',
+        groupMaxSize: 2,
+        priority: 2_097_151,
+      });
+    }
+    expect(
+      validateBulkItems([{ data: {}, groupId: 'tenant-a', priority: -1 }], {}, 'spec').ok
+    ).toBe(false);
+    expect(validateBulkItems([{ data: {}, groupMaxSize: 2 }], {}, 'spec').ok).toBe(false);
+    expect(
+      validateBulkItems([{ data: {}, groupId: 'tenant-a' }], { priority: -1 }, 'spec').ok
+    ).toBe(false);
+    expect(validateBulkItems([{ data: {}, groupId: 'tenant\0a' }], {}, 'spec').ok).toBe(false);
   });
 
   test('bulk defaults reject values the v2.8.55 server would reject', () => {

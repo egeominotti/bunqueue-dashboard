@@ -209,7 +209,7 @@ export function ConfigCard({
       >
         <Field
           label="Command"
-          hint="The exact command the agent runs to launch bunqueue. It receives HTTP_PORT and TCP_PORT; BUNQUEUE_DATA_PATH is injected only for SQLite and removed in non-SQLite modes. The default resolves Bunqueue 2.9.2 with bunx; offline installs can point at a local entry."
+          hint="The exact command the agent runs to launch bunqueue. It receives HTTP_PORT and TCP_PORT; BUNQUEUE_DATA_PATH is injected only for SQLite and removed in non-SQLite modes. The default resolves Bunqueue 2.9.3 with bunx; offline installs can point at a local entry."
         >
           <Input
             name="server-command"
@@ -218,7 +218,7 @@ export function ConfigCard({
             value={value.command}
             disabled={busy}
             onChange={(e) => set({ command: e.target.value })}
-            placeholder="bunx bunqueue@2.9.2 start"
+            placeholder="bunx bunqueue@2.9.3 start"
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">
@@ -262,7 +262,7 @@ export function ConfigCard({
         </Field>
         <Field
           label="Environment variables"
-          hint="Injected on start. Memory and PostgreSQL modes remove inherited SQLite path aliases so Bunqueue cannot start with ambiguous storage. Applies on the next restart."
+          hint="Injected on start. Includes Bunqueue 2.9.3 completed-history controls: BUNQUEUE_MAX_COMPLETED_JOBS bounds hot memory, while BUNQUEUE_COMPLETED_RETENTION_MS opts into durable age-based expiry. Memory and PostgreSQL modes remove inherited SQLite path aliases. Applies on the next restart."
         >
           <EnvVarsEditor
             key={currentEditor?.id ?? 'initial'}

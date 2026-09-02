@@ -86,7 +86,7 @@ try {
   console.log(
     JSON.stringify(
       {
-        bunqueue: '2.9.2',
+        bunqueue: '2.9.3',
         approval: completed.state,
         resumedCompensation: resumedFinal.rollbackStatus,
         abandonedCompensation: abandonedFinal.rollbackStatus,

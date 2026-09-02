@@ -44,6 +44,9 @@ async function runScenario(page: Page, options: DashboardFleetScenarioOptions): 
   const runId = Date.now();
   const queueName = `orders-ui-${runId}`;
   const customJobId = `ui-cross-node-${runId}`;
+  const secondJobId = `ui-group-priority-${runId}`;
+  const overflowJobId = `ui-group-overflow-${runId}`;
+  const groupId = `tenant-${runId}`;
   const cronName = `dashboard-realistic-cron-${runId}`;
 
   await page.goto(`${options.dashboardUrl}/settings`);
@@ -59,7 +62,7 @@ async function runScenario(page: Page, options: DashboardFleetScenarioOptions): 
     await visible(page.getByText('Saved ✓'), `${node.name} save receipt`);
     await page.getByRole('button', { name: 'Test connection' }).click();
     await visible(
-      page.getByText(/Connected in .*bunqueue v2\.9\.2/u),
+      page.getByText(/Connected in .*bunqueue v2\.9\.3/u),
       `${node.name} server connection`
     );
     await page.getByRole('button', { name: 'Test agent' }).click();
@@ -96,10 +99,31 @@ async function runScenario(page: Page, options: DashboardFleetScenarioOptions): 
   await page.getByLabel('Custom job ID').fill(customJobId);
   await page.getByRole('switch', { name: 'durable' }).check();
   await page.getByLabel('Tags').fill('invoice, browser-realistic');
-  await page.getByLabel('Group ID').fill('tenant-42');
+  await page.getByLabel('Group ID').fill(groupId);
+  await page.getByLabel('Group max size').fill('2');
   await page.getByRole('button', { name: 'Add job' }).click();
-  await visible(page.getByText(`Accepted job ID ${customJobId}`), 'job acceptance receipt');
-  console.log(`PASS job: created through ${options.nodes[0].name}`);
+  await visible(
+    page.locator('form').getByText(/Accepted 1 job submission; server returned 1 distinct job ID/u),
+    'job acceptance receipt'
+  );
+
+  await page.getByLabel('Job name').fill('invoice.prioritized');
+  await page.getByLabel('Custom job ID').fill(secondJobId);
+  await page.getByLabel('Group priority').fill('2');
+  await page.getByRole('button', { name: 'Add job' }).click();
+  await visible(
+    page.locator('form').getByText(/Accepted 1 job submission; server returned 1 distinct job ID/u),
+    'second group job receipt'
+  );
+
+  await page.getByLabel('Custom job ID').fill(overflowJobId);
+  await page.getByLabel('Group priority').fill('0');
+  await page.getByRole('button', { name: 'Add job' }).click();
+  await visible(
+    page.locator('form').getByText(/maximum size of 2/u),
+    'atomic group max-size rejection'
+  );
+  console.log(`PASS jobs: group priority and atomic max-size through ${options.nodes[0].name}`);
 
   await activate(page, options.nodes[1].name);
   await nav(page, 'Jobs', 'Jobs Explorer');
@@ -109,6 +133,28 @@ async function runScenario(page: Page, options: DashboardFleetScenarioOptions): 
   await visible(page.getByText('invoice.created', { exact: true }), 'job name');
   await visible(page.getByText(/dashboard-ui/u), 'job payload');
   console.log(`PASS job: inspected through ${options.nodes[1].name}`);
+
+  await activate(page, options.nodes[2].name);
+  await nav(page, 'Queue Control', 'Queue Control');
+  await selectGroup(page, queueName, groupId);
+  await page.getByRole('button', { name: 'Read group' }).click();
+  await visible(page.getByText(customJobId, { exact: true }), 'first grouped job');
+  await visible(page.getByText(secondJobId, { exact: true }), 'second grouped job');
+  await visible(page.getByText('2: 1 · 7: 1', { exact: true }), 'group priority counts');
+  await page.getByRole('button', { name: 'Pause group' }).click();
+  await visible(groupFact(page, 'Paused', 'Yes'), 'paused group on Broker 3');
+
+  await activate(page, options.nodes[0].name);
+  await selectGroup(page, queueName, groupId);
+  await page.getByRole('button', { name: 'Read group' }).click();
+  await visible(groupFact(page, 'Paused', 'Yes'), 'shared group pause on Broker 1');
+  await page.getByRole('button', { name: 'Resume group' }).click();
+  await visible(groupFact(page, 'Paused', 'No'), 'group resumed on Broker 1');
+  await activate(page, options.nodes[1].name);
+  await selectGroup(page, queueName, groupId);
+  await page.getByRole('button', { name: 'Read group' }).click();
+  await visible(groupFact(page, 'Paused', 'No'), 'shared group resume on Broker 2');
+  console.log('PASS groups: list/priorities C -> pause C -> observe/resume A -> observe B');
 
   await activate(page, options.nodes[2].name);
   await nav(page, 'Queue Control', 'Queue Control');
@@ -129,10 +175,20 @@ async function runScenario(page: Page, options: DashboardFleetScenarioOptions): 
   await page.locator('input[name="rate-limit"]').fill('5');
   await page.locator('input[name="rate-duration"]').fill('60000');
   await confirm(page, () => page.getByRole('button', { name: 'Replace policy' }).first().click());
-  await visible(page.getByText('5 / 60000 ms', { exact: true }), 'rate-limit readback');
+  await refreshUntilVisible(
+    page,
+    page.getByRole('button', { name: 'Refresh limits' }),
+    page.getByText('5 / 60000 ms', { exact: true }),
+    'rate-limit readback'
+  );
   await page.locator('input[name="concurrency"]').fill('2');
   await confirm(page, () => page.getByRole('button', { name: 'Replace policy' }).nth(1).click());
-  await visible(fact(page, 'Global concurrency', '2'), 'concurrency readback');
+  await refreshUntilVisible(
+    page,
+    page.getByRole('button', { name: 'Refresh limits' }),
+    fact(page, 'Global concurrency', '2'),
+    'concurrency readback'
+  );
   await activate(page, options.nodes[2].name);
   await refreshUntilVisible(
     page,
@@ -189,6 +245,23 @@ function stat(page: Page, label: string, value: string): Locator {
 
 function fact(page: Page, label: string, value: string): Locator {
   return page.getByText(label, { exact: true }).locator('..').getByText(value, { exact: true });
+}
+
+const groupConsole = (page: Page) => page.locator('[aria-labelledby="queue-groups-title"]');
+
+function groupFact(page: Page, label: string, value: string): Locator {
+  return groupConsole(page)
+    .getByText(label, { exact: true })
+    .locator('..')
+    .getByText(value, { exact: true });
+}
+
+async function selectGroup(page: Page, queue: string, groupId: string): Promise<void> {
+  const queuePicker = page.getByRole('combobox', { name: 'Queue', exact: true });
+  await visible(queuePicker, 'queue picker');
+  await queuePicker.selectOption(queue);
+  await visible(groupConsole(page), 'group controls');
+  await groupConsole(page).getByLabel('Group ID').fill(groupId);
 }
 
 async function visible(locator: Locator, description: string): Promise<void> {

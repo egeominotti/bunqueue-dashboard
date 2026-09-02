@@ -59,7 +59,7 @@ describe('external Bunqueue server mode', () => {
         redirect: init?.redirect,
       };
       return Promise.resolve(
-        Response.json({ ok: true, status: 'healthy', version: '2.9.2', uptime: 10 })
+        Response.json({ ok: true, status: 'healthy', version: '2.9.3', uptime: 10 })
       );
     }) as typeof fetch;
 
@@ -78,7 +78,7 @@ describe('external Bunqueue server mode', () => {
         reachable: true,
         externalUrl: 'http://127.0.0.1:6790',
         healthStatus: 200,
-        version: '2.9.2',
+        version: '2.9.3',
         db: null,
       });
       expect(request).toEqual({
@@ -100,7 +100,7 @@ describe('external Bunqueue server mode', () => {
     try {
       globalThis.fetch = (() =>
         Promise.resolve(
-          Response.json({ ok: false, status: 'degraded', version: '2.9.2' }, { status: 503 })
+          Response.json({ ok: false, status: 'degraded', version: '2.9.3' }, { status: 503 })
         )) as typeof fetch;
       const degraded = await handle(new Request('http://agent.test/control/status'));
       expect(await degraded.json()).toMatchObject({
@@ -235,9 +235,9 @@ describe('external Bunqueue server mode', () => {
       reachable: true,
       externalUrl: 'http://127.0.0.1:6790',
       healthStatus: 200,
-      version: '2.9.2',
+      version: '2.9.3',
       config: {
-        command: 'bunx bunqueue@2.9.2 start',
+        command: 'bunx bunqueue@2.9.3 start',
         httpPort: 6790,
         tcpPort: 6789,
         dataPath: './data/bunq.db',

@@ -15,6 +15,43 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.42] - 2026-09-02
+
+### Added
+
+- Added Bunqueue 2.9.3 group controls across embedded, TCP and PostgreSQL
+  deployments: atomic `group.maxSize`, the full grouped-priority range,
+  pause/resume, bounded pending-job pages and per-priority counts are now
+  operable from Add Job, Bulk import and Queue Control.
+- Added completed-history environment presets for the separate hot
+  `BUNQUEUE_MAX_COMPLETED_JOBS` cap and durable age-based
+  `BUNQUEUE_COMPLETED_RETENTION_MS` policy.
+- Added real runtime coverage for group admission and priority scheduling, plus
+  a three-broker Dashboard scenario that creates, inspects, pauses and resumes
+  groups through different PostgreSQL brokers.
+- Added a real published-npm 2.9.2 schema-35 to 2.9.3 schema-37 SQLite migration gate that
+  verifies durable completions survive both the upgrade and a constrained hot
+  recovery cache.
+- The three-broker PostgreSQL gate now creates schema 19 and a job with the
+  published 2.9.2 package, upgrades to schema 20, and proves that 2.9.3 can read
+  the pre-upgrade job before exercising the fleet.
+
+### Changed
+
+- Pinned the managed CLI, public client, demos, documentation and every runtime
+  gate to Bunqueue 2.9.3 while retaining Bun 1.4.0 everywhere.
+- Updated the migration contract to SQLite schema 37 and PostgreSQL schema 20,
+  with coordinated namespace-upgrade and no-downgrade guidance.
+
+### Fixed
+
+- Prevented `groupMaxSize` from being silently lost by Bunqueue's single-job
+  HTTP route: the Dashboard uses the bulk route for capped groups even when
+  submitting one job.
+- Invalidated Queue SDK snapshots and post-mutation refreshes when the active
+  Fleet profile changes, preventing a response started on one broker from
+  being displayed or continued against another.
+
 ## [0.0.41] - 2026-09-02
 
 ### Added
@@ -1231,7 +1268,9 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.40...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.42...HEAD
+[0.0.42]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.41...v0.0.42
+[0.0.41]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.40...v0.0.41
 [0.0.40]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.39...v0.0.40
 [0.0.39]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.38...v0.0.39
 [0.0.38]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.37...v0.0.38

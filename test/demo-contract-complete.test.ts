@@ -46,7 +46,7 @@ describe('demo control contract', () => {
     expect(status).toMatchObject({
       status: 'running',
       healthy: true,
-      version: '2.9.2',
+      version: '2.9.3',
       config: DEMO_CONFIG,
       runningConfig: DEMO_CONFIG,
       db: { exists: true, totalSize: 2_703_360 },
@@ -78,7 +78,7 @@ describe('demo control contract', () => {
       'stdout',
       'stdout',
     ]);
-    expect(logs.lines[0].line).toContain('bunqueue@2.9.2');
+    expect(logs.lines[0].line).toContain('bunqueue@2.9.3');
   });
 });
 

@@ -43,7 +43,7 @@ Each row also has a trash icon at the end for deleting that schedule.
 The button is disabled while it's working, so a fast double-click can't create the same schedule twice. Creation also re-fetches the cron list immediately before POST and fails closed if the name now exists.
 
 ::: warning Upstream creation is not atomic
-`POST /crons` is an upsert in Bunqueue v2.9.2 and has no create-only or version precondition. The dashboard refuses a name already observed and rechecks immediately before POST, but a simultaneous client can still race between that GET and POST. The UI never claims atomic creation; use a globally unique name and continue only when last-writer-wins is acceptable.
+`POST /crons` is an upsert in Bunqueue v2.9.3 and has no create-only or version precondition. The dashboard refuses a name already observed and rechecks immediately before POST, but a simultaneous client can still race between that GET and POST. The UI never claims atomic creation; use a globally unique name and continue only when last-writer-wins is acceptable.
 :::
 
 **Delete a schedule**, click the trash icon on its row.
@@ -59,7 +59,7 @@ Deleting asks you to confirm first, then removes the schedule permanently. If a 
 - **Cron syntax follows Bunqueue 2.9 and Bun 1.4.** The dashboard accepts standard five-field expressions (including Bun's optional leading `+` on numeric values), six fields with leading seconds, and the official `@yearly`, `@annually`, `@monthly`, `@weekly`, `@daily`, `@midnight`, and `@hourly` shortcuts. Seven-field years and Croner-only `L`, `W`, `#`, and `?` extensions are rejected before submission.
 - **Upgrade old persisted schedules first.** A Croner-only definition created before Bunqueue 2.9 can make the broker fail closed at startup. Update or remove it while still running Bunqueue 2.8, then upgrade.
 - **Switches mirror the submitted value.** Overlap and missed-run defaults are
-  initialized to the v2.9.2 defaults and every switch is sent explicitly, so
+  initialized to the v2.9.3 defaults and every switch is sent explicitly, so
   an off switch cannot silently fall back to an on server default.
 - **You may reach this screen from more than one link.** An older, list-and-delete-only version of this page also exists. The sidebar's **Cron Jobs** entry always opens this full version. See [Known issues](/known-issues) for details.
 

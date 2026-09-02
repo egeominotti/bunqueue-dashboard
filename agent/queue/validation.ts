@@ -45,6 +45,14 @@ export function optionalMaxCount(query: URLSearchParams): number | undefined {
   return raw === null ? undefined : boundedInteger(raw, 'maxCount', 1, 1_000_000);
 }
 
+export function groupJobsRange(query: URLSearchParams): { start: number; end: number } {
+  const start = optionalInteger(query.get('start'), 'start', 0, 1_000_000, 0);
+  const end = optionalInteger(query.get('end'), 'end', 0, 1_000_000, start + 24);
+  if (end < start) throw new Error('Group jobs end must be at least start');
+  if (end - start >= 100) throw new Error('Group jobs page must contain at most 100 jobs');
+  return { start, end };
+}
+
 export function requiredGroupId(value: unknown): string {
   if (typeof value !== 'string' || !value || value.length > 256 || value.includes('\0')) {
     throw new Error('groupId must be a non-empty string of at most 256 characters without NUL');

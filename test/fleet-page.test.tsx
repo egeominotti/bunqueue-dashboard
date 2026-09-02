@@ -91,7 +91,7 @@ beforeEach(() => {
     const method = init?.method ?? 'GET';
     calls.push({ url, method });
     if (url.endsWith('/health')) {
-      return Response.json({ ok: true, status: 'healthy', uptime: 1, version: '2.9.2' });
+      return Response.json({ ok: true, status: 'healthy', uptime: 1, version: '2.9.3' });
     }
     const name = url.includes('b.example') ? 'b' : 'a';
     if (url.endsWith('/control/start')) states.set(name, 'running');

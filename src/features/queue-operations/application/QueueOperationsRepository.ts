@@ -15,9 +15,20 @@ export interface QueueGroupSnapshot {
   jobs: number;
   active: number;
   totalGrouped: number;
+  paused: boolean;
+  entries: QueueGroupJobSummary[];
+  priorityCounts: Record<string, number>;
   rateLimit: { max: number; duration: number } | null;
   rateLimitTtl: number;
   concurrency: number | null;
+}
+
+export interface QueueGroupJobSummary {
+  id: string;
+  name: string;
+  priority: number;
+  delay: number;
+  timestamp: number;
 }
 
 export interface QueueOperationsRepository {
@@ -26,8 +37,12 @@ export interface QueueOperationsRepository {
     queue: string,
     groupId: string,
     maxJobs?: number,
-    maxCount?: number
+    maxCount?: number,
+    start?: number,
+    end?: number
   ): Promise<QueueGroupSnapshot>;
+  pauseGroup(queue: string, groupId: string): Promise<boolean>;
+  resumeGroup(queue: string, groupId: string): Promise<boolean>;
   setGroupRateLimit(queue: string, groupId: string, max: number, duration: number): Promise<void>;
   removeGroupRateLimit(queue: string, groupId: string): Promise<number>;
   setGroupConcurrency(queue: string, groupId: string, concurrency: number): Promise<void>;

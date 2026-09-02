@@ -17,7 +17,7 @@ describe('flow mutation fail-closed boundary', () => {
       FLOW_COMPLETED_REQUEUE_UNAVAILABLE,
     ];
     for (const reason of versionedReasons) {
-      expect(reason).toContain('Bunqueue v2.9.2');
+      expect(reason).toContain('Bunqueue v2.9.3');
     }
     expect(FLOW_DLQ_RETENTION_UNAVAILABLE).toContain('read-only');
     expect(FLOW_DLQ_RETENTION_UNAVAILABLE).toContain('atomic reverse-dependency check');

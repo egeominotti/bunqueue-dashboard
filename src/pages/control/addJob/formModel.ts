@@ -32,6 +32,7 @@ export interface AddJobFormValues {
   backoffType: '' | 'fixed' | 'exponential';
   tags: string;
   groupId: string;
+  groupMaxSize: string;
   dependsOn: string;
   uniqueKey: string;
   repeatText: string;
@@ -65,6 +66,7 @@ export function initialAddJobValues(clone?: CloneJobState['clone']): AddJobFormV
     backoffType: defaults.backoffType,
     tags: defaults.tags,
     groupId: defaults.groupId,
+    groupMaxSize: '',
     dependsOn: '',
     uniqueKey: '',
     repeatText: '',
@@ -93,15 +95,26 @@ export function buildAddJobSubmission(values: AddJobFormValues, now = Date.now()
     };
   }
 
-  const numeric = parseAddJobNumbers({
-    priority: values.priority,
-    delay: values.runAt.trim() ? '' : values.delay,
-    maxAttempts: values.maxAttempts,
-    backoff: values.backoff,
-    timeout: values.timeout,
-    ttl: values.ttl,
-  });
+  const groupId = values.groupId.trim();
+  if (groupId.length > 256 || groupId.includes('\0')) {
+    return failure('Group ID must contain 1–256 characters and no NUL');
+  }
+  const numeric = parseAddJobNumbers(
+    {
+      priority: values.priority,
+      delay: values.runAt.trim() ? '' : values.delay,
+      maxAttempts: values.maxAttempts,
+      backoff: values.backoff,
+      timeout: values.timeout,
+      ttl: values.ttl,
+      groupMaxSize: values.groupMaxSize,
+    },
+    Boolean(groupId)
+  );
   if (!numeric.ok) return failure(numeric.msg);
+  if (numeric.options.groupMaxSize !== undefined && !groupId) {
+    return failure('Group max size requires a Group ID');
+  }
 
   let effectiveDelay = numeric.options.delay;
   if (values.runAt.trim()) {
@@ -152,7 +165,8 @@ export function buildAddJobSubmission(values: AddJobFormValues, now = Date.now()
       durable: values.durable || undefined,
       lifo: values.lifo || undefined,
       tags: tags.length ? tags : undefined,
-      groupId: values.groupId.trim() || undefined,
+      groupId: groupId || undefined,
+      groupMaxSize: numeric.options.groupMaxSize,
       dependsOn: dependencies.length ? dependencies : undefined,
       uniqueKey: values.uniqueKey.trim() || undefined,
       repeat: repeat.repeat,

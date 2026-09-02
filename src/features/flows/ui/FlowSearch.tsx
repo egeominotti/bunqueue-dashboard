@@ -36,7 +36,7 @@ export function FlowSearch({
         </button>
       </form>
       <p id="flow-input-help" className="mt-2 text-xs text-faint">
-        Start from any surviving structural node. Bunqueue 2.9.2 flow topology is resolved from
+        Start from any surviving structural node. Bunqueue 2.9.3 flow topology is resolved from
         durable parent, children, and dependency contracts. Up to {MAX_FLOW_NODES} nodes are
         rendered.
       </p>

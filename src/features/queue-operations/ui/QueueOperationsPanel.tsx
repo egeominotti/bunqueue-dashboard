@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Field, Input } from '@/components/ui/form';
+import { currentControlConnectionEpoch } from '@/lib/controlConnectionEpoch';
+import { useControlActionGuard } from '@/lib/useControlActionGuard';
 import type {
   QueueLimitSnapshot,
   QueueOperationsRepository,
@@ -14,7 +16,7 @@ import { QueueTelemetryConsole } from './QueueTelemetryConsole';
 
 export type QueueOperationRunner = <T>(
   label: string,
-  task: () => Promise<T>,
+  task: (isCurrent: () => boolean) => Promise<T>,
   onSuccess: (value: T) => void,
   mutation?: boolean
 ) => void;
@@ -30,6 +32,7 @@ export function QueueOperationsPanel({
   repository?: QueueOperationsRepository;
   onApplied?: () => void;
 }) {
+  const actionGuard = useControlActionGuard(`queue-operations:${queue}`);
   const [maxJobs, setMaxJobs] = useState('');
   const [limitsState, setLimitsState] = useState<{
     queue: string;
@@ -55,6 +58,14 @@ export function QueueOperationsPanel({
     };
   }, []);
 
+  useEffect(() => {
+    limitRequest.current += 1;
+    lock.current = false;
+    setLimitsState(null);
+    setBusy('');
+    setActionError('');
+  }, [actionGuard.scopeKey]);
+
   const loadLimits = useCallback(async () => {
     const parsed = optionalMaxJobs(maxJobs);
     if (parsed === null) {
@@ -67,6 +78,7 @@ export function QueueOperationsPanel({
       return;
     }
     const mine = ++limitRequest.current;
+    const connectionEpoch = currentControlConnectionEpoch();
     setLimitsState((current) => ({
       queue,
       snapshot: current?.queue === queue ? current.snapshot : null,
@@ -75,11 +87,19 @@ export function QueueOperationsPanel({
     }));
     try {
       const next = await repository.limits(queue, parsed);
-      if (active.current && mine === limitRequest.current) {
+      if (
+        active.current &&
+        mine === limitRequest.current &&
+        connectionEpoch === currentControlConnectionEpoch()
+      ) {
         setLimitsState({ queue, snapshot: next, loading: false, error: '' });
       }
     } catch (error) {
-      if (active.current && mine === limitRequest.current) {
+      if (
+        active.current &&
+        mine === limitRequest.current &&
+        connectionEpoch === currentControlConnectionEpoch()
+      ) {
         setLimitsState({ queue, snapshot: null, loading: false, error: messageOf(error) });
       }
     }
@@ -90,12 +110,14 @@ export function QueueOperationsPanel({
 
   const run: QueueOperationRunner = (label, task, onSuccess, mutation = false) => {
     if (lock.current) return;
+    const lease = actionGuard.begin('queue-sdk-command');
+    if (!lease) return;
     lock.current = true;
     setBusy(label);
     setActionError('');
-    void task()
+    void task(lease.isCurrent)
       .then((value) => {
-        if (!active.current) return;
+        if (!active.current || !lease.isCurrent()) return;
         onSuccess(value);
         if (mutation) {
           onApplied?.();
@@ -103,11 +125,14 @@ export function QueueOperationsPanel({
         }
       })
       .catch((error) => {
-        if (active.current) setActionError(messageOf(error));
+        if (active.current && lease.isCurrent()) setActionError(messageOf(error));
       })
       .finally(() => {
-        lock.current = false;
-        if (active.current) setBusy('');
+        const current = lease.finish();
+        if (active.current && current) {
+          lock.current = false;
+          setBusy('');
+        }
       });
   };
 
@@ -118,8 +143,9 @@ export function QueueOperationsPanel({
         action={busy ? <span className="font-mono text-xs text-accent">{busy}...</span> : undefined}
       />
       <p className="mb-5 max-w-3xl text-xs leading-5 text-faint">
-        Live Bunqueue 2.9.2 limit, group, deduplication, metric, and event-journal contracts.
-        Requests are pinned to the server managed by this control agent.
+        Live Bunqueue 2.9.3 limit, group, deduplication, metric, and event-journal contracts,
+        including group pause, pending jobs, and priority counts. Requests are pinned to the server
+        managed by this control agent.
       </p>
       <div className="mb-5 flex flex-wrap items-end gap-3 border-b border-line pb-5">
         <div className="w-48">

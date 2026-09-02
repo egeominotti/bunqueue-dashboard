@@ -8,8 +8,12 @@ import type {
 
 export const bqQueueOperationsRepository: QueueOperationsRepository = {
   limits: async (queue, maxJobs) => parseLimits(await bq.queueOperations.limits(queue, maxJobs)),
-  group: async (queue, groupId, maxJobs, maxCount) =>
-    parseGroup(await bq.queueOperations.group(queue, groupId, maxJobs, maxCount)),
+  group: async (queue, groupId, maxJobs, maxCount, start, end) =>
+    parseGroup(await bq.queueOperations.group(queue, groupId, maxJobs, maxCount, start, end)),
+  pauseGroup: async (queue, groupId) =>
+    parseChanged(await bq.queueOperations.pauseGroup(queue, groupId)),
+  resumeGroup: async (queue, groupId) =>
+    parseChanged(await bq.queueOperations.resumeGroup(queue, groupId)),
   setGroupRateLimit: async (queue, groupId, max, duration) => {
     parseApplied(await bq.queueOperations.setGroupRateLimit(queue, groupId, max, duration));
   },
@@ -33,10 +37,21 @@ export const bqQueueOperationsRepository: QueueOperationsRepository = {
 function parseGroup(value: unknown): QueueGroupSnapshot {
   const group = record(okRecord(value, 'Queue group').group, 'Queue group');
   const rate = group.rateLimit;
+  const entries = group.entries;
+  const priorityCounts = group.priorityCounts;
   if (
     !integerAtLeast(group.jobs, 0) ||
     !integerAtLeast(group.active, 0) ||
     !integerAtLeast(group.totalGrouped, 0) ||
+    typeof group.paused !== 'boolean' ||
+    !Array.isArray(entries) ||
+    entries.length > 100 ||
+    !entries.every(validGroupJob) ||
+    !isRecord(priorityCounts) ||
+    !Object.entries(priorityCounts).every(
+      ([priority, count]) =>
+        /^\d+$/.test(priority) && Number(priority) <= 2_097_151 && integerAtLeast(count, 0)
+    ) ||
     (rate !== null &&
       (!isRecord(rate) || !positiveInteger(rate.max) || !positiveInteger(rate.duration))) ||
     !integerAtLeast(group.rateLimitTtl, -2) ||
@@ -45,6 +60,26 @@ function parseGroup(value: unknown): QueueGroupSnapshot {
     throw malformed('Queue group');
   }
   return group as unknown as QueueGroupSnapshot;
+}
+
+function validGroupJob(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string' &&
+    value.id.length > 0 &&
+    typeof value.name === 'string' &&
+    value.name.length > 0 &&
+    integerAtLeast(value.priority, 0) &&
+    (value.priority as number) <= 2_097_151 &&
+    integerAtLeast(value.delay, 0) &&
+    integerAtLeast(value.timestamp, 0)
+  );
+}
+
+function parseChanged(value: unknown): boolean {
+  const changed = okRecord(value, 'Queue group mutation').changed;
+  if (typeof changed !== 'boolean') throw malformed('Queue group mutation');
+  return changed;
 }
 
 function parseApplied(value: unknown): void {

@@ -12,6 +12,7 @@ import {
   eventRetention,
   exactJsonBody,
   exactQuery,
+  groupJobsRange,
   metricsRange,
   optionalMaxCount,
   optionalMaxJobs,
@@ -23,7 +24,7 @@ import {
 
 const READ_ROUTE = /^\/queue-operations\/([^/]+)\/(limits|groups|deduplication|metrics)$/;
 const MUTATION_ROUTE =
-  /^\/queue-operations\/([^/]+)\/(groups\/(?:rate-limit|concurrency)(?:\/remove)?|deduplication\/remove|events\/trim)$/;
+  /^\/queue-operations\/([^/]+)\/(groups\/(?:(?:rate-limit|concurrency)(?:\/remove)?|pause|resume)|deduplication\/remove|events\/trim)$/;
 
 export async function routeQueueOperationsRequest(
   request: Request,
@@ -58,15 +59,26 @@ export async function routeQueueOperationsRequest(
       const query = pinnedQuery(
         request,
         config,
-        ['target', 'groupId', 'maxJobs', 'maxCount'],
+        ['target', 'groupId', 'maxJobs', 'maxCount', 'start', 'end'],
         targetPolicy
       );
       const groupId = requiredGroupId(query.get('groupId'));
       const maxJobs = optionalMaxJobs(query);
       const maxCount = optionalMaxCount(query);
+      const range = groupJobsRange(query);
       assertRunning(running);
       return admitted(query, config, running, admission, targetPolicy, async ({ config: current }) =>
-        ok({ group: await runtime.group(current, queue, groupId, maxJobs, maxCount) })
+        ok({
+          group: await runtime.group(
+            current,
+            queue,
+            groupId,
+            maxJobs,
+            maxCount,
+            range.start,
+            range.end
+          ),
+        })
       );
     }
     const query = pinnedQuery(request, config, ['target', 'type', 'start', 'end'], targetPolicy);
@@ -93,6 +105,24 @@ export async function routeQueueOperationsRequest(
       );
     }
     if (mutation[2].startsWith('groups/')) {
+      if (mutation[2] === 'groups/pause' || mutation[2] === 'groups/resume') {
+        const body = await exactJsonBody(request, ['groupId']);
+        const groupId = requiredGroupId(body.groupId);
+        return admitted(
+          query,
+          config,
+          running,
+          admission,
+          targetPolicy,
+          async ({ config: current }) =>
+            ok({
+              changed:
+                mutation[2] === 'groups/pause'
+                  ? await runtime.pauseGroup(current, queue, groupId)
+                  : await runtime.resumeGroup(current, queue, groupId),
+            })
+        );
+      }
       const remove = mutation[2].endsWith('/remove');
       const rateLimit = mutation[2].includes('/rate-limit');
       const allowed = remove

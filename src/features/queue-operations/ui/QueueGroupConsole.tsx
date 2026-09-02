@@ -5,6 +5,7 @@ import type {
   QueueGroupSnapshot,
   QueueOperationsRepository,
 } from '../application/QueueOperationsRepository';
+import { QueueGroupReadback } from './QueueGroupReadback';
 import type { QueueOperationRunner } from './QueueOperationsPanel';
 
 export function QueueGroupConsole({
@@ -21,17 +22,24 @@ export function QueueGroupConsole({
   const [groupId, setGroupId] = useState('default');
   const [maxJobs, setMaxJobs] = useState('');
   const [maxCount, setMaxCount] = useState('100');
+  const [start, setStart] = useState('0');
+  const [end, setEnd] = useState('24');
   const [rateMax, setRateMax] = useState('100');
   const [duration, setDuration] = useState('60000');
   const [concurrency, setConcurrency] = useState('1');
   const [snapshot, setSnapshot] = useState<QueueGroupSnapshot | null>(null);
 
   const id = validGroupId(groupId);
+  const pageRange = groupPageRange(start, end);
   const read = () => {
     const threshold = optionalInteger(maxJobs, 0);
     const count = optionalInteger(maxCount, 1);
-    if (!id || threshold === null || count === null) return;
-    run('Reading group', () => repository.group(queue, id, threshold, count), setSnapshot);
+    if (!id || threshold === null || count === null || !pageRange) return;
+    run(
+      'Reading group',
+      () => repository.group(queue, id, threshold, count, pageRange.start, pageRange.end),
+      setSnapshot
+    );
   };
   const setRate = () => {
     const max = positiveInteger(rateMax);
@@ -39,8 +47,9 @@ export function QueueGroupConsole({
     if (!id || max === null || milliseconds === null) return;
     run(
       'Setting group rate limit',
-      async () => {
+      async (isCurrent) => {
         await repository.setGroupRateLimit(queue, id, max, milliseconds);
+        if (!isCurrent()) throw new Error('Queue operations target changed.');
         return repository.group(queue, id);
       },
       setSnapshot,
@@ -52,8 +61,23 @@ export function QueueGroupConsole({
     if (!id || value === null) return;
     run(
       'Setting group concurrency',
-      async () => {
+      async (isCurrent) => {
         await repository.setGroupConcurrency(queue, id, value);
+        if (!isCurrent()) throw new Error('Queue operations target changed.');
+        return repository.group(queue, id);
+      },
+      setSnapshot,
+      true
+    );
+  };
+  const setPaused = (paused: boolean) => {
+    if (!id) return;
+    run(
+      paused ? 'Pausing group' : 'Resuming group',
+      async (isCurrent) => {
+        if (paused) await repository.pauseGroup(queue, id);
+        else await repository.resumeGroup(queue, id);
+        if (!isCurrent()) throw new Error('Queue operations target changed.');
         return repository.group(queue, id);
       },
       setSnapshot,
@@ -66,7 +90,7 @@ export function QueueGroupConsole({
       <h3 id="queue-groups-title" className="mb-3 text-sm font-medium text-fg">
         Groups
       </h3>
-      <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-4 xl:grid-cols-8">
         <Field label="Group ID">
           <Input
             value={groupId}
@@ -88,6 +112,24 @@ export function QueueGroupConsole({
             min={1}
             value={maxCount}
             onChange={(event) => setMaxCount(event.target.value)}
+          />
+        </Field>
+        <Field label="Jobs start">
+          <Input
+            type="number"
+            min={0}
+            max={1_000_000}
+            value={start}
+            onChange={(event) => setStart(event.target.value)}
+          />
+        </Field>
+        <Field label="Jobs end" hint="Inclusive; max 100">
+          <Input
+            type="number"
+            min={0}
+            max={1_000_000}
+            value={end}
+            onChange={(event) => setEnd(event.target.value)}
           />
         </Field>
         <Field label="Rate max">
@@ -116,7 +158,7 @@ export function QueueGroupConsole({
         </Field>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" disabled={Boolean(busy) || !id} onClick={read}>
+        <Button size="sm" disabled={Boolean(busy) || !id || !pageRange} onClick={read}>
           Read group
         </Button>
         <Button size="sm" disabled={Boolean(busy) || !id} onClick={setRate}>
@@ -128,8 +170,9 @@ export function QueueGroupConsole({
           onClick={() =>
             run(
               'Clearing group rate limit',
-              async () => {
+              async (isCurrent) => {
                 await repository.removeGroupRateLimit(queue, id!);
+                if (!isCurrent()) throw new Error('Queue operations target changed.');
                 return repository.group(queue, id!);
               },
               setSnapshot,
@@ -144,12 +187,27 @@ export function QueueGroupConsole({
         </Button>
         <Button
           size="sm"
+          disabled={Boolean(busy) || !id || snapshot?.paused === true}
+          onClick={() => setPaused(true)}
+        >
+          Pause group
+        </Button>
+        <Button
+          size="sm"
+          disabled={Boolean(busy) || !id || snapshot?.paused === false}
+          onClick={() => setPaused(false)}
+        >
+          Resume group
+        </Button>
+        <Button
+          size="sm"
           disabled={Boolean(busy) || !id}
           onClick={() =>
             run(
               'Clearing group concurrency',
-              async () => {
+              async (isCurrent) => {
                 await repository.removeGroupConcurrency(queue, id!);
+                if (!isCurrent()) throw new Error('Queue operations target changed.');
                 return repository.group(queue, id!);
               },
               setSnapshot,
@@ -165,33 +223,14 @@ export function QueueGroupConsole({
           Group ID must contain 1–256 characters and no NUL.
         </p>
       )}
-      {snapshot && (
-        <dl className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-line p-3 text-xs sm:grid-cols-6">
-          <Readback label="Jobs" value={snapshot.jobs} />
-          <Readback label="Active" value={snapshot.active} />
-          <Readback label="All grouped" value={snapshot.totalGrouped} />
-          <Readback
-            label="Rate"
-            value={
-              snapshot.rateLimit
-                ? `${snapshot.rateLimit.max}/${snapshot.rateLimit.duration}ms`
-                : 'None'
-            }
-          />
-          <Readback label="TTL" value={`${snapshot.rateLimitTtl} ms`} />
-          <Readback label="Concurrency" value={snapshot.concurrency ?? 'None'} />
-        </dl>
+      {!pageRange && (
+        <p role="alert" className="mt-3 text-xs text-danger">
+          Group job range must be an inclusive page of 1–100 jobs with whole indexes from 0 to
+          1000000.
+        </p>
       )}
+      {snapshot && <QueueGroupReadback snapshot={snapshot} />}
     </section>
-  );
-}
-
-function Readback({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div>
-      <dt className="text-faint">{label}</dt>
-      <dd className="mt-1 font-mono text-fg">{value}</dd>
-    </div>
   );
 }
 
@@ -205,4 +244,18 @@ const optionalInteger = (value: string, minimum: number) => {
   if (!value.trim()) return undefined;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= minimum ? parsed : null;
+};
+const groupPageRange = (start: string, end: string) => {
+  const first = optionalInteger(start, 0);
+  const last = optionalInteger(end, 0);
+  return first !== null &&
+    first !== undefined &&
+    first <= 1_000_000 &&
+    last !== null &&
+    last !== undefined &&
+    last <= 1_000_000 &&
+    last >= first &&
+    last - first < 100
+    ? { start: first, end: last }
+    : null;
 };

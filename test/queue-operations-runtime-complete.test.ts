@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import type { Job } from 'bunqueue/client';
 import type { ServerConfig } from '../agent/manager';
 import { type QueueOperationsClient, QueueOperationsRuntime } from '../agent/queue/runtime';
 
@@ -69,6 +70,34 @@ function fakeClient(log: string[]): QueueOperationsClient {
       log.push(`remove-group-concurrency:${groupId}`);
       return 1;
     },
+    pauseGroup: async (groupId) => {
+      log.push(`pause-group:${groupId}`);
+      return true;
+    },
+    resumeGroup: async (groupId) => {
+      log.push(`resume-group:${groupId}`);
+      return true;
+    },
+    isGroupPaused: async (groupId) => {
+      log.push(`group-paused:${groupId}`);
+      return true;
+    },
+    getGroupJobs: async (groupId, start, end) => {
+      log.push(`group-list:${groupId}:${start}:${end}`);
+      return [
+        {
+          id: 'group-job-7',
+          name: 'deliver',
+          priority: 2,
+          delay: 50,
+          timestamp: 100,
+        } as Job,
+      ];
+    },
+    getCountsPerPriorityForGroup: async (groupId) => {
+      log.push(`group-priorities:${groupId}`);
+      return { 2: 1 };
+    },
     getDeduplicationJobId: async (id) => {
       log.push(`dedup:${id}`);
       return 'job-7';
@@ -110,10 +139,13 @@ describe('Queue SDK runtime complete method surface', () => {
       rateLimitTtl: 75,
       maxed: true,
     });
-    expect(await runtime.group(config, 'orders', 'tenant-7', 2, 50)).toEqual({
+    expect(await runtime.group(config, 'orders', 'tenant-7', 2, 50, 10, 19)).toEqual({
       jobs: 7,
       active: 2,
       totalGrouped: 18,
+      paused: true,
+      entries: [{ id: 'group-job-7', name: 'deliver', priority: 2, delay: 50, timestamp: 100 }],
+      priorityCounts: { '2': 1 },
       rateLimit: { max: 5, duration: 2_000 },
       rateLimitTtl: 25,
       concurrency: 3,
@@ -122,6 +154,8 @@ describe('Queue SDK runtime complete method surface', () => {
     expect(await runtime.removeGroupRateLimit(config, 'orders', 'tenant-7')).toBe(1);
     await runtime.setGroupConcurrency(config, 'orders', 'tenant-7', 3);
     expect(await runtime.removeGroupConcurrency(config, 'orders', 'tenant-7')).toBe(1);
+    expect(await runtime.pauseGroup(config, 'orders', 'tenant-7')).toBe(true);
+    expect(await runtime.resumeGroup(config, 'orders', 'tenant-7')).toBe(true);
     expect(await runtime.deduplicationJobId(config, 'orders', 'invoice:7')).toBe('job-7');
     expect(await runtime.removeDeduplicationKey(config, 'orders', 'invoice:7')).toBe(1);
     expect(await runtime.removeDlqJob(config, 'orders', 'job-7')).toBe(true);
@@ -132,13 +166,17 @@ describe('Queue SDK runtime complete method surface', () => {
     });
     expect(await runtime.trimEvents(config, 'orders', 250)).toBe(6);
 
-    expect(queues).toEqual(Array.from({ length: 11 }, () => 'orders'));
-    expect(log.filter((entry) => entry === 'ready')).toHaveLength(11);
-    expect(log.filter((entry) => entry === 'close')).toHaveLength(11);
+    expect(queues).toEqual(Array.from({ length: 13 }, () => 'orders'));
+    expect(log.filter((entry) => entry === 'ready')).toHaveLength(13);
+    expect(log.filter((entry) => entry === 'close')).toHaveLength(13);
     expect(log).toContain('rate-ttl:3');
     expect(log).toContain('groups-jobs:50');
     expect(log).toContain('set-group-rate:tenant-7:5:2000');
     expect(log).toContain('set-group-concurrency:tenant-7:3');
+    expect(log).toContain('group-list:tenant-7:10:19');
+    expect(log).toContain('group-priorities:tenant-7');
+    expect(log).toContain('pause-group:tenant-7');
+    expect(log).toContain('resume-group:tenant-7');
     expect(log).toContain('remove-dlq:job-7');
     expect(log).toContain('metrics:failed:2:8');
   });

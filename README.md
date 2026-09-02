@@ -90,13 +90,13 @@ The full dashboard running on sample data, no server needed.
 bunqueue exposes a rich HTTP API, but operating it by hand (curl, ad-hoc scripts) is slow and
 error-prone. This dashboard is a production-oriented operator console: it exposes the verified,
 safe subset of the API, fails closed where
-[Bunqueue 2.9.x](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.2) lacks atomic
+[Bunqueue 2.9.x](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.3) lacks atomic
 flow-safety guarantees, and also manages the
 server *process* through a separate guarded agent.
 
 It uses Bunqueue's public HTTP API (`:6790`) for ordinary remote observability and a small local
 **control agent** for process, FlowProducer, Workflow Engine, database, and backup operations. The
-agent is pinned to the server it manages and uses the exact installable Bunqueue 2.9.2 npm client
+agent is pinned to the server it manages and uses the exact installable Bunqueue 2.9.3 npm client
 contracts; it never patches Bunqueue internals.
 
 ## Features
@@ -108,7 +108,7 @@ contracts; it never patches Bunqueue internals.
 | **Server** | Control ▸ Server | **Start / stop / restart** the server process, edit its config, tail process logs |
 | **Enqueue** | Control ▸ Add Job | Add jobs (single or bulk) with every option |
 | **Inspect** | Control ▸ Job Inspector | Look up any job; promote / re-prioritize / delay; view data & result |
-| **Queues** | Control ▸ Queue Control | Pause/resume/promote; desired-state writes plus live SDK limits, deduplication, metrics and journal retention |
+| **Queues** | Control ▸ Queue Control | Pause/resume/promote; desired-state writes plus live SDK limits, group jobs/priorities/pause/policies, deduplication, metrics and journal retention |
 | **Cron** | Control ▸ Cron Manager | Submit acknowledged cron/interval upserts and delete schedules |
 | **Workflow Engine** | Workflow ▸ Overview / Executions / Waiting / Compensation / Archive | Start, recover, signal, inspect, compensate, archive and clean durable executions |
 | **Job Flows** | Workflow ▸ Job Flows | Explore DAGs, run all FlowProducer create modes and operate safe Flow Job methods |
@@ -118,7 +118,7 @@ contracts; it never patches Bunqueue internals.
 | **S3 backup** | Management ▸ S3 Backup | Configure, inspect, list, create and guarded-restore official snapshots |
 | **Browse** | Queues / Jobs / DLQ / Cron / Metrics / Workers / Logs | Read-only browsing with basic actions |
 
-> Job actions are gated by the v2.9.2 flow contract. Every DLQ retry and completed-job requeue is
+> Job actions are gated by the v2.9.3 flow contract. Every DLQ retry and completed-job requeue is
 > unavailable: the DLQ GET + POST sequence has no atomic generation/state/topology precondition and
 > can target a job recreated under the same ID, while `retryCompleted` does not rebuild dependency
 > registration or flow order. Cancel, Discard, Drain, Clean, Obliterate and DLQ Purge also fail
@@ -262,8 +262,9 @@ target-pinned Flow, Workflow, Queue and Backup agent operations.
 | `bun run check` | Oxlint + Oxfmt validation (the CI gate) |
 | `bun run check:fix` | Apply safe Oxlint fixes, then format with Oxfmt |
 | `bun test` | Unit + agent-lifecycle tests |
+| `bun run test:e2e:upgrade` | Real npm Bunqueue 2.9.2 SQLite schema-35 → 2.9.3 schema-37 migration and retention semantics |
 | `bun run test:e2e` | Real Flow, Workflow, Queue SDK, and three-broker PostgreSQL runtime tests |
-| `bun run test:e2e:postgres-fleet` | Three authenticated Bunqueue 2.9.2 brokers + three agents sharing disposable PostgreSQL 18.6 |
+| `bun run test:e2e:postgres-fleet` | Three authenticated Bunqueue 2.9.3 brokers + three agents sharing disposable PostgreSQL 18.6 |
 
 ## Docker
 
@@ -310,11 +311,12 @@ The canonical gate must be green before a change is considered done; CI runs the
 bun run quality   # architecture, lint/build, size, docs, coverage, real E2E, packed-bin smoke, audit
 ```
 
-The E2E stage starts disposable Bunqueue 2.9.2 processes and exercises the complete FlowProducer,
+The E2E stage starts disposable Bunqueue 2.9.3 processes and exercises the complete FlowProducer,
 Workflow Engine, and Queue SDK operator bridges. It also starts PostgreSQL 18.6 in Docker with
 three authenticated brokers and paired agents, proving cross-broker enqueue/inspect/leased
-pull+ack, pause/resume, cron, and rate-limit behavior. Run it alone with `bun run test:e2e` (Docker
-is required for the PostgreSQL stage).
+pull+ack, pause/resume, cron, rate limits, group admission, group priority and group pause/resume
+on PostgreSQL schema 20. Run it alone with `bun run test:e2e` (Docker is required for the
+PostgreSQL stage).
 
 The blocking browser job builds the production bundle under `/e2e/dashboard`, starts an
 authenticated disposable Bunqueue server, and drives the UI with Playwright on Chromium, Firefox,

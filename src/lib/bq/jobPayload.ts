@@ -2,6 +2,7 @@ import { opaqueHttpIdError } from '../upstreamPaths';
 import type { AddJobBody, BulkJobBody, RepeatOptions } from './types';
 
 const MAX_REPEAT_MS = 365 * 24 * 60 * 60 * 1000;
+const MAX_GROUP_PRIORITY = 2_097_151;
 export const MAX_BULK_JOB_PAYLOAD_BYTES = 64 * 1024 * 1024;
 export const MAX_BULK_JOB_COUNT = 10_000;
 const UNSAFE_FIELDS = [
@@ -25,7 +26,7 @@ function assertSafeRepeat(repeat: RepeatOptions | undefined): void {
   const unsupported = Object.keys(repeat).filter((key) => key !== 'every' && key !== 'limit');
   if (unsupported.length) {
     throw new TypeError(
-      `Unsupported repeat option(s): ${unsupported.join(', ')}. bunqueue v2.9.2 pattern repeats are unsafe; use the Cron API instead.`
+      `Unsupported repeat option(s): ${unsupported.join(', ')}. bunqueue v2.9.3 pattern repeats are unsafe; use the Cron API instead.`
     );
   }
   if (!Number.isSafeInteger(repeat.every) || repeat.every < 1 || repeat.every > MAX_REPEAT_MS) {
@@ -47,15 +48,40 @@ function assertNoUnsafeFields(job: BulkJobBody): void {
   const unsafe = UNSAFE_FIELDS.filter((field) => raw[field] !== undefined);
   if (unsafe.length) {
     throw new TypeError(
-      `Unsupported Bunqueue v2.9.2 enqueue option(s): ${unsafe.join(', ')}. Flow topology must use the atomic flow API; inert compatibility fields are not sent.`
+      `Unsupported Bunqueue v2.9.3 enqueue option(s): ${unsafe.join(', ')}. Flow topology must use the atomic flow API; inert compatibility fields are not sent.`
     );
+  }
+}
+
+function assertGroupOptions(raw: Record<string, unknown>): void {
+  const groupId = raw.groupId;
+  if (
+    groupId !== undefined &&
+    (typeof groupId !== 'string' || !groupId || groupId.length > 256 || groupId.includes('\0'))
+  ) {
+    throw new TypeError('groupId must be a non-empty string of at most 256 characters without NUL');
+  }
+  if (raw.groupMaxSize !== undefined) {
+    if (groupId === undefined) throw new TypeError('groupMaxSize requires groupId');
+    if (!Number.isSafeInteger(raw.groupMaxSize) || (raw.groupMaxSize as number) < 1) {
+      throw new TypeError('groupMaxSize must be a positive safe integer');
+    }
+  }
+  if (
+    groupId !== undefined &&
+    raw.priority !== undefined &&
+    (!Number.isSafeInteger(raw.priority) ||
+      (raw.priority as number) < 0 ||
+      (raw.priority as number) > MAX_GROUP_PRIORITY)
+  ) {
+    throw new TypeError(`Grouped priority must be an integer from 0 to ${MAX_GROUP_PRIORITY}`);
   }
 }
 
 function manageableId(field: string, id: string): void {
   const error = opaqueHttpIdError(id);
   if (error) {
-    throw new TypeError(`${field}: ${error}. The job would not be manageable through v2.9.2 HTTP.`);
+    throw new TypeError(`${field}: ${error}. The job would not be manageable through v2.9.3 HTTP.`);
   }
 }
 
@@ -63,6 +89,12 @@ function validateAddJob(raw: Record<string, unknown>): void {
   assertValidJobName(raw.name);
   assertSafeRepeat(raw.repeat as RepeatOptions | undefined);
   assertNoUnsafeFields(raw as unknown as BulkJobBody);
+  assertGroupOptions(raw);
+  if (raw.groupMaxSize !== undefined) {
+    throw new TypeError(
+      'groupMaxSize is not forwarded by Bunqueue 2.9.3 single-job HTTP; use the bulk transport'
+    );
+  }
   if (
     raw.dependsOn !== undefined &&
     (!Array.isArray(raw.dependsOn) || !raw.dependsOn.every((id) => typeof id === 'string'))
@@ -110,6 +142,7 @@ function validateEncodedBulkJob(encoded: string): void {
   assertValidJobName(raw.name);
   assertSafeRepeat(raw.repeat as RepeatOptions | undefined);
   assertNoUnsafeFields(raw as unknown as BulkJobBody);
+  assertGroupOptions(raw);
   if (raw.customId !== undefined) {
     if (typeof raw.customId !== 'string') throw new TypeError('customId must be a string');
     manageableId('customId', raw.customId);

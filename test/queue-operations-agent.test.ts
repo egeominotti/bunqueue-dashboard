@@ -26,7 +26,7 @@ describe('Queue operations agent contract', () => {
     });
     const group = await routeQueueOperationsRequest(
       new Request(
-        'http://agent/queue-operations/orders/groups?target=%2Fapi&groupId=tenant-7&maxJobs=2&maxCount=50'
+        'http://agent/queue-operations/orders/groups?target=%2Fapi&groupId=tenant-7&maxJobs=2&maxCount=50&start=10&end=19'
       ),
       '/queue-operations/orders/groups',
       'GET',
@@ -40,6 +40,9 @@ describe('Queue operations agent contract', () => {
         jobs: 2,
         active: 1,
         totalGrouped: 4,
+        paused: false,
+        entries: [{ id: 'group-job-1', name: 'deliver', priority: 2, delay: 0, timestamp: 100 }],
+        priorityCounts: { '2': 1 },
         rateLimit: { max: 5, duration: 1000 },
         rateLimitTtl: 20,
         concurrency: 3,
@@ -89,6 +92,26 @@ describe('Queue operations agent contract', () => {
       true
     );
     await routeQueueOperationsRequest(
+      post('/queue-operations/orders/groups/pause?target=%2Fapi', {
+        groupId: 'tenant-7',
+      }),
+      '/queue-operations/orders/groups/pause',
+      'POST',
+      config,
+      runtime,
+      true
+    );
+    await routeQueueOperationsRequest(
+      post('/queue-operations/orders/groups/resume?target=%2Fapi', {
+        groupId: 'tenant-7',
+      }),
+      '/queue-operations/orders/groups/resume',
+      'POST',
+      config,
+      runtime,
+      true
+    );
+    await routeQueueOperationsRequest(
       new Request(
         'http://agent/queue-operations/orders/deduplication?target=%2Fapi&deduplicationId=invoice%3A7'
       ),
@@ -128,11 +151,13 @@ describe('Queue operations agent contract', () => {
     );
     expect(calls).toEqual([
       'limits:orders:3',
-      'group:orders:tenant-7:2:50',
+      'group:orders:tenant-7:2:50:10:19',
       'group-rate:orders:tenant-7:5:1000',
       'group-rate-remove:orders:tenant-7',
       'group-concurrency:orders:tenant-7:3',
       'group-concurrency-remove:orders:tenant-7',
+      'group-pause:orders:tenant-7',
+      'group-resume:orders:tenant-7',
       'dedup:orders:invoice:7',
       'remove:orders:invoice:7',
       'metrics:orders:failed:2:8',
@@ -155,6 +180,16 @@ describe('Queue operations agent contract', () => {
       routeQueueOperationsRequest(
         new Request('http://agent/queue-operations/q/metrics?target=%2Fapi&type=other'),
         '/queue-operations/q/metrics',
+        'GET',
+        config,
+        runtime,
+        true
+      ),
+      routeQueueOperationsRequest(
+        new Request(
+          'http://agent/queue-operations/q/groups?target=%2Fapi&groupId=g&start=0&end=100'
+        ),
+        '/queue-operations/q/groups',
         'GET',
         config,
         runtime,
@@ -202,6 +237,11 @@ describe('Queue operations agent contract', () => {
       setGroupConcurrency: async () => undefined,
       getGroupConcurrency: async () => null,
       removeGroupConcurrency: async () => 0,
+      pauseGroup: async () => true,
+      resumeGroup: async () => true,
+      isGroupPaused: async () => false,
+      getGroupJobs: async () => [],
+      getCountsPerPriorityForGroup: async () => ({}),
       getDeduplicationJobId: async () => null,
       removeDeduplicationKey: async () => 0,
       removeDlqJob: async () => false,
