@@ -44,7 +44,7 @@ describe('demo API dispatcher complete route surface', () => {
     expect(logs.lines).toHaveLength(5);
     expect(logs.lines[0]).toMatchObject({ seq: 1 });
     expect(demoApiResponse('/control/config', 'GET', '')).toMatchObject({
-      command: 'bunx bunqueue@2.9.3 start',
+      command: 'bunx bunqueue@2.9.4 start',
       configRevision: 1,
     });
     expect(demoApiResponse('/control/status', 'GET', '')).toMatchObject({

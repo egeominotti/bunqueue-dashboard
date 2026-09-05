@@ -46,7 +46,7 @@ describe('Flow operations client adapter', () => {
     await bqFlowOperationsRepository.getParentResult('parent-1');
     await bqFlowOperationsRepository.getParentResults(['parent-1', 'parent-2']);
     await bqFlowOperationsRepository.waitUntilFinished(target, 60_000);
-    await bqFlowOperationsRepository.mutate(target, 'retry');
+    await bqFlowOperationsRepository.mutate(target, 'promote');
     await bqFlowOperationsRepository.mutate(target, 'updateProgress', { progress: 50 });
 
     expect(requests.map((request) => request.path)).toEqual([
@@ -56,7 +56,7 @@ describe('Flow operations client adapter', () => {
       '/flows/results?target=http%3A%2F%2Fserver.test',
       '/flows/results?target=http%3A%2F%2Fserver.test',
       '/flows/jobs/child-1/waitUntilFinished?queueName=orders&target=http%3A%2F%2Fserver.test&ttl=60000',
-      '/flows/jobs/child-1/retry?queueName=orders&target=http%3A%2F%2Fserver.test',
+      '/flows/jobs/child-1/promote?queueName=orders&target=http%3A%2F%2Fserver.test',
       '/flows/jobs/child-1/updateProgress?queueName=orders&target=http%3A%2F%2Fserver.test',
     ]);
     expect(requests.map((request) => request.method)).toEqual([

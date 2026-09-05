@@ -1,6 +1,6 @@
 import { basename } from 'node:path';
 import { safeErrorMessage } from '../errorMessage';
-import { managedAuthToken } from '../managedTarget';
+import { managedConnection } from '../managedConnection';
 import type { ServerConfig } from '../manager';
 import type { WorkflowRuntimeStatus } from './runtime';
 
@@ -53,7 +53,7 @@ export function workflowRuntimeSignature(
     modified,
     config.dataPath,
     config.tcpPort,
-    managedAuthToken(config),
+    managedConnection(config),
     options.queueName,
     options.concurrency,
   ]);

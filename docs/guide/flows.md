@@ -6,7 +6,7 @@ description: Visualize a bunqueue job flow as an interactive DAG in the dashboar
 # Flows
 
 The **Job Flows** page is both an interactive DAG explorer and an operator
-console for Bunqueue 2.9.3's official `FlowProducer` and Flow Job contracts.
+console for Bunqueue 2.9.4's official `FlowProducer` and Flow Job contracts.
 
 The URL preserves the loaded root, selected DAG node, and active Explore/Create/
 Job methods tool. Back/Forward restores that context, while an invalid root or
@@ -22,9 +22,15 @@ The page has three tools:
   with editable JSON and shows the atomic broker result.
 - **Job methods** exposes all safe remote methods: state predicates,
   broker-native `getFlow`, `toJSON`/`asJSON`, dependency/result reads, bounded
-  `waitUntilFinished`, data, progress, log, delay, priority, log retention,
-  deduplication, retry, promote, dependency release, unprocessed-child removal,
-  and job removal.
+  `waitUntilFinished`, progress, log, delay, priority, log retention,
+  deduplication, promote, and explicit dependency release.
+
+Payload replacement, retry, job removal and unprocessed-child removal are
+disabled and rejected by both the browser transport and the agent, including
+direct service calls. These SDK methods do not supply the atomic topology or
+generation preconditions missing from the corresponding HTTP operations.
+Delay/priority changes require a runnable job; promotion requires a delayed job.
+These reads do not create an atomic compare-and-swap guarantee.
 
 Creation and Job methods go through the local control agent to the exact TCP
 port of its managed server. A dashboard connected to another target fails

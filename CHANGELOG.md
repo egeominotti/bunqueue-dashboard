@@ -15,6 +15,33 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.43] - 2026-09-05
+
+### Added
+
+- Add modular paper-trading examples for flow ordering, risk rejection, transient
+  retries, group limits, deduplication, DLQ and restart persistence. Examples now
+  participate in the TypeScript gate and satisfy the source-size and lint rules.
+
+### Changed
+
+- Upgrade the bundled Bunqueue client and default managed server command to
+  2.9.4. Existing 2.9.3 persistence schemas and public protocols are unchanged.
+- Runtime validation now checks the installed dependency against the project
+  pin and probes each running broker's version instead of printing a fixed label.
+
+### Fixed
+
+- Wait for PostgreSQL TCP readiness in fleet tests, rather than the temporary
+  initialization socket, and retain legacy broker startup logs on failure.
+- Apply the same Flow safety policy in the UI, browser transport, agent route
+  and service: refuse payload replacement, retry, job removal and unprocessed
+  child removal. Priority, delay and promotion follow the ordinary job state gates.
+- Connect Queue, Flow and Workflow agent bridges to native TLS brokers with
+  certificate verification and optional private CA trust. TLS settings invalidate
+  persistent Workflow connections. Add an end-to-end TLS test for all bridges
+  and rejection of an untrusted certificate.
+
 ## [0.0.42] - 2026-09-02
 
 ### Added
@@ -1268,7 +1295,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.42...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.43...HEAD
+[0.0.43]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.42...v0.0.43
 [0.0.42]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.41...v0.0.42
 [0.0.41]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.40...v0.0.41
 [0.0.40]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.39...v0.0.40

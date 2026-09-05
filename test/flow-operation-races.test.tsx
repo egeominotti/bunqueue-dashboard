@@ -172,19 +172,19 @@ describe('Flow operation request identity', () => {
     window.confirm = () => true;
     try {
       const first = renderFlowUi(element);
-      click(button(first.host, 'Retry job'));
+      click(button(first.host, 'Release dependency'));
       expect(calls).toBe(1);
       first.unmount();
 
       const remounted = renderFlowUi(element);
       cleanups.add(remounted.unmount);
-      click(button(remounted.host, 'Retry job'));
+      click(button(remounted.host, 'Release dependency'));
       await settle(2);
       expect(calls).toBe(1);
 
       held.resolve(marker('old-retry'));
       await settle(2);
-      click(button(remounted.host, 'Retry job'));
+      click(button(remounted.host, 'Release dependency'));
       await settle(2);
       expect(calls).toBe(2);
       expect(remounted.host.textContent).toContain('fresh-retry');

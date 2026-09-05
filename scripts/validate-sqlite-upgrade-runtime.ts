@@ -1,3 +1,4 @@
+import { assertBunqueueRuntimeVersion, installedBunqueueVersion } from './bunqueueRuntimeVersion';
 import { Database } from 'bun:sqlite';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -44,11 +45,11 @@ try {
   assert(countCompletedRows() === 3, 'Bunqueue 2.9.2 fixture did not persist three completions');
 
   broker = await startBroker(newCli, { BUNQUEUE_MAX_COMPLETED_JOBS: '1' });
-  assert(readSchemaVersion() === 37, 'Bunqueue 2.9.3 did not migrate SQLite to schema 37');
+  assert(readSchemaVersion() === 37, 'Bunqueue target did not migrate SQLite to schema 37');
   for (const jobId of jobIds) {
     const body = await request(`/jobs/${jobId}`);
     const job = body.job as { id?: unknown; state?: unknown } | undefined;
-    assert(job?.id === jobId && job.state === 'completed', `2.9.3 could not read ${jobId}`);
+    assert(job?.id === jobId && job.state === 'completed', `Target could not read ${jobId}`);
   }
   await stopBroker(broker);
   broker = null;
@@ -65,7 +66,7 @@ try {
     JSON.stringify(
       {
         bun: Bun.version,
-        upgraded: 'Bunqueue 2.9.2 → 2.9.3',
+        upgraded: `Bunqueue 2.9.2 → ${installedBunqueueVersion}`,
         sqliteSchema: '35 → 37',
         completedRows: 3,
         maxCompletedJobs: 1,
@@ -102,6 +103,7 @@ async function startBroker(cli: string, extraEnv: Record<string, string>): Promi
   });
   try {
     await waitForServer(httpPort, child);
+    await assertBunqueueRuntimeVersion(httpPort, undefined, cli === oldCli ? '2.9.2' : installedBunqueueVersion);
     return child;
   } catch (error) {
     const stderr = await new Response(child.stderr).text();

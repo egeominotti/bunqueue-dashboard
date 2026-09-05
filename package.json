@@ -1,6 +1,6 @@
 {
   "name": "bunqueue-dashboard",
-  "version": "0.0.42",
+  "version": "0.0.43",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun 1.4.0).",
   "packageManager": "bun@1.4.0",
@@ -14,7 +14,8 @@
     "scripts/servePolicy.ts",
     "scripts/bunVersion.ts",
     "scripts/embedded.gen.ts",
-    "agent"
+    "agent",
+    "shared"
   ],
   "publishConfig": {
     "access": "public"
@@ -55,8 +56,9 @@
     "dev": "vite",
     "agent": "bun run agent/index.ts",
     "build": "bun run typecheck && vite build",
-    "typecheck": "tsc --noEmit && bun run typecheck:agent",
+    "typecheck": "tsc --noEmit && bun run typecheck:agent && bun run typecheck:examples",
     "typecheck:agent": "tsc -p tsconfig.agent.json",
+    "typecheck:examples": "tsc -p tsconfig.examples.json",
     "size": "bun run scripts/check-bundle.ts",
     "version:check": "bun run scripts/check-bun-version.ts",
     "architecture": "bun run scripts/check-file-size.ts",
@@ -71,7 +73,8 @@
     "test:e2e:upgrade": "bun run scripts/validate-sqlite-upgrade-runtime.ts",
     "test:e2e:workflow": "bun run scripts/validate-workflow-runtime.ts",
     "test:e2e:postgres-fleet": "bun run scripts/validate-postgres-fleet-runtime.ts",
-    "test:e2e": "bun run test:e2e:upgrade && bun run test:e2e:flow && bun run test:e2e:workflow && bun run test:e2e:queue-operations && bun run test:e2e:postgres-fleet",
+    "test:e2e:tls": "bun run scripts/validate-tls-runtime.ts",
+    "test:e2e": "bun run test:e2e:tls && bun run test:e2e:upgrade && bun run test:e2e:flow && bun run test:e2e:workflow && bun run test:e2e:queue-operations && bun run test:e2e:postgres-fleet",
     "test:e2e:browser:install": "playwright install chromium firefox webkit",
     "test:e2e:browser:serve": "bun e2e/runtime.ts",
     "test:e2e:browser:postgres-fleet": "bun run scripts/validate-postgres-fleet-dashboard-runtime.ts",
@@ -130,7 +133,7 @@
     "postcss": "^8.5.25"
   },
   "dependencies": {
-    "bunqueue": "2.9.3",
+    "bunqueue": "2.9.4",
     "msgpackr": "^1.11.8"
   }
 }

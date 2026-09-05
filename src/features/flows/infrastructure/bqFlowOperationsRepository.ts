@@ -1,5 +1,6 @@
 import { getBaseUrl } from '@/components/dashboard/stores/connectionStore';
 import { agentRequest } from '@/lib/bq';
+import { assertFlowOperationAllowed } from '@/lib/flowOperationPolicy';
 import type { FlowOperationsRepository } from '../application/FlowOperationsRepository';
 
 const jsonBody = (value: unknown): RequestInit => ({
@@ -55,9 +56,11 @@ export const bqFlowOperationsRepository: FlowOperationsRepository = {
       undefined,
       flowWaitRequestTimeout(ttl)
     ),
-  mutate: (target, operation, payload) =>
-    agentRequest(
+  mutate: (target, operation, payload) => {
+    assertFlowOperationAllowed(operation);
+    return agentRequest(
       `/flows/jobs/${encodeURIComponent(target.id)}/${operation}?${new URLSearchParams({ queueName: target.queueName, target: getBaseUrl() })}`,
       BODYLESS_MUTATIONS.has(operation) ? { method: 'POST' } : jsonBody(payload ?? {})
-    ),
+    );
+  },
 };

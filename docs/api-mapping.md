@@ -5,6 +5,17 @@ description: "Every bunqueue HTTP endpoint the dashboard drives, with verified r
 
 # API mapping & shape gotchas
 
+The bundled client and default server now target **2.9.4**. This release has
+no public API, wire-format or schema changes from 2.9.3; the historical contract
+notes below still describe those unchanged upstream behaviors. Runtime tests
+probe the server version and assert it matches the installed, pinned package.
+
+Flow payload replacement, retry, remove and removeUnprocessedChildren are now
+rejected at the UI transport, agent route and service boundaries. Older endpoint
+inventories below describe the SDK surface, not permission to execute those
+mutations. Explicit dependency release remains available; promotion, priority
+and delay are checked against the same state policy as ordinary jobs.
+
 `bq` (`src/lib/bq.ts`) targets bunqueue's HTTP API. Shapes below were verified
 against the exact [bunqueue v2.9.3 server release](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.3)
 (`3fbfde2`) and the installable 2.9.3 client; several differ from older dashboard assumptions.
@@ -82,7 +93,7 @@ agent routes for the TCP-only Bunqueue client contracts:
 | `POST /flows/results?target=` | One or many official parent results |
 | `GET /flows/jobs/:id/:operation?queueName=&target=` | State predicates, `toJSON`, `asJSON`, dependency/failure reads |
 | `GET /flows/jobs/:id/waitUntilFinished?queueName=&target=&ttl=` | Bounded 1–60,000 ms completion wait; dedicated TCP and browser deadlines use `ttl + 5,000 ms` |
-| `POST /flows/jobs/:id/:operation?queueName=&target=` | Data/progress/log/delay/priority/log retention/deduplication, dependency release/removal, retry, promote, remove |
+| `POST /flows/jobs/:id/:operation?queueName=&target=` | Progress/log/delay/priority/log retention/deduplication, dependency release and promote; payload replacement, retry and removal are rejected |
 
 Every operation first resolves the ID and queue through the official flow
 reader, so a caller cannot retarget a job by changing only the displayed queue.

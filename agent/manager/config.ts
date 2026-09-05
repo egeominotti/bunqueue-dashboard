@@ -10,7 +10,7 @@ const CONFIG_KEYS = new Set<keyof ServerConfig>([
 
 export function defaultConfig(): ServerConfig {
   return {
-    command: process.env.BUNQUEUE_START_CMD || 'bunx bunqueue@2.9.3 start',
+    command: process.env.BUNQUEUE_START_CMD || 'bunx bunqueue@2.9.4 start',
     httpPort: Number(process.env.HTTP_PORT) || 6790,
     tcpPort: Number(process.env.TCP_PORT) || 6789,
     dataPath: process.env.BUNQUEUE_DATA_PATH || './data/bunq.db',

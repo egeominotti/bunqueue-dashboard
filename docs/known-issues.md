@@ -5,6 +5,13 @@ description: "A verified, non-glossed list of the bunqueue dashboard's current b
 
 # Known issues
 
+Bunqueue 2.9.4 is now the installed/default target; it retains the 2.9.3 API
+and schemas described below. Flow safety gates now also apply to the SDK
+console and direct agent calls: payload replacement, retry, remove and
+unprocessed-child removal are blocked. Queue/Flow/Workflow bridges now support
+verified native TCP TLS and private CA configuration; see [agent.md](agent.md).
+
+
 Verified against the current source (not speculative), each entry cites the
 exact file so you can confirm or fix it. None of these are catastrophic; the
 dashboard is fully usable. They're documented here because "professional docs"

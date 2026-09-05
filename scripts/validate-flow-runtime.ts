@@ -1,3 +1,4 @@
+import { assertBunqueueRuntimeVersion } from './bunqueueRuntimeVersion';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -25,7 +26,6 @@ import {
   target,
   waitForServer,
 } from './flowRuntimeSupport';
-
 const root = await mkdtemp(join(tmpdir(), 'bunqueue-dashboard-flow-'));
 const httpPort = await freePort();
 const tcpPort = await freePort();
@@ -52,6 +52,7 @@ const server = Bun.spawn(
 const workers: Worker[] = [];
 try {
   await waitForServer(httpPort, server);
+  const bunqueue = await assertBunqueueRuntimeVersion(httpPort);
   const creations = await exerciseCreators();
   const mutable = await exerciseSafeMutations();
   await exerciseDependencyMutations();
@@ -61,10 +62,11 @@ try {
   console.log(
     JSON.stringify(
       {
-        bunqueue: '2.9.3',
+        bunqueue,
         createOperations: creations.operations,
         inspections: 14,
-        mutations: 12,
+        allowedMutations: 8,
+        rejectedMutations: ['updateData', 'remove', 'removeUnprocessedChildren', 'retry'],
         mutableResult: mutable,
         processedGraphs: creations.targets.length,
       },
@@ -79,7 +81,6 @@ try {
   if (server.exitCode === null) server.kill('SIGKILL');
   await rm(root, { recursive: true, force: true });
 }
-
 async function exerciseCreators() {
   const add = asRecord(
     await createFlow(config, {
@@ -137,7 +138,6 @@ async function exerciseCreators() {
     targets,
   };
 }
-
 async function exerciseSafeMutations(): Promise<unknown> {
   const queue = new Queue('flow-mutable', { connection: connection() });
   const added = await queue.add('mutable', { source: 'dashboard-e2e' }, {
@@ -152,7 +152,8 @@ async function exerciseSafeMutations(): Promise<unknown> {
     () => mutateFlowJob(config, job, 'updateProgress', { progress: 1 }),
     'inactive Flow progress update unexpectedly succeeded'
   );
-  await mutateFlowJob(config, job, 'updateData', { data: { changed: true } });
+  await expectFailure(() => mutateFlowJob(config, job, 'updateData', { data: {} }),
+    'Flow payload replacement was allowed');
   await mutateFlowJob(config, job, 'changeDelay', { delay: 45_000 });
   await mutateFlowJob(config, job, 'changePriority', { priority: 3, lifo: false });
   const deduplication = asRecord(await mutateFlowJob(config, job, 'removeDeduplicationKey', {}));
@@ -181,7 +182,7 @@ async function exerciseSafeMutations(): Promise<unknown> {
   const logs = asRecord((await readJson(httpPort, `/jobs/${encodeURIComponent(job.id)}/logs`)).data);
   assert(
     progress.progress === 0 && progress.message === JSON.stringify(objectProgress),
-    'object Flow progress did not follow the Bunqueue 2.9.3 wire contract'
+    'object Flow progress did not follow the Bunqueue wire contract'
   );
   assert(logs.count === 1, 'Flow clearLogs did not preserve keepLogs');
   const json = asRecord(await inspectFlowJob(config, job, 'toJSON'));
@@ -189,7 +190,7 @@ async function exerciseSafeMutations(): Promise<unknown> {
   assert(json.job && raw.job, 'Flow serialization methods returned no job');
   const waiting = await createFlowTarget(config, 'waiting', 'flow-waiting');
   assert(await matches(waiting, 'isWaiting'), 'waiting Flow job was not detected');
-  await mutateFlowJob(config, waiting, 'remove', {});
+  await expectFailure(() => mutateFlowJob(config, waiting, 'remove', {}), 'Flow removal was allowed');
   release();
   const finished = asRecord(await waitForFlowJob(config, job, 10_000));
   assert(await matches(job, 'isCompleted'), 'Flow wait did not observe completion');
@@ -200,13 +201,11 @@ async function exerciseSafeMutations(): Promise<unknown> {
     await readParentResults(config, { operation: 'getParentResults', parentIds: [job.id] })
   );
   assert(single.value !== undefined && Array.isArray(many.entries), 'Flow results were not readable');
-
   const removable = await createFlowTarget(config, 'removable', 'flow-removable', { delay: 60_000 });
-  await mutateFlowJob(config, removable, 'remove', {});
-  await expectFailure(() => inspectFlowJob(config, removable, 'getState'), 'removed job remained readable');
+  await expectFailure(() => mutateFlowJob(config, removable, 'remove', {}), 'Flow removal was allowed');
+  assert(await matches(removable, 'isDelayed'), 'blocked removal changed the job');
   return finished.value;
 }
-
 async function exerciseDependencyMutations(): Promise<void> {
   const first = await createParentChild(config, 'detach', 'flow-detach-parent', 'flow-detach-child');
   assert(await matches(first.parent, 'isWaitingChildren'), 'parent was not waiting for its child');
@@ -217,15 +216,12 @@ async function exerciseDependencyMutations(): Promise<void> {
   await inspectFlowJob(config, first.parent, 'getFailedChildrenValues');
   await inspectFlowJob(config, first.parent, 'getIgnoredChildrenFailures');
   await mutateFlowJob(config, first.child, 'removeChildDependency', {});
-
   const second = await createParentChild(config, 'prune', 'flow-prune-parent', 'flow-prune-child');
-  await mutateFlowJob(config, second.parent, 'removeUnprocessedChildren', {});
-  await expectFailure(
-    () => inspectFlowJob(config, second.child, 'getState'),
-    'unprocessed child remained readable after removal'
-  );
+  await expectFailure(() => mutateFlowJob(config, second.parent, 'removeUnprocessedChildren', {}),
+    'Flow child removal was allowed');
+  assert(await matches(second.parent, 'isWaitingChildren'), 'blocked pruning changed the parent');
+  assert(await matches(second.child, 'isWaiting'), 'blocked pruning removed the child');
 }
-
 async function exerciseRetry(): Promise<void> {
   let attempts = 0;
   await startWorker('flow-retry', async () => {
@@ -236,11 +232,9 @@ async function exerciseRetry(): Promise<void> {
   const job = await createFlowTarget(config, 'retry', 'flow-retry', { attempts: 1 });
   await waitForState(job, 'failed');
   assert(await matches(job, 'isFailed'), 'failed Flow job was not detected');
-  await mutateFlowJob(config, job, 'retry', {});
-  const result = asRecord(await waitForFlowJob(config, job, 10_000));
-  assert(asRecord(result.value).retried === true, 'Flow retry did not complete');
+  await expectFailure(() => mutateFlowJob(config, job, 'retry', {}), 'Flow retry was allowed');
+  assert(await matches(job, 'isFailed'), 'blocked retry changed the failed job');
 }
-
 async function exerciseActiveInspection(): Promise<void> {
   let release: () => void = () => undefined;
   const gate = new Promise<void>((resolveGate) => {
@@ -253,10 +247,14 @@ async function exerciseActiveInspection(): Promise<void> {
   const job = await createFlowTarget(config, 'active', 'flow-active');
   await waitForState(job, 'active');
   assert(await matches(job, 'isActive'), 'active Flow job was not detected');
+  for (const operation of ['promote', 'changePriority', 'changeDelay'] as const) {
+    await expectFailure(() => mutateFlowJob(config, job, operation,
+      operation === 'changePriority' ? { priority: 1 } : operation === 'changeDelay' ? { delay: 100 } : {}),
+    'An active Flow job accepted an operator scheduling mutation');
+  }
   release();
   await waitForFlowJob(config, job, 10_000);
 }
-
 async function processCreatedFlows(targets: FlowJobTarget[]): Promise<void> {
   await startWorkers([
     'flow-add-root', 'flow-add-child', 'flow-bulk-a', 'flow-bulk-b',
@@ -265,7 +263,6 @@ async function processCreatedFlows(targets: FlowJobTarget[]): Promise<void> {
   ]);
   await Promise.all(targets.map((item) => waitForFlowJob(config, item, 15_000)));
 }
-
 async function startWorkers(queueNames: string[]): Promise<void> {
   await Promise.all(queueNames.map((name) => startWorker(name, defaultProcessor)));
 }
@@ -275,7 +272,6 @@ async function startWorker(queueName: string, processor: (job: Job) => Promise<u
   workers.push(worker);
   await worker.waitUntilReady();
 }
-
 async function defaultProcessor(job: Job) {
   return { processed: true, name: job.name, queue: job.queueName };
 }

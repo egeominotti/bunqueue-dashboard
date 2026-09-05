@@ -79,7 +79,7 @@ describe('FlowProducer operation UI', () => {
     }
   });
 
-  test('wires every dependency inspection and mutation to the selected target', async () => {
+  test('wires allowed dependency operations and disables unsafe mutations', async () => {
     const calls: string[] = [];
     const repository = fakeRepository({
       inspect: async (target, operation) => {
@@ -104,7 +104,13 @@ describe('FlowProducer operation UI', () => {
         act(() => button.dispatchEvent(new window.MouseEvent('click', { bubbles: true })));
         await settle(2);
       }
-      expect(calls).toHaveLength(10);
+      expect(calls).toHaveLength(7);
+      for (const label of ['Retry job', 'Remove job', 'Remove unprocessed children']) {
+        const button = Array.from(host.querySelectorAll('button')).find(
+          (item) => item.textContent === label
+        );
+        expect(button?.disabled).toBeTrue();
+      }
       expect(calls.every((call) => call.endsWith(':job-1:queue-a'))).toBeTrue();
     } finally {
       window.confirm = originalConfirm;
@@ -194,7 +200,6 @@ describe('FlowProducer operation UI', () => {
         throw new Error('Missing mutation controls');
       }
       for (const operation of [
-        'updateData',
         'updateProgress',
         'log',
         'changeDelay',
@@ -229,7 +234,6 @@ describe('FlowProducer operation UI', () => {
         'inspect:isWaitingChildren',
         'inspect:toJSON',
         'inspect:asJSON',
-        'mutate:updateData',
         'mutate:updateProgress',
         'mutate:log',
         'mutate:changeDelay',

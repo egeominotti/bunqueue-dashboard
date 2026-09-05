@@ -5,7 +5,7 @@
     "": {
       "name": "bunqueue-dashboard",
       "dependencies": {
-        "bunqueue": "2.9.3",
+        "bunqueue": "2.9.4",
         "msgpackr": "^1.11.8",
       },
       "devDependencies": {
@@ -489,7 +489,7 @@
 
     "bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
-    "bunqueue": ["bunqueue@2.9.3", "", { "dependencies": { "msgpackr": "^1.11.8" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.26.0" }, "optionalPeers": ["@modelcontextprotocol/sdk"], "bin": { "bunqueue": "dist/cli/index.js", "bunqueue-mcp": "dist/mcp/index.js" } }, "sha512-i/5QxFpxfAfx8xpkop4TFxhkMgP9/7lIPG3cC9rcl9O5mil87m/qbmo3QeejcQJ3sgdPiaCIo/I71CtmbF0rrg=="],
+    "bunqueue": ["bunqueue@2.9.4", "", { "dependencies": { "msgpackr": "^1.11.8" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.26.0" }, "optionalPeers": ["@modelcontextprotocol/sdk"], "bin": { "bunqueue": "dist/cli/index.js", "bunqueue-mcp": "dist/mcp/index.js" } }, "sha512-XnOeemQQtxKOxpU8cc3+negWzutDcJTYHjCQHB8Km80bCMa7EGPTjntFX+XVdsO+6KT57/Op8Wze1gfyM8M/Lw=="],
 
     "bunqueue-v2-9-2": ["bunqueue@2.9.2", "", { "dependencies": { "msgpackr": "^1.11.8" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.26.0" }, "optionalPeers": ["@modelcontextprotocol/sdk"], "bin": { "bunqueue": "dist/cli/index.js", "bunqueue-mcp": "dist/mcp/index.js" } }, "sha512-AwfmruUNUxIzANhv8I+/mNV9yclfoeB+QpqLs660THrfKQJxe9mpcMwajrAkLl35JcI5dvklwRuxMnm7OQZdlQ=="],
 

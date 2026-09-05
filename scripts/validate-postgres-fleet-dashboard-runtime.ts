@@ -1,3 +1,4 @@
+import { assertBunqueueRuntimeVersion } from './bunqueueRuntimeVersion';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
@@ -60,6 +61,9 @@ try {
     await agentRequest(node, '/control/start', { method: 'POST' });
     await waitForBroker(node);
   }
+  const versions = await Promise.all(nodes.map((node) =>
+    assertBunqueueRuntimeVersion(node.httpPort, node.serverToken)
+  ));
   await assertPostgresSchema20(container, database);
 
   dashboard = await serveDashboard();
@@ -82,7 +86,7 @@ try {
     JSON.stringify(
       {
         bun: Bun.version,
-        bunqueue: '2.9.3',
+        bunqueue: versions[0],
         postgres: '18.6',
         postgresSchema: 20,
         brokers: nodes.length,
@@ -153,7 +157,7 @@ async function waitForPostgres(): Promise<void> {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const code = await docker(
-      ['exec', container, 'pg_isready', '-U', 'postgres', '-d', database],
+      ['exec', container, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres', '-d', database],
       false
     );
     if (code === '0') return;

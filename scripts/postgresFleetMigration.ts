@@ -36,6 +36,8 @@ export async function seedLegacyPostgres19(
     stdout: 'pipe',
     stderr: 'pipe',
   });
+  const stdout = new Response(child.stdout).text();
+  const stderr = new Response(child.stderr).text();
   try {
     await waitForServer(httpPort, child);
     const response = await fetch(`http://127.0.0.1:${httpPort}/queues/${queue}/jobs`, {
@@ -47,6 +49,10 @@ export async function seedLegacyPostgres19(
     const body = (await response.json()) as { ok?: unknown; id?: unknown; error?: unknown };
     assert(response.ok && body.ok === true && body.id === jobId, `Legacy enqueue failed: ${body.error}`);
     return { queue, jobId };
+  } catch (error) {
+    await terminate(child);
+    const logs = `${await stdout}\n${await stderr}`.trim().split('\n').slice(-30).join('\n');
+    throw new Error(`Legacy PostgreSQL seed failed: ${String(error)}\n${logs}`);
   } finally {
     await terminate(child);
   }

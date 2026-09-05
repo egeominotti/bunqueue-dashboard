@@ -96,7 +96,7 @@ server *process* through a separate guarded agent.
 
 It uses Bunqueue's public HTTP API (`:6790`) for ordinary remote observability and a small local
 **control agent** for process, FlowProducer, Workflow Engine, database, and backup operations. The
-agent is pinned to the server it manages and uses the exact installable Bunqueue 2.9.3 npm client
+agent is pinned to the server it manages and uses the exact installable Bunqueue 2.9.4 npm client
 contracts; it never patches Bunqueue internals.
 
 ## Features
@@ -262,9 +262,10 @@ target-pinned Flow, Workflow, Queue and Backup agent operations.
 | `bun run check` | Oxlint + Oxfmt validation (the CI gate) |
 | `bun run check:fix` | Apply safe Oxlint fixes, then format with Oxfmt |
 | `bun test` | Unit + agent-lifecycle tests |
-| `bun run test:e2e:upgrade` | Real npm Bunqueue 2.9.2 SQLite schema-35 → 2.9.3 schema-37 migration and retention semantics |
+| `bun run test:e2e:tls` | Queue, Flow and Workflow over verified native TLS, including untrusted-certificate rejection |
+| `bun run test:e2e:upgrade` | Real npm Bunqueue 2.9.2 SQLite schema-35 → 2.9.4 schema-37 migration and retention semantics |
 | `bun run test:e2e` | Real Flow, Workflow, Queue SDK, and three-broker PostgreSQL runtime tests |
-| `bun run test:e2e:postgres-fleet` | Three authenticated Bunqueue 2.9.3 brokers + three agents sharing disposable PostgreSQL 18.6 |
+| `bun run test:e2e:postgres-fleet` | Three authenticated Bunqueue 2.9.4 brokers + three agents sharing disposable PostgreSQL 18.6 |
 
 ## Docker
 
@@ -311,7 +312,7 @@ The canonical gate must be green before a change is considered done; CI runs the
 bun run quality   # architecture, lint/build, size, docs, coverage, real E2E, packed-bin smoke, audit
 ```
 
-The E2E stage starts disposable Bunqueue 2.9.3 processes and exercises the complete FlowProducer,
+The E2E stage starts disposable Bunqueue 2.9.4 processes and exercises the complete FlowProducer,
 Workflow Engine, and Queue SDK operator bridges. It also starts PostgreSQL 18.6 in Docker with
 three authenticated brokers and paired agents, proving cross-broker enqueue/inspect/leased
 pull+ack, pause/resume, cron, rate limits, group admission, group priority and group pause/resume

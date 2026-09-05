@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { flowOperationError } from '@/lib/flowOperationPolicy';
 import type {
   FlowInspectOperation,
   FlowMutationOperation,
@@ -52,6 +53,8 @@ export function FlowDependencyConsole({
     void request.run(operation, () => repository.inspect(pinnedTarget, operation));
   };
   const mutate = (operation: FlowMutationOperation) => {
+    const error = flowOperationError(operation);
+    if (error) return request.reject(error);
     const pinnedTarget = cleanTarget(target);
     if (
       !window.confirm(
@@ -75,6 +78,10 @@ export function FlowDependencyConsole({
             <FlowTargetFields target={target} onChange={setTarget} />
           </div>
         )}
+        <p className="mt-3 text-xs text-muted">
+          Payload replacement, retry and removal are unavailable because they can damage flow
+          dependencies or restart active work.
+        </p>
         <h3 className="mt-5 mb-2 text-[10px] font-semibold uppercase tracking-wider text-faint">
           Inspect
         </h3>
@@ -99,7 +106,8 @@ export function FlowDependencyConsole({
             <button
               key={action.id}
               type="button"
-              disabled={!valid || Boolean(busy)}
+              disabled={!valid || Boolean(busy) || Boolean(flowOperationError(action.id))}
+              title={flowOperationError(action.id) ?? undefined}
               onClick={() => mutate(action.id)}
               className={
                 action.dangerous

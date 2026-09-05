@@ -1,3 +1,4 @@
+import { assertBunqueueRuntimeVersion } from './bunqueueRuntimeVersion';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -37,6 +38,7 @@ let releaseActive: () => void = () => undefined;
 
 try {
   await waitForServer(httpPort, server);
+  const bunqueue = await assertBunqueueRuntimeVersion(httpPort);
   await queue.waitUntilReady();
   await validateLimits();
   await validateGroups();
@@ -48,7 +50,7 @@ try {
   console.log(
     JSON.stringify(
       {
-        bunqueue: '2.9.3',
+        bunqueue,
         queue: queueName,
         verified: [
           'getGlobalRateLimit',

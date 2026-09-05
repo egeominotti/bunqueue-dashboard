@@ -1,3 +1,4 @@
+import { assertFlowOperationAllowed } from '../../shared/flowOperationPolicy';
 import type { ServerConfig } from '../manager';
 import { assertManagedTarget, type ManagedTargetPolicy } from '../managedTarget';
 import type {
@@ -160,6 +161,7 @@ export async function routeFlowRequest(
     const payload = MUTATIONS_WITH_BODY.has(mutation)
       ? await readFlowJsonBody(request)
       : (assertNoFlowBody(request), {});
+    assertFlowOperationAllowed(mutation);
     return success(
       await admitted(query, config, serverRunning, dependencies, ({ config: current }) =>
         operations(dependencies).mutate(current, target, mutation, payload)

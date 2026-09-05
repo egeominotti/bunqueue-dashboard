@@ -34,7 +34,7 @@ The **Configuration** card holds the settings the server will launch with next t
 
 | Element | What it tells you |
 | --- | --- |
-| **Command** | The command the agent runs to launch bunqueue (default `bunx bunqueue@2.9.3 start`). |
+| **Command** | The command the agent runs to launch bunqueue (default `bunx bunqueue@2.9.4 start`). |
 | **HTTP port** | The dashboard API and live-update port (1 to 65535). |
 | **TCP port** | The binary-protocol port. Must differ from the HTTP port. |
 | **Data path** | Where the SQLite database file lives. |
@@ -86,7 +86,7 @@ Both **Save config** and **Save & restart** validate your ports first: each must
 ## Good to know
 
 - **Configuration never applies in place.** Changes to the command, ports, or data path only take effect on the **next start or restart**, the running server keeps what it launched with. Use **Save & restart** to apply immediately. When your saved config is ahead of the running one, a "Restart to apply changes" hint appears next to the buttons.
-- **The default command resolves Bunqueue 2.9.3 through `bunx`.** For offline or source-checkout workflows, point **Command** at a local entry instead, for example `bun run /path/to/bunqueue/src/main.ts`.
+- **The default command resolves Bunqueue 2.9.4 through `bunx`.** For offline or source-checkout workflows, point **Command** at a local entry instead, for example `bun run /path/to/bunqueue/src/main.ts`.
 - **PostgreSQL multi-broker mode:** add `BUNQUEUE_STORAGE_DRIVER=postgres` and
   `BUNQUEUE_POSTGRES_URL=…` under Environment variables, plus the same
   `BUNQUEUE_POSTGRES_NAMESPACE` on every member. Create one Dashboard profile

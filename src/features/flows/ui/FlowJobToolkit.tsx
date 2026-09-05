@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { flowOperationError } from '@/lib/flowOperationPolicy';
 import type {
   FlowInspectOperation,
   FlowMutationOperation,
@@ -46,8 +47,8 @@ export function FlowJobToolkit({
   initialTarget?: FlowTarget;
 }) {
   const [target, setTarget] = useState<FlowTarget>(initialTarget);
-  const [operation, setOperation] = useState<PayloadOperation>('updateData');
-  const [source, setSource] = useState(JSON.stringify(TEMPLATES.updateData, null, 2));
+  const [operation, setOperation] = useState<PayloadOperation>('updateProgress');
+  const [source, setSource] = useState(JSON.stringify(TEMPLATES.updateProgress, null, 2));
   const [ttl, setTtl] = useState('30000');
   const request = useLatestFlowRequest<unknown>(
     flowRequestKey(target.id, target.queueName, operation, source, ttl),
@@ -60,6 +61,8 @@ export function FlowJobToolkit({
     setSource(JSON.stringify(TEMPLATES[next], null, 2));
   };
   const mutate = () => {
+    const error = flowOperationError(operation);
+    if (error) return request.reject(error);
     let payload: unknown;
     try {
       payload = JSON.parse(source);
@@ -92,7 +95,7 @@ export function FlowJobToolkit({
             <h2 className="text-sm font-semibold text-fg">Flow Job methods</h2>
             <p className="mt-1 text-xs text-faint">
               State predicates, serialization, bounded waiting, and durable mutations from Bunqueue
-              2.9.3.
+              2.9.4.
             </p>
           </div>
           {busy && <span className="font-mono text-xs text-accent">{busy}…</span>}
@@ -100,6 +103,10 @@ export function FlowJobToolkit({
         <div className="mt-4">
           <FlowTargetFields target={target} onChange={setTarget} />
         </div>
+        <p className="mt-3 text-xs text-muted">
+          Payload replacement, retry and removal are unavailable because they can damage flow
+          dependencies or restart active work.
+        </p>
         <h3 className="mt-5 mb-2 text-[10px] font-semibold uppercase tracking-wider text-faint">
           Inspect state and wire JSON
         </h3>
@@ -131,13 +138,16 @@ export function FlowJobToolkit({
                   className="mt-1 block h-9 rounded-lg border border-line bg-surface-2 px-3 font-mono text-xs text-fg"
                 >
                   {Object.keys(TEMPLATES).map((name) => (
-                    <option key={name}>{name}</option>
+                    <option key={name} disabled={Boolean(flowOperationError(name))}>
+                      {name}
+                    </option>
                   ))}
                 </select>
               </label>
               <button
                 type="button"
-                disabled={!valid || Boolean(busy)}
+                disabled={!valid || Boolean(busy) || Boolean(flowOperationError(operation))}
+                title={flowOperationError(operation) ?? undefined}
                 onClick={mutate}
                 className="h-9 rounded-md border border-warning/40 px-3 text-xs text-warning disabled:opacity-40"
               >

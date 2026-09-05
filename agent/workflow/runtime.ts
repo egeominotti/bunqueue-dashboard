@@ -7,7 +7,7 @@ import {
   type ExecutionState,
   type Workflow,
 } from 'bunqueue/workflow';
-import { managedAuthToken } from '../managedTarget';
+import { managedConnection } from '../managedConnection';
 import type { ServerConfig } from '../manager';
 import {
   configuredWorkflowModule,
@@ -188,11 +188,7 @@ export class WorkflowRuntime implements WorkflowRuntimePort {
       dataPath: config.dataPath,
       queueName: options.queueName,
       concurrency: options.concurrency,
-      connection: {
-        host: '127.0.0.1',
-        port: config.tcpPort,
-        token: managedAuthToken(config),
-      },
+      connection: managedConnection(config),
     });
     const active: ActiveRuntime = {
       engine,

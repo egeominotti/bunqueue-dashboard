@@ -237,7 +237,7 @@ describe('external Bunqueue server mode', () => {
       healthStatus: 200,
       version: '2.9.3',
       config: {
-        command: 'bunx bunqueue@2.9.3 start',
+        command: 'bunx bunqueue@2.9.4 start',
         httpPort: 6790,
         tcpPort: 6789,
         dataPath: './data/bunq.db',

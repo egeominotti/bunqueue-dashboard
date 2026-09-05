@@ -1,3 +1,4 @@
+import { assertBunqueueRuntimeVersion } from './bunqueueRuntimeVersion';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -12,11 +13,9 @@ import {
   seedLegacyPostgres19,
 } from './postgresFleetMigration';
 import { type NodeRuntime, spawnPostgresFleetNode } from './postgresFleetNode';
-
 type Child = ReturnType<typeof Bun.spawn>;
 const message = (value: unknown) => (value instanceof Error ? value.message : String(value));
 const tail = (value: string) => value.trim().split('\n').slice(-30).join('\n');
-
 const root = await mkdtemp(join(tmpdir(), 'bunqueue-dashboard-postgres-fleet-'));
 const container = `bunqueue-dashboard-postgres-fleet-${process.pid}`;
 const postgresPort = await freePort();
@@ -29,7 +28,6 @@ const cli = join(repository, 'node_modules/bunqueue/dist/cli/index.js');
 const nodes: NodeRuntime[] = [];
 let containerStarted = false;
 let failure: unknown;
-
 try {
   await docker([
     'run',
@@ -49,7 +47,6 @@ try {
   await waitForPostgres();
   const legacy = await seedLegacyPostgres19(postgresUrl, namespace);
   await assertPostgresSchemaVersion(container, database, 19);
-
   for (let index = 0; index < 3; index++) {
     nodes.push(
       await spawnPostgresFleetNode(index, { repository, root, cli, namespace, postgresUrl })
@@ -60,9 +57,11 @@ try {
     await agentRequest(node, '/control/start', { method: 'POST' });
     await waitForBroker(node);
   }
+  const versions = await Promise.all(nodes.map((node) =>
+    assertBunqueueRuntimeVersion(node.httpPort, node.serverToken)
+  ));
   await assertPostgresSchema20(container, database);
   await assertLegacySeedReadable(nodes[2], legacy);
-
   await validateAgentTopology();
   const queue = `dashboard-fleet-${Date.now()}`;
   const created = await serverRequest(nodes[0], `/queues/${queue}/jobs`, {
@@ -71,7 +70,6 @@ try {
   });
   assert(typeof created.id === 'string' && created.id.length > 0, 'created job id is missing');
   const jobId = created.id;
-
   await waitForJson(nodes[1], `/jobs/${encodeURIComponent(jobId)}`, (body) =>
     (body.job as { id?: unknown } | undefined)?.id === jobId
   );
@@ -127,7 +125,7 @@ try {
     JSON.stringify(
       {
         bun: Bun.version,
-        bunqueue: '2.9.3',
+        bunqueue: versions[0],
         postgres: '18.6',
         postgresSchema: 20,
         target: `127.0.0.1:${postgresPort}/${database}`,
@@ -139,7 +137,7 @@ try {
           agentPort,
         })),
         verified: [
-          'published 2.9.2 schema 19 → 2.9.3 schema 20; legacy job readable on C',
+          'published 2.9.2 schema 19 → 2.9.4 schema 20; legacy job readable on C',
           'three paired control agents',
           'shared PostgreSQL topology discovery',
           'enqueue A → inspect/pull B → acknowledge C → inspect A',
@@ -188,7 +186,7 @@ async function validateAgentTopology(): Promise<void> {
 async function waitForPostgres(): Promise<void> {
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
-    const result = await docker(['exec', container, 'pg_isready', '-U', 'postgres', '-d', database], false);
+    const result = await docker(['exec', container, 'pg_isready', '-h', '127.0.0.1', '-U', 'postgres', '-d', database], false);
     if (result === '0') return;
     await Bun.sleep(250);
   }

@@ -7,7 +7,8 @@ import {
   type JobNode,
 } from 'bunqueue/client';
 import type { ServerConfig } from '../manager';
-import { managedAuthToken } from '../managedTarget';
+import { managedConnection } from '../managedConnection';
+import { assertFlowOperationAllowed, assertFlowOperationState } from '../../shared/flowOperationPolicy';
 import {
   asFlowRecord,
   assertFlowBodySize,
@@ -119,11 +120,15 @@ export async function mutateFlowJob(
   operation: FlowMutationOperation,
   input: unknown
 ): Promise<unknown> {
+  assertFlowOperationAllowed(operation);
   assertFlowBodySize(input);
   const payload = asFlowRecord(input);
   validateMutationPayload(operation, payload);
   const { producer, job } = await loadJob(config, target);
   try {
+    if (['promote', 'changeDelay', 'changePriority'].includes(operation)) {
+      assertFlowOperationState(operation, await job.getState());
+    }
     switch (operation) {
       case 'removeChildDependency': return { removed: await job.removeChildDependency() };
       case 'removeUnprocessedChildren': await job.removeUnprocessedChildren(); break;
@@ -173,7 +178,7 @@ function producerFor(
 }
 
 function connectionFor(config: ServerConfig) {
-  return { host: '127.0.0.1', port: config.tcpPort, token: managedAuthToken(config) };
+  return managedConnection(config);
 }
 
 async function loadJob(

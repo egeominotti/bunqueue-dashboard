@@ -1,5 +1,5 @@
 import { Queue, type QueueMetricType, type QueueMetrics } from 'bunqueue/client';
-import { managedAuthToken } from '../managedTarget';
+import { managedConnection } from '../managedConnection';
 import type { ServerConfig } from '../manager';
 import type { QueueGroupSnapshot, QueueLimitSnapshot, QueueOperationsPort } from './types';
 import { QueueOperationsUnavailableError } from './types';
@@ -220,7 +220,7 @@ export class QueueOperationsRuntime implements QueueOperationsPort {
 }
 
 function connectionFor(config: ServerConfig) {
-  return { host: '127.0.0.1', port: config.tcpPort, token: managedAuthToken(config) };
+  return managedConnection(config);
 }
 
 function defaultClient(config: ServerConfig, queue: string): QueueOperationsClient {

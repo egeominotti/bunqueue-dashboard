@@ -139,7 +139,7 @@ disk for the SQLite main file plus its WAL/SHM sidecars.
 are validated atomically: unknown keys, an empty/non-string command, invalid
 ports, a non-string data path, or a non-string environment map return HTTP 400
 without partially changing the previous configuration. The agent
-launches `command` (default `bunx bunqueue@2.9.3 start`, e.g. `bun run ../src/main.ts` when
+launches `command` (default `bunx bunqueue@2.9.4 start`, e.g. `bun run ../src/main.ts` when
 developing) with `HTTP_PORT`, `TCP_PORT`, the selected storage environment and
 `extraEnv` injected. PostgreSQL mode is selected by `BUNQUEUE_STORAGE_DRIVER=postgres`
 or `BUNQUEUE_POSTGRES_URL`; the agent removes inherited SQLite path aliases so Bunqueue 2.9
@@ -188,3 +188,24 @@ proves it cannot run after Engine closure or cross into a new process
 generation. `bun run test:package` then creates the npm tarball, installs it in
 a temporary consumer outside the repository, starts its real bin, and probes
 the dashboard, direct agent, and `/agent` bridge.
+
+## Native TLS for SDK bridges
+
+Queue Operations, FlowProducer and Workflow Engine share one authenticated
+loopback TCP connection configuration. `TLS_CERT_FILE` or `TLS_KEY_FILE` in the
+managed environment enables TLS automatically. When the server command uses
+`--tls-cert`/`--tls-key` instead, also set `BUNQUEUE_AGENT_TCP_TLS=true`.
+
+Set `BUNQUEUE_AGENT_TCP_CA_FILE` to an absolute CA certificate path for a private
+CA. It also enables TLS. Certificates must cover `127.0.0.1`, the fixed connection
+host. Certificate verification is always enabled; invalid settings fail closed.
+`extraEnv` overrides inherited environment values, including an explicit empty
+value. Changing TLS settings recreates the persistent Workflow connection on
+its next use.
+
+Bunqueue native TLS also enables HTTPS. Configure the dashboard/proxy
+`BUNQUEUE_URL` accordingly and arrange HTTPS CA trust separately; the TCP CA
+setting applies only to the SDK bridges, not the browser or HTTP proxy.
+
+`bun run test:e2e:tls` creates an ephemeral certificate, runs all three bridges
+against a real TLS broker, and verifies rejection without the trusted CA.

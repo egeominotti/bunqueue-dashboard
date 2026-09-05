@@ -1,3 +1,4 @@
+import { assertBunqueueRuntimeVersion } from './bunqueueRuntimeVersion';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
@@ -39,6 +40,7 @@ const runtime = new WorkflowRuntime();
 
 try {
   await waitForServer(httpPort, child);
+  const bunqueue = await assertBunqueueRuntimeVersion(httpPort);
   const status = await runtime.status(config);
   assert(status.ready, `runtime not ready: ${status.error ?? 'unknown error'}`);
   assert(status.workflowNames.length === 3, 'callback registrations were not discovered');
@@ -86,7 +88,7 @@ try {
   console.log(
     JSON.stringify(
       {
-        bunqueue: '2.9.3',
+        bunqueue,
         approval: completed.state,
         resumedCompensation: resumedFinal.rollbackStatus,
         abandonedCompensation: abandonedFinal.rollbackStatus,
