@@ -19,6 +19,7 @@ the code has a rough edge, it's documented rather than glossed over.
   the "strict mode" `{ok:false}`-on-HTTP-200 handling.
 - [known-issues.md](known-issues.md), verified, honest list of current bugs
   and limitations, each with the exact file to look at.
+- [testing.md](testing.md), reproducible real-server checks and a section-by-section coverage matrix.
 - [development.md](development.md), run / build / test / lint, and how to
   add a page (additively).
 

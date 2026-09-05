@@ -15,6 +15,27 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.44] - 2026-09-05
+
+### Added
+
+- Add eight real-server browser scenarios for job submission and bulk import,
+  persisted inspection, benchmark reconciliation, SQLite queries, webhook
+  registry operations, live monitoring, alerts and DLQ triage. All 42 browser
+  tests pass across Chromium, Firefox and WebKit.
+- Document section-by-section verification, reproducible commands, external
+  integration limits, and browser-local alert rules.
+
+### Changed
+
+- Clarify README setup and validation commands, distinguish the quality gate
+  from browser tests, and update current S3 and Workflow documentation to Bunqueue 2.9.4.
+
+### Fixed
+
+- Compare Fleet browser connection results with the version verified on the
+  running broker, removing the obsolete hard-coded Bunqueue 2.9.3 expectation.
+
 ## [0.0.43] - 2026-09-05
 
 ### Added
@@ -1295,7 +1316,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.43...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.44...HEAD
+[0.0.44]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.43...v0.0.44
 [0.0.43]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.42...v0.0.43
 [0.0.42]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.41...v0.0.42
 [0.0.41]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.40...v0.0.41

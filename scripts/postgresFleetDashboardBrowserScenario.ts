@@ -9,6 +9,7 @@ export type DashboardFleetNode = {
 };
 
 export type DashboardFleetScenarioOptions = {
+  bunqueueVersion: string;
   dashboardUrl: string;
   postgresTarget: string;
   namespace: string;
@@ -62,7 +63,7 @@ async function runScenario(page: Page, options: DashboardFleetScenarioOptions): 
     await visible(page.getByText('Saved ✓'), `${node.name} save receipt`);
     await page.getByRole('button', { name: 'Test connection' }).click();
     await visible(
-      page.getByText(/Connected in .*bunqueue v2\.9\.3/u),
+      page.getByText('bunqueue v' + options.bunqueueVersion, { exact: false }),
       `${node.name} server connection`
     );
     await page.getByRole('button', { name: 'Test agent' }).click();

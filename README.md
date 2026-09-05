@@ -4,7 +4,9 @@
 
 # bunqueue dashboard
 
-**The only queue dashboard that also _runs_ the server.** Monitor and control queues, jobs, DLQ,
+**Monitor jobs and operate your Bunqueue server from one dashboard.**
+
+Manage queues, jobs, DLQ,
 cron, webhooks, workers, and a live activity stream for a [bunqueue](https://bunqueue.dev) server
 (a fast, Redis-free, Bun-native background-job queue), plus **start / stop / restart of the server
 process itself**, all from one place.
@@ -63,9 +65,10 @@ The full dashboard running on sample data, no server needed.
 **Full, illustrated docs live at
 [egeominotti.github.io/bunqueue-dashboard/docs](https://egeominotti.github.io/bunqueue-dashboard/docs/).**
 
-- **[Illustrated user guide](https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide)**, one detailed, screenshot-backed page per dashboard section.
+- **[Illustrated user guide](https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide)**, section guides with screenshots, operations and limitations.
 - **[Deployment](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/)**, Docker (Caddy), Kubernetes, PM2, and hosting platforms (Vercel, Netlify, Cloudflare, Fly.io, Render, Cloud Run).
 - **[Architecture](https://egeominotti.github.io/bunqueue-dashboard/docs/architecture)** and **[API mapping](https://egeominotti.github.io/bunqueue-dashboard/docs/api-mapping)**, how it fits together and every endpoint it drives.
+- **[Testing matrix](docs/testing.md)**, real-server coverage, reproduction steps and verification limits.
 - **[llms.txt](https://egeominotti.github.io/bunqueue-dashboard/docs/llms.txt)**, the whole site as a single file for LLMs.
 
 ## Table of contents
@@ -191,7 +194,8 @@ flowchart LR
 
 - **Reads** by polling (`usePolledData`) and a Server-Sent Events stream (`useActivityStream`).
 - **Writes** through the same HTTP API, with every mutation shape-verified against the live server.
-- **Process lifecycle**, the one thing HTTP can't do, is delegated to the local control agent.
+- **Managed operations** use the local control agent for process lifecycle, Queue SDK controls,
+  FlowProducer, Workflow Engine, SQLite inspection, and backups.
 
 For multiple brokers, create one named Dashboard profile and one paired control
 agent per broker. The Fleet page probes all profiles without retargeting the
@@ -264,7 +268,10 @@ target-pinned Flow, Workflow, Queue and Backup agent operations.
 | `bun test` | Unit + agent-lifecycle tests |
 | `bun run test:e2e:tls` | Queue, Flow and Workflow over verified native TLS, including untrusted-certificate rejection |
 | `bun run test:e2e:upgrade` | Real npm Bunqueue 2.9.2 SQLite schema-35 → 2.9.4 schema-37 migration and retention semantics |
-| `bun run test:e2e` | Real Flow, Workflow, Queue SDK, and three-broker PostgreSQL runtime tests |
+| `bun run test:e2e` | Real TLS, SQLite upgrade, Flow, Workflow, Queue SDK, and three-broker PostgreSQL runtime tests |
+| `bun run test:e2e:browser` | Production UI tests on Chromium, Firefox and WebKit |
+| `bun run test:e2e:browser:postgres-fleet` | Real UI operations across three PostgreSQL brokers (requires Docker and Chromium) |
+| `bun run quality` | Complete static, build, docs, coverage, runtime, package and dependency gate |
 | `bun run test:e2e:postgres-fleet` | Three authenticated Bunqueue 2.9.4 brokers + three agents sharing disposable PostgreSQL 18.6 |
 
 ## Docker
@@ -306,10 +313,14 @@ Because the deployed build is a static shell, point it at a reachable bunqueue s
 
 ## Testing & quality gate
 
-The canonical gate must be green before a change is considered done; CI runs the same command:
+Use both the canonical gate and browser tests to validate a change. Browser tests are a separate
+CI job; `quality` alone does not run Playwright:
 
 ```bash
-bun run quality   # architecture, lint/build, size, docs, coverage, real E2E, packed-bin smoke, audit
+bun run test:e2e:browser:install  # first run only
+bun run quality                  # includes runtime E2E; requires Docker
+bun run test:e2e:browser          # production UI on all three browser engines
+bun run test:e2e:browser:postgres-fleet # cross-node UI; separate from both commands above
 ```
 
 The E2E stage starts disposable Bunqueue 2.9.4 processes and exercises the complete FlowProducer,
@@ -322,10 +333,16 @@ PostgreSQL stage).
 The blocking browser job builds the production bundle under `/e2e/dashboard`, starts an
 authenticated disposable Bunqueue server, and drives the UI with Playwright on Chromium, Firefox,
 and WebKit. It covers the token gate, every sidebar route, SSE recovery across a real server
-restart, confirmed Cron creation/deletion, and automated WCAG A/AA checks. Install the browser
+restart, confirmed Cron creation/deletion, job submission and bulk import, persisted job inspection,
+DLQ failures, live monitoring and alerts, SQLite queries, webhook registry mutations, a real
+producer/worker benchmark, and automated WCAG A/AA checks. Install the browser
 binaries once with `bun run test:e2e:browser:install`, then run `bun run test:e2e:browser`.
 
-CI enforces this on every push and pull request. See [Contributing](#contributing).
+See the [section-by-section validation matrix](docs/testing.md) for reproducible commands,
+prerequisites, and the distinction between live operations, navigation checks, and external
+integrations that need their own environment. The live demo uses sample data and is not test evidence.
+
+CI enforces the quality gate and browser matrix on every push and pull request. See [Contributing](#contributing).
 
 ## Project structure
 

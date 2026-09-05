@@ -19,6 +19,7 @@ export function createThemeConfig(base: string): DefaultTheme.Config {
           { text: 'Quickstart', link: '/quickstart' },
           { text: 'User guide (index)', link: '/user-guide' },
           { text: 'Development', link: '/development' },
+          { text: 'Testing & verification', link: '/testing' },
         ],
       },
       {
@@ -55,6 +56,7 @@ export function createThemeConfig(base: string): DefaultTheme.Config {
           { text: 'Metrics', link: '/guide/metrics' },
           { text: 'Workers', link: '/guide/workers' },
           { text: 'Logs', link: '/guide/logs' },
+          { text: 'Alerts', link: '/guide/alerts' },
         ],
       },
       {

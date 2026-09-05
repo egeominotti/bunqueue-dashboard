@@ -45,14 +45,16 @@ This is the exact blocking gate run by the
 on every push and pull request. Release, Pages, and Docker run the same command
 before publishing. It executes, in order:
 
+- `bun run version:check`: enforce the Bun version pin.
+- `bun run architecture`: enforce the TypeScript source file size budget.
 - `bun run check`: Oxlint plus an Oxfmt formatting check (`bun run check:fix`
   applies safe lint fixes, then formats files).
-- `bun run build`: strict typechecks for `src/`, `agent/`, and `scripts/`, then the
+- `bun run build`: strict typechecks for `src/`, `agent/`, `scripts/`, and examples, then the
   production Vite build.
 - `bun run size`: initial-load and total JavaScript bundle budgets.
 - `bun run docs:build`: the VitePress production build, including dead-link checks.
 - `bun run test:coverage`: the complete Bun test suite plus aggregate coverage floors.
-- `bun run test:e2e`: disposable Bunqueue 2.9.3 Flow/Workflow/Queue contracts
+- `bun run test:e2e`: disposable Bunqueue 2.9.4 TLS, SQLite migration, Flow/Workflow/Queue contracts
   plus three authenticated brokers and agents sharing PostgreSQL 18.6 (Docker required).
 - `bun run test:package`: packs, installs, starts, and probes the published binary
   from a clean temporary consumer.
@@ -60,14 +62,21 @@ before publishing. It executes, in order:
 
 CI also runs `bun run test:e2e:browser` as a separate blocking matrix on Chromium, Firefox, and
 WebKit. The suite uses the production bundle, a non-root `BASE_PATH`, an authenticated disposable
-Bunqueue 2.9.3 process, and a temporary database. It verifies the token gate, full sidebar
+Bunqueue 2.9.4 process, and a temporary database. It verifies the token gate, full sidebar
 navigation, SSE reconnection after an actual upstream restart, confirmed Cron mutations, and
-automated WCAG A/AA rules. For a local first run:
+automated WCAG A/AA rules. Operational browser tests also submit and inspect jobs, import bulk
+jobs, reconcile a 40-job benchmark, execute SQLite queries, operate webhook entries, inspect
+DLQ failures, receive live logs and evaluate alert rules. For a local first run:
 
 ```bash
 bun run test:e2e:browser:install
 bun run test:e2e:browser
 ```
+
+For multi-node UI verification, also run `bun run test:e2e:browser:postgres-fleet`
+(Docker and Chromium required). This command is separate from `quality` and the regular browser
+matrix. See [Testing & verification](testing.md) for the coverage of each section and external
+service prerequisites.
 
 The audit has one ID-specific exception: `GHSA-qwww-vcr4-c8h2` affects React
 Router's RSC mode. This project is a client-only `BrowserRouter` SPA and has no

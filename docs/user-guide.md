@@ -5,11 +5,9 @@ title: User guide
 
 # User guide
 
-An illustrated, section-by-section tour of the bunqueue dashboard. **Every
-dashboard section has its own page** in the sidebar, each with a real
-screenshot and a detailed, source-grounded walkthrough of what it shows, every
-action you can take, its states and gating, the API calls behind it, and its
-honest gotchas.
+The guides below explain each dashboard section: displayed data, available actions,
+state-dependent controls, API calls and known limitations. Screenshots illustrate the main
+operator pages; use the [verification matrix](/testing) for current test coverage.
 
 Screenshots were captured against a live seeded server (queues `emails`, `image-resize`, `reports`, `notifications`, `benchmark`, `maintenance`; real
 completed jobs, DLQ entries, cron schedules, webhooks and workers) in the
@@ -54,6 +52,7 @@ component → API-client table, see [Pages & routes](/pages).
 - [**Workers**](/guide/workers), registered workers, active/stale status, and
   guarded stale-worker registry cleanup (it does not stop worker processes).
 - [**Logs**](/guide/logs), the live SSE event feed with filters and search.
+- [**Alerts**](/guide/alerts), browser-local thresholds, triggered rules and delivery limits.
 
 ## Control
 
@@ -66,7 +65,7 @@ component → API-client table, see [Pages & routes](/pages).
   limits/deduplication/metrics/journal tools, and stall/DLQ configuration; DLQ
   retention is read-only.
 - [**DLQ Control**](/guide/dlq-control), read-only single-queue dead-letter triage.
-- [**Webhooks**](/guide/webhooks), register, test and remove webhook endpoints.
+- [**Webhooks**](/guide/webhooks), register, enable/disable and remove webhook endpoints.
 - [**Diagnostics**](/guide/diagnostics), connectivity and health checks.
 - [**Benchmark**](/guide/benchmark), drive synthetic load and watch throughput.
 

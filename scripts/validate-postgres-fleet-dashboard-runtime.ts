@@ -70,6 +70,7 @@ try {
   await waitForDashboard();
 
   await runPostgresFleetDashboardBrowserScenario({
+    bunqueueVersion: versions[0],
     dashboardUrl,
     postgresTarget: `127.0.0.1:${postgresPort}/${database}`,
     namespace,
