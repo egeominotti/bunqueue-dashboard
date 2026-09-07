@@ -71,7 +71,7 @@ new browser session.
 ## Real compatibility gate
 
 The repository's canonical E2E gate starts a disposable PostgreSQL 18.6
-container, three Bunqueue 2.9.3 brokers, and three authenticated agents. It
+container, three Bunqueue 2.9.4 brokers, and three authenticated agents. It
 proves cross-broker enqueue, inspect, leased pull/ack, pause/resume, cron, and
 rate-limit operations, then removes every process, container, and temporary
 file:

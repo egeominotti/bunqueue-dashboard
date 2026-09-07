@@ -31,8 +31,8 @@ export default {
       const original = router.go.bind(router);
       const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)');
       let transitioning = false;
-      router.go = (href?: string) => {
-        if (transitioning || reduceMotion?.matches) return original(href);
+      router.go = (...args: Parameters<typeof original>) => {
+        if (args[1]?.initialLoad || transitioning || reduceMotion?.matches) return original(...args);
         transitioning = true;
         return new Promise<void>((resolve) => {
           const done = () => {
@@ -41,14 +41,15 @@ export default {
           };
           try {
             // startViewTransition is feature-detected above.
-            const t = (document as any).startViewTransition(() => original(href));
+            const t = document.startViewTransition(() => original(...args));
             // Resolve navigation as soon as the DOM has updated; let the visual
             // transition finish on its own. Swallow abort rejections.
             t.updateCallbackDone.then(done, done);
-            t.finished?.catch?.(() => {});
+            t.finished.catch(() => {});
+            t.ready.catch(() => {});
           } catch {
             // startViewTransition can throw synchronously in an invalid state.
-            void original(href).finally(done);
+            void original(...args).then(done, done);
           }
         });
       };

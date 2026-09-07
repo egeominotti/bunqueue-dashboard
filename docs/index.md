@@ -98,7 +98,7 @@ Register endpoints with event scoping and an optional HMAC secret; watch success
 
 ### Server lifecycle
 
-The one thing HTTP can't do, namely starting, stopping and restarting the bunqueue process, is delegated to a small loopback-bound agent with an Origin + Host allowlist, locked CORS and an optional bearer token. <a href="./guide/server">Server Control →</a>
+The one thing HTTP can't do, namely starting, stopping and restarting the bunqueue process, is delegated to a small loopback-bound agent with an Origin + Host allowlist, locked CORS and a bearer token required for remote or proxied access. <a href="./guide/server">Server Control →</a>
 
 </article>
 
@@ -369,7 +369,7 @@ Alerts are evaluated in the browser while a tab is open, so it's not away-from-d
 
 ### Is my data sent anywhere?
 
-No telemetry. The only optional egress is the AI Copilot: if you enable it, requests go directly from your browser to the LLM provider you configure, using your own key.
+The dashboard does not send analytics. If enabled, Copilot requests go directly from your browser to your configured model provider. Remote broker/agent connections, configured S3 operations and broker webhook deliveries also contact the endpoints you choose.
 
 </article>
 

@@ -66,6 +66,35 @@ Resolving the remaining mutation items completely requires generation/state/
 topology-conditional APIs, flow-aware retry reconstruction, and create-only
 cron semantics in Bunqueue itself.
 
+## MCP TCP worker ID (Bunqueue 2.9.4)
+
+The public MCP `register_worker` tool can return `success: true` and worker ID
+`"0"` while the real broker stores a different ID. A heartbeat with the returned
+ID then reports `success: false`. Read the worker registry and match a unique
+name and queues before heartbeat/unregister; inspect the JSON success field,
+not only MCP `isError`. The managed browser regression verifies the real ID,
+heartbeat, dashboard display and removal. See [MCP setup](/guide/mcp).
+
+## Documentation direct URLs (fixed in 0.0.45)
+
+The theme's custom view-transition wrapper previously forwarded only the URL to
+VitePress's router and dropped its `initialLoad` option. A direct clean URL could
+return valid HTML but become a 404 during hydration. The wrapper now forwards
+all router arguments and skips transitions on initial load; real browser tests
+cover every generated page at desktop and mobile widths plus search and history.
+
+## Copilot browser cancellation (fixed in 0.0.45)
+
+AI SDK 7.0.14 creates a telemetry completion promise even in the browser, where
+its non-Node early return did not attach a rejection handler. Stop during a
+pending tool confirmation therefore emitted an unhandled AbortError despite
+correctly cancelling the mutation. `patches/ai@7.0.14.patch` adds the same local
+promise handling used by the SDK's Node path. The package version is pinned and
+frozen installs apply the patch; Docker copies it before dependency installation.
+The real-browser regression keeps browser-error assertions enabled and proves
+that Stop leaves the queue unchanged. Recheck this regression before removing
+the patch when upgrading the SDK.
+
 ## Adversarial audit pass (v0.0.32)
 
 Every module was re-read against the invariants it assumes, each suspected
@@ -369,4 +398,4 @@ ship with reproducing tests (`test/agent-server.test.ts`, `test/manager.test.ts`
 - **Multiple pages cover overlapping ground on purpose** (three DLQ pages, two
   cron pages, `-classic` duplicates), this is the additive convention from
   `CLAUDE.md`, not accidental drift. See
-  [pages.md](pages.md#sidebar--page-mapping).
+  [pages.md](pages.md#sidebar-page-mapping).

@@ -184,7 +184,11 @@ describe('MCP reference page', () => {
     expect(view.host.textContent).toContain('bunqueue_incident_response');
     expect(view.host.textContent).toContain('bunqueue-mcp');
     expect(view.host.textContent).toContain('BUNQUEUE_TOKEN');
-    expect(view.host.querySelectorAll('button[aria-label="Copy to clipboard"]')).toHaveLength(3);
+    expect(view.host.querySelectorAll('button[aria-label="Copy to clipboard"]')).toHaveLength(4);
+    expect(view.host.textContent).toContain(
+      'bun add --exact bunqueue@2.9.4 @modelcontextprotocol/sdk@1.30.0'
+    );
+    expect(view.host.textContent).toContain('node_modules/.bin/bunqueue-mcp');
     const docs = view.host.querySelector<HTMLAnchorElement>('a[target="_blank"]');
     expect(docs?.rel).toContain('noopener');
     expect(docs?.rel).toContain('noreferrer');

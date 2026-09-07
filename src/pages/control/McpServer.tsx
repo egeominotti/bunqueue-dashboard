@@ -3,6 +3,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { CopyButton } from '@/components/ui/CopyButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
+import { CLI_ADD, EMBEDDED_CONFIG, TCP_CONFIG } from './mcp/setup';
 
 /**
  * MCP Server — a setup and reference page for bunqueue's Model Context Protocol
@@ -13,33 +14,6 @@ import { StatCard } from '@/components/ui/StatCard';
  * it), not a live monitor. The totals below are derived from the reference
  * arrays in this module so edits cannot leave the summary cards stale.
  */
-
-const EMBEDDED_CONFIG = `{
-  "mcpServers": {
-    "bunqueue": {
-      "command": "bunx",
-      "args": ["--package=bunqueue", "bunqueue-mcp"],
-      "env": { "DATA_PATH": "./data/bunq.db" }
-    }
-  }
-}`;
-
-const TCP_CONFIG = `{
-  "mcpServers": {
-    "bunqueue": {
-      "command": "bunx",
-      "args": ["--package=bunqueue", "bunqueue-mcp"],
-      "env": {
-        "BUNQUEUE_MODE": "tcp",
-        "BUNQUEUE_HOST": "localhost",
-        "BUNQUEUE_PORT": "6789",
-        "BUNQUEUE_TOKEN": "your-token"
-      }
-    }
-  }
-}`;
-
-const CLI_ADD = 'claude mcp add bunqueue -- bunx --package=bunqueue bunqueue-mcp';
 
 type Category = { name: string; count: number; examples: string[] };
 
@@ -82,7 +56,11 @@ const CATEGORIES: Category[] = [
     count: 4,
     examples: ['add_webhook', 'list_webhooks', 'remove_webhook', 'set_webhook_enabled'],
   },
-  { name: 'Workers', count: 3, examples: ['register_worker', 'list_workers', 'worker_heartbeat'] },
+  {
+    name: 'Workers',
+    count: 3,
+    examples: ['register_worker', 'unregister_worker', 'worker_heartbeat'],
+  },
   {
     name: 'Handlers',
     count: 3,
@@ -160,6 +138,23 @@ export function McpServer() {
           DLQ Purge tools. They bypass this dashboard's v2.9.3 flow-safety gates and have no atomic
           reverse-dependency or job-generation precondition. Grant MCP write access only after
           independently proving the workload is not flow-linked.
+        </p>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader title="Install the MCP runtime" />
+        <p className="mb-3 text-sm text-muted">
+          Create a dedicated directory, install both packages, then replace the absolute path in the
+          client configuration below. TCP mode connects to the existing broker.
+        </p>
+        <CodeBlock
+          code={
+            'mkdir bunqueue-mcp-runtime\ncd bunqueue-mcp-runtime\nbun add --exact bunqueue@2.9.4 @modelcontextprotocol/sdk@1.30.0'
+          }
+        />
+        <p className="mt-3 text-sm text-warning">
+          In Bunqueue 2.9.4 TCP mode, register_worker can return ID "0". Read list_workers and match
+          the unique worker name and queues before sending a heartbeat or unregistering.
         </p>
       </Card>
 

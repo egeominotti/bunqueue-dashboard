@@ -81,6 +81,17 @@ async function resolveHealth(request: PendingHealth, version: string): Promise<v
 beforeEach(() => {
   ensureDom();
   useConnectionStore.setState({
+    ...useConnectionStore.getInitialState(),
+    agentBaseUrl: 'http://localhost:6800',
+    profiles: [
+      {
+        id: 'default',
+        name: 'Local Bunqueue',
+        baseUrl: '/api',
+        agentBaseUrl: 'http://localhost:6800',
+      },
+    ],
+    activeProfileId: 'default',
     baseUrl: '/api',
     token: '',
     agentToken: '',
@@ -92,6 +103,17 @@ afterEach(() => {
   while (cleanups.length > 0) cleanups.pop()?.();
   globalThis.fetch = realFetch;
   useConnectionStore.setState({
+    ...useConnectionStore.getInitialState(),
+    agentBaseUrl: 'http://localhost:6800',
+    profiles: [
+      {
+        id: 'default',
+        name: 'Local Bunqueue',
+        baseUrl: '/api',
+        agentBaseUrl: 'http://localhost:6800',
+      },
+    ],
+    activeProfileId: 'default',
     baseUrl: '/api',
     token: '',
     agentToken: '',

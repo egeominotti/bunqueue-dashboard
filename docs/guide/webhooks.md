@@ -25,7 +25,7 @@ A header with a **Live** indicator (the page refreshes on its own), an **Add web
 | **Enabled** | A switch showing whether deliveries are currently active. |
 
 ::: tip Reading the counters
-A climbing **Fail** count with **Success** stuck at 0 usually means the receiving endpoint is unreachable or rejecting every call. The dashboard records the outcome but does not retry, that's your cue to check the endpoint.
+A climbing **Fail** count with **Success** stuck at 0 usually means the receiving endpoint is unreachable or rejecting every call. Bunqueue performs delivery retries; the dashboard displays the counters and does not provide manual redelivery. Check the receiving endpoint and the broker logs.
 :::
 
 ## What you can do
@@ -52,7 +52,8 @@ Deleting a webhook asks you to confirm ("Remove webhook for &lt;url&gt;?"), then
 
 - **There's no edit.** To change a hook's URL, events, queue, or secret, delete it and add a new one.
 - **The secret is write-only.** You can set a signing secret, but the page never shows it back to you.
-- **Counters don't retry.** Success/Fail are just outcomes, a growing Fail count means fix your endpoint; the dashboard won't resend.
+- **Delivery retries belong to Bunqueue.** Version 2.9.4 defaults to 3 retries with a 1,000 ms base delay (`WEBHOOK_MAX_RETRIES`, `WEBHOOK_RETRY_DELAY_MS`); the delay grows between attempts. The dashboard has no manual resend action.
+- **Endpoint safety:** Bunqueue rejects loopback and private network callback URLs. Local browser tests exercise registration, enable/disable and deletion with an unused queue and a reserved `.invalid` URL; they do not prove outbound delivery or signature verification.
 - **Empty and offline states are clear.** With no hooks yet, you'll see "No webhooks" and a prompt to add one. If the connection drops, the last table stays on screen with a **Retry** button, and a failed enable/disable/delete shows a red banner instead of silently snapping back.
 - **The list pages at 15 rows.** Large lists are split into pages of 15 in your browser, fine for typical use. See [Known issues](/known-issues) for notes on client-side pagination.
 

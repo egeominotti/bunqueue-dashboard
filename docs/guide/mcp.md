@@ -25,6 +25,22 @@ dashboard's **MCP** page (and this guide) is a setup and reference, not a live
 monitor. The server needs the optional peer dependency
 `@modelcontextprotocol/sdk`.
 
+## Install the runtime
+
+Install Bunqueue and its optional SDK in a dedicated directory:
+
+```bash
+mkdir bunqueue-mcp-runtime
+cd bunqueue-mcp-runtime
+bun add --exact bunqueue@2.9.4 @modelcontextprotocol/sdk@1.30.0
+```
+
+Replace `/absolute/path/bunqueue-mcp-runtime` below with that directory's absolute
+path. `bun` must be on the MCP client's PATH. Installing both packages explicitly
+avoids depending on an optional peer being supplied by a transient `bunx` cache.
+The dashboard's local regression uses this public executable over stdio and the
+real authenticated TCP broker.
+
 ## Connection modes
 
 ### Embedded (default)
@@ -36,8 +52,8 @@ database file. Best for a local agent on the same machine.
 {
   "mcpServers": {
     "bunqueue": {
-      "command": "bunx",
-      "args": ["--package=bunqueue", "bunqueue-mcp"],
+      "command": "bun",
+      "args": ["/absolute/path/bunqueue-mcp-runtime/node_modules/.bin/bunqueue-mcp"],
       "env": { "DATA_PATH": "./data/bunq.db" }
     }
   }
@@ -53,8 +69,8 @@ from the HTTP admin API on `6790`). Use `BUNQUEUE_TOKEN` if the server has one.
 {
   "mcpServers": {
     "bunqueue": {
-      "command": "bunx",
-      "args": ["--package=bunqueue", "bunqueue-mcp"],
+      "command": "bun",
+      "args": ["/absolute/path/bunqueue-mcp-runtime/node_modules/.bin/bunqueue-mcp"],
       "env": {
         "BUNQUEUE_MODE": "tcp",
         "BUNQUEUE_HOST": "localhost",
@@ -72,7 +88,7 @@ For **Claude Desktop**, add the JSON above to `claude_desktop_config.json`. For
 **Claude Code**, register it from the CLI:
 
 ```bash
-claude mcp add bunqueue -- bunx --package=bunqueue bunqueue-mcp
+claude mcp add bunqueue -- bun /absolute/path/bunqueue-mcp-runtime/node_modules/.bin/bunqueue-mcp
 ```
 
 ## What it exposes
@@ -92,7 +108,7 @@ Every tool name is prefixed `bunqueue_`; the examples below drop the prefix.
 | Flows | 4 | `add_flow`, `add_flow_chain`, `get_flow`, `get_children_values` |
 | Rate limits | 4 | `set_rate_limit`, `set_concurrency`, `clear_rate_limit` |
 | Webhooks | 4 | `add_webhook`, `list_webhooks`, `remove_webhook`, `set_webhook_enabled` |
-| Workers | 3 | `register_worker`, `list_workers`, `worker_heartbeat` |
+| Workers | 3 | `register_worker`, `unregister_worker`, `worker_heartbeat` |
 | Handlers | 3 | `register_handler`, `list_handlers`, `unregister_handler` |
 | Monitoring | 11 | `get_stats`, `get_queue_stats`, `get_memory_stats`, `get_prometheus_metrics` |
 
@@ -104,3 +120,15 @@ Every tool name is prefixed `bunqueue_`; the examples below drop the prefix.
 ### Prompts (3)
 
 `bunqueue_debug_queue`, `bunqueue_health_report`, `bunqueue_incident_response`.
+
+## Verified TCP worker limitation
+
+With Bunqueue **2.9.4**, `register_worker` can return `success: true` with worker
+ID `"0"`, while the broker registry contains a different real ID. A heartbeat
+using `"0"` returns `success: false`. Read `list_workers`, match a unique worker
+name and its queues, and use that actual ID for heartbeat and unregister.
+Check the tool's JSON `success` field as well as MCP's `isError` flag.
+
+The regression verifies registration, the real registry ID, a successful
+heartbeat, display in the dashboard and removal. It also reads the stats resource
+and health-report prompt. This is not a test of every external MCP mutation.

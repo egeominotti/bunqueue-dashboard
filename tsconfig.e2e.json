@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.agent.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM", "DOM.Iterable"]
+  },
+  "include": [
+    "e2e",
+    "playwright.config.ts",
+    "playwright.managed.config.ts",
+    "playwright.docs.config.ts"
+  ],
+  "exclude": []
+}

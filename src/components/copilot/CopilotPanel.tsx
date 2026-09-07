@@ -127,8 +127,9 @@ export function CopilotPanel() {
               </Select>
             </Field>
             {def?.id === 'custom' && (
-              <Field label="Base URL">
+              <Field label="Base URL" htmlFor="copilot-base-url">
                 <Input
+                  id="copilot-base-url"
                   name="copilot-base-url"
                   value={config.baseURL}
                   onChange={(e) => setConfig({ baseURL: e.target.value })}

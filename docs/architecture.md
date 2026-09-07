@@ -53,7 +53,7 @@ src/features/<capability>/
 Workflow, Job Flow, Queue SDK, S3, and Fleet operations follow this boundary. Tests
 inject repository ports into the UI and fake runtime ports into agent routes;
 real E2E scripts exercise the same adapters against a disposable Bunqueue
-2.9.3 process. Non-idempotent commands use synchronous leases, while reads
+2.9.4 process. Non-idempotent commands use synchronous leases, while reads
 carry a target/request generation so a late response cannot cross a server,
 queue, workflow, or form retarget.
 
@@ -78,7 +78,7 @@ runtime resources after the managed server has transitioned.
     render at the plain operational paths and the retained classic pages use
     `-classic` suffixes. Settings is shared, while Fleet is a direct
     multi-target operational page. See
-    [pages.md](pages.md#route-table-from-srcapptsx) for the authoritative
+    [pages.md](pages.md#route-table-from-src-app-tsx) for the authoritative
     table, don't infer family from the URL.
   - One page mixes clients: `LogsPro` calls `bq.queues()` for the queue
     filter dropdown but `useActivityStream` (shared with the classic `Logs`
@@ -185,7 +185,7 @@ API has no process-lifecycle endpoint. See [agent.md](agent.md) for the full
 reference (endpoints, `ServerConfig`/`runningConfig` split, `dbStats()`).
 Because it can spawn processes it binds `127.0.0.1` only and is guarded by a
 **locked-CORS Origin allowlist** (never `*`) plus an optional `AGENT_TOKEN`
-bearer gate, see [agent.md](agent.md#security) and [SECURITY.md](../SECURITY.md).
+bearer gate, see [agent.md](agent.md#security) and [Security policy](https://github.com/egeominotti/bunqueue-dashboard/blob/main/SECURITY.md).
 Keep its port on loopback (or an equally trusted network) regardless.
 The all-in-one server independently gates every remote/proxied administrative
 `/api/*` request with `BUNQUEUE_TOKEN`; this is not the agent credential.

@@ -24,29 +24,29 @@ At the top, a wide banner tells you if the dashboard is connected. Below it are 
 
 The line under the banner always shows the server address, how long it's been running (uptime), and how much memory it's using.
 
-**Headline numbers (first row)**
+**Health row**
 
 | Element | What it tells you |
 | --- | --- |
-| Completed | Total jobs finished successfully over the server's lifetime. |
-| Failed | Total jobs that failed. Turns red when above zero. |
-| Waiting | Jobs currently queued, waiting to run. |
-| Active | Jobs being processed right now. |
-| Error Rate | Failed jobs as a share of the total. Turns red above 5%. |
-| DLQ | Jobs in the dead-letter queue. Turns red when above zero. |
+| Error Rate | Recorded failed jobs divided by recorded processed jobs; unknown with no sample, red above 5%. |
+| Failed | Current failed jobs summed across queues. |
+| DLQ | Current dead-letter entries. |
 
-**Throughput and capacity (second row)**
+**Throughput and inventory row**
 
 | Element | What it tells you |
 | --- | --- |
-| Push/sec | Jobs being added per second. |
-| Pull/sec | Jobs being pulled for processing per second. |
-| Queues | How many queues exist, with the number of active cron schedules. |
-| Total Pushed | Total jobs ever added. |
-| API Keys | Whether *this dashboard* has an auth token set (1) or not (0). |
-| Uptime | How long the server has been running, with its memory use. |
+| Completed | Retained completed jobs. |
+| Active | Jobs being processed now. |
+| Ready backlog | Waiting plus prioritized jobs across queues. |
+| Push/sec / Pull/sec | Current rates, with process-session totals labelled since restart. |
+| Queues | Queue count, with active cron count beneath it. |
 
-**Queue Health**, cards for your first six queues. Each shows the queue name, an **active** or **paused** badge, and four counts: **W**aiting, **A**ctive, **C**ompleted, **F**ailed. A dash (, ) means that count isn't available yet.
+Uptime and memory appear in the connection banner. There is no API Keys card.
+
+**Queue Health — most loaded** shows up to six queues ranked by failed jobs,
+then ready backlog (waiting plus prioritized), rather than arbitrary list order.
+Each card links to its queue detail. Missing values use a dash (—).
 
 **Recent Activity**, a live feed of the last few job events, each with a colored status dot, the queue, a short job ID, the status, and how long ago it happened.
 
@@ -65,10 +65,9 @@ This screen is for watching, not changing, there are no destructive actions here
 The screen refreshes on its own every few seconds. An amber "Stale" banner means only the *last* check failed, the server may still be up, and your numbers are simply a few seconds old. Click **Retry** to check again.
 :::
 
-- **API Keys reflects only this dashboard.** It shows 1 when you've set an auth token here, 0 otherwise. It is not a count of keys on the server.
 - **Queue Health shows six queues.** If you have more, use **View All** to see them. The **Queues** number still counts every one.
 - **Recent Activity starts empty.** It fills as new events arrive and doesn't load past history. For the full picture, open the activity log via **View All**.
-- **A dash (, ) means "not available yet,"** not zero.
+- **A dash (—) means "not available yet,"** not zero.
 
 For a plain-language list of current limits, see [Known issues](/known-issues).
 

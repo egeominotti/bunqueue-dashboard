@@ -32,9 +32,9 @@ Each row in the table is a single event:
 | --- | --- |
 | **Status** | A colored badge for the event's state (waiting, active, completed, failed). |
 | **Event** | The exact event type, such as `job:completed`, `job:pushed`, or `job:failed`. |
-| **Queue** | Which queue the event came from, or `, ` if none was reported. |
+| **Queue** | Which queue the event came from, or `—` if none was reported. |
 | **Timestamp** | How long ago the event happened, shown as relative time. |
-| **ID** | The job's ID, or `, ` if it wasn't included. |
+| **ID** | The job's ID, or `—` if it wasn't included. |
 
 ## What you can do
 

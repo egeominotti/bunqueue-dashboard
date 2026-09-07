@@ -81,6 +81,14 @@ jobs:
         if: matrix.browser == 'chromium'
         run: bun run test:e2e:browser:postgres-fleet
 
+      - name: Run managed server, Workflow, Copilot, MCP and S3 browser E2E
+        if: matrix.browser == 'chromium'
+        run: bunx playwright test -c playwright.managed.config.ts
+
+      - name: Verify documentation URLs, hydration and navigation
+        if: matrix.browser == 'chromium'
+        run: bun run test:e2e:docs
+
       - name: Upload browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

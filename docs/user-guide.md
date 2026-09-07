@@ -60,6 +60,7 @@ component → API-client table, see [Pages & routes](/pages).
   process via the local control agent, with live logs.
 - [**Add Job**](/guide/add-job), enqueue a job with payload, options, priority
   and delay.
+- [**Bulk Add Jobs**](/guide/bulk-add), import validated JSON or NDJSON into one queue.
 - [**Job Inspector**](/guide/job-inspector), a single job's full timeline, payload, result and state-gated actions.
 - [**Queue Control**](/guide/queue-control), per-queue actions, live Queue SDK
   limits/deduplication/metrics/journal tools, and stall/DLQ configuration; DLQ
@@ -72,6 +73,8 @@ component → API-client table, see [Pages & routes](/pages).
 ## Management
 
 - [**Database**](/guide/database), the read-only SQLite inspector: tables, schema, rows, and query runner.
+- [**MCP Server**](/guide/mcp), install and connect the separate stdio server.
+- [**Copilot**](/guide/copilot), configure a model and approve safe queue actions.
 - [**Usage**](/guide/usage), cumulative usage totals and runtime/storage facts.
 - [**S3 Backup**](/guide/s3), live configuration, status, listing, on-demand
   snapshots, and guarded restore through the local control agent.

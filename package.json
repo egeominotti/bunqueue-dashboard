@@ -1,6 +1,6 @@
 {
   "name": "bunqueue-dashboard",
-  "version": "0.0.44",
+  "version": "0.0.45",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun 1.4.2).",
   "packageManager": "bun@1.4.2",
@@ -15,7 +15,8 @@
     "scripts/bunVersion.ts",
     "scripts/embedded.gen.ts",
     "agent",
-    "shared"
+    "shared",
+    "patches"
   ],
   "publishConfig": {
     "access": "public"
@@ -56,7 +57,7 @@
     "dev": "vite",
     "agent": "bun run agent/index.ts",
     "build": "bun run typecheck && vite build",
-    "typecheck": "tsc --noEmit && bun run typecheck:agent && bun run typecheck:examples",
+    "typecheck": "tsc --noEmit && bun run typecheck:agent && bun run typecheck:examples && bun run typecheck:e2e",
     "typecheck:agent": "tsc -p tsconfig.agent.json",
     "typecheck:examples": "tsc -p tsconfig.examples.json",
     "size": "bun run scripts/check-bundle.ts",
@@ -88,7 +89,10 @@
     "check": "bun run lint && bun run format:check",
     "check:fix": "bun run lint:fix && bun run format",
     "audit:high": "bun audit --audit-level=high --ignore=GHSA-qwww-vcr4-c8h2",
-    "quality": "bun run version:check && bun run architecture && bun run check && bun run build && bun run size && bun run docs:build && bun run test:coverage && bun run test:e2e && bun run test:package && bun run audit:high"
+    "quality": "bun run version:check && bun run architecture && bun run check && bun run build && bun run size && bun run docs:build && bun run test:coverage && bun run test:e2e && bun run test:package && bun run audit:high",
+    "typecheck:e2e": "tsc -p tsconfig.e2e.json",
+    "test:e2e:browser:managed": "bun run build && bun scripts/gen-embed.ts && playwright test -c playwright.managed.config.ts",
+    "test:e2e:docs": "bun run docs:build && playwright test -c playwright.docs.config.ts"
   },
   "devDependencies": {
     "@ai-sdk/anthropic": "^4.0.7",
@@ -98,6 +102,7 @@
     "@axe-core/playwright": "4.13.0",
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@playwright/test": "1.62.1",
     "@shikijs/vitepress-twoslash": "^4.3.0",
     "@tailwindcss/vite": "^4.3.2",
@@ -105,7 +110,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
-    "ai": "^7.0.14",
+    "ai": "7.0.14",
     "bun-types": "1.4.2",
     "bunqueue-v2-9-2": "npm:bunqueue@2.9.2",
     "happy-dom": "^20.10.6",
@@ -135,5 +140,8 @@
   "dependencies": {
     "bunqueue": "2.9.4",
     "msgpackr": "^1.11.8"
+  },
+  "patchedDependencies": {
+    "ai@7.0.14": "patches/ai@7.0.14.patch"
   }
 }

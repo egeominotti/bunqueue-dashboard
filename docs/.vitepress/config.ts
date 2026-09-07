@@ -16,8 +16,6 @@ export default withMermaid({
   description: SITE_DESCRIPTION,
   cleanUrls: true,
   lastUpdated: true,
-  // Keep internal links honest. SECURITY.md is outside the docs source directory.
-  ignoreDeadLinks: ['./../SECURITY'],
   // README.md is the GitHub-facing index; index.md is the site home.
   srcExclude: ['README.md'],
   sitemap: { hostname: `${SITE}/` },

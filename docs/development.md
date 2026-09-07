@@ -49,7 +49,7 @@ before publishing. It executes, in order:
 - `bun run architecture`: enforce the TypeScript source file size budget.
 - `bun run check`: Oxlint plus an Oxfmt formatting check (`bun run check:fix`
   applies safe lint fixes, then formats files).
-- `bun run build`: strict typechecks for `src/`, `agent/`, `scripts/`, and examples, then the
+- `bun run build`: strict typechecks for `src/`, `agent/`, `scripts/`, examples and browser fixtures, then the
   production Vite build.
 - `bun run size`: initial-load and total JavaScript bundle budgets.
 - `bun run docs:build`: the VitePress production build, including dead-link checks.
@@ -75,8 +75,10 @@ bun run test:e2e:browser
 
 For multi-node UI verification, also run `bun run test:e2e:browser:postgres-fleet`
 (Docker and Chromium required). This command is separate from `quality` and the regular browser
-matrix. See [Testing & verification](testing.md) for the coverage of each section and external
-service prerequisites.
+matrix. The Chromium CI job also runs `bun run test:e2e:browser:managed` for managed lifecycle,
+Workflow, Flow, MCP, local S3 and scripted Copilot transport/tool checks. See [Testing & verification](testing.md) for the coverage of each section and external
+service prerequisites. `bun run test:e2e:docs` separately checks clean documentation URLs
+on desktop/mobile and search/navigation after the VitePress build.
 
 The audit has one ID-specific exception: `GHSA-qwww-vcr4-c8h2` affects React
 Router's RSC mode. This project is a client-only `BrowserRouter` SPA and has no
@@ -142,3 +144,11 @@ same suite with the CI coverage floor. Tests live under `test/` and cover pure
 logic, stores and clients, component regressions, SSE parsing, and control-agent
 behaviour. Add focused regression coverage there for every bug fix or new
 testable behaviour.
+
+## Dependency patch
+
+`ai` is pinned to **7.0.14** because `patches/ai@7.0.14.patch` handles a rejected
+browser telemetry completion promise on cancellation. Keep `patches/` alongside
+`package.json` and `bun.lock` before running a frozen install, including in Docker.
+When upgrading the SDK, verify the managed Copilot Stop regression against the
+production browser bundle before removing or refreshing the patch.

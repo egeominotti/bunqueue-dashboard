@@ -13,7 +13,7 @@ A live registry of every worker connected to your server, so you can confirm you
 
 ## What you'll see
 
-A **Live** indicator next to the title tells you the page is getting fresh data; it drops off if the server stops answering. Four cards summarize the whole fleet, and a table lists each worker underneath.
+A **Live** indicator next to the title tells you the page is getting fresh data; it drops off if the server stops answering. Five cards summarize the whole fleet, and a table lists each worker underneath.
 
 The summary cards:
 
@@ -23,13 +23,14 @@ The summary cards:
 | **Active** | Workers that are heartbeating (healthy) |
 | **Stale** | Workers that stopped heartbeating (turns amber when any exist) |
 | **Active Jobs** | Jobs being processed across the whole fleet |
+| **Quarantined** | Malformed registrations isolated from the actionable table |
 
 Each row in the table is one worker:
 
 | Column | What it tells you |
 | --- | --- |
 | **Worker** | The worker's name, with its full id below it |
-| **Queues** | The queues this worker consumes (`, ` if none) |
+| **Queues** | The queues this worker consumes (`—` if none) |
 | **Status** | A pill: green **active** or amber **stale** |
 | **Active** | Jobs this worker is processing right now |
 | **Processed** | Jobs it has completed over its lifetime |
@@ -50,6 +51,7 @@ Registry cleanup **does not stop the worker process**. In Bunqueue v2.9.3, a run
 
 ## Good to know
 
+- **Quarantined records are not actionable.** Invalid identity, counters or status values produce a separate diagnostic list; they cannot be removed through the worker table.
 - **Stale doesn't mean stopped.** A worker that stops heartbeating turns amber and counts toward **Stale**, but its process may still exist. Verify it outside the dashboard before removing the record.
 - **The summary cards always reflect the full fleet.** Even when the table is capped, Total, Active, Stale, and Active Jobs are counted across every worker.
 - **The table shows at most 100 workers**, with no pagination. Past that, a note reads "Showing first 100 of N workers." See [Known issues](/known-issues).

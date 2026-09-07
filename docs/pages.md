@@ -77,7 +77,7 @@ remains routable at a `-classic` suffix.
 `/cron`; it is now a `<Navigate replace>` redirect to `/cron` so old bookmarks
 keep working.
 
-## Sidebar → page mapping
+## Sidebar → page mapping {#sidebar-page-mapping}
 
 `src/components/layout/Sidebar.tsx` (`NAV`, also consumed by the Cmd/Ctrl-K
 command palette) groups nav items into five sections plus root Overview/Fleet:
@@ -132,7 +132,7 @@ single-queue triage surface.
 | `/logs` | `LogsPro` | Paginated, filterable (queue/status/search) view over the same live SSE stream `useActivityStream` drives on `OverviewPro`, a fuller UI over the identical 250-event ring buffer, not a separate data source. |
 | `/workers` | `WorkersPro` | Registered-workers table over `bq.workers()`, with active/stale status and confirmed registry cleanup only for stale workers reporting zero active jobs. The cleanup does not stop the process. Caps at 100 rows with a truncation hint. |
 | `/usage` | `UsagePro` | Cumulative totals, error rate, runtime, and an honest Storage health card from `bq.storage()` (red "Disk full, writes suspended" when `diskFull`). Renders uptime correctly (`stats.uptime` is ms). |
-| `/s3` | `S3BackupPro` | S3-compatible environment builder plus live Bunqueue 2.9.3 CLI status/list/backup operations. The agent applies only whitelisted `S3_*` keys and permits restore only while stopped with typed confirmation and an unchanged database snapshot. |
+| `/s3` | `S3BackupPro` | S3-compatible environment builder plus live Bunqueue 2.9.4 CLI status/list/backup operations. The agent applies only whitelisted `S3_*` keys and permits restore only while stopped with typed confirmation and an unchanged database snapshot. |
 
 ## Alerts (client-side)
 

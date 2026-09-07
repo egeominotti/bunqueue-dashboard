@@ -10,9 +10,11 @@ import { repositoryOf } from './queue-operations-ui.repository';
 
 const mounted = new Set<() => void>();
 let originalConfirm: typeof window.confirm;
+let originalConnection: ReturnType<typeof useConnectionStore.getState>;
 
 beforeEach(() => {
   ensureDom();
+  originalConnection = useConnectionStore.getState();
   useConnectionStore.setState({
     baseUrl: 'http://queue-a.test',
     agentBaseUrl: 'http://agent-a.test',
@@ -26,7 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   for (const unmount of [...mounted]) unmount();
   window.confirm = originalConfirm;
-  useConnectionStore.setState({ baseUrl: '/api', agentBaseUrl: '', token: '', agentToken: '' });
+  useConnectionStore.setState(originalConnection, true);
 });
 
 describe('Queue SDK operations UI', () => {

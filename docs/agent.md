@@ -11,7 +11,7 @@ A browser cannot start or stop an OS process, and bunqueue's HTTP API has no
 process-lifecycle endpoint (and we don't modify bunqueue). So the dashboard ships
 a tiny **local agent**, a Bun process that supervises a bunqueue server child.
 It also hosts target-pinned Flow, Workflow, and Queue operations through
-Bunqueue's public 2.9.3 client, runs the pinned backup implementation, and
+Bunqueue's public 2.9.4 client, runs the pinned backup implementation, and
 exposes read-only SQLite observability that the browser cannot perform directly.
 
 ## Files
@@ -174,7 +174,7 @@ stop-then-start race** no longer orphans the newly-started process.
 (the CSRF-to-RCE vector), same-origin + non-browser requests succeeding, OPTIONS
 preflight ACAO, loopback mutation auth, and all-route auth for network exposure.
 
-`bun run test:e2e` additionally starts disposable Bunqueue 2.9.3 servers and
+`bun run test:e2e` additionally starts disposable Bunqueue 2.9.4 servers and
 executes every FlowProducer creation mode, every exposed safe Flow Job group,
 Workflow handler discovery/control/compensation/archive, all eight exposed Queue
 SDK operations, and the unexposed `removeDlqJob` compatibility contract. Its

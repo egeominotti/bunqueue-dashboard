@@ -23,8 +23,9 @@ pick a provider:
 - Custom (any OpenAI-compatible endpoint: Groq, Together, Mistral, a local
   Ollama or LM Studio)
 
-It is built on the Vercel AI SDK, so all of these work. Paste your own API key
-and set the model id. The key is kept in memory for the session only and is
+These are provider adapters supported by the dashboard through the Vercel AI SDK.
+A successful request also depends on the selected model, API credentials, endpoint
+compatibility and browser CORS policy. Paste your own API key and set the model id. The key is kept in memory for the session only and is
 never written to disk; the provider and model are remembered. Named providers
 (including Z.ai and OpenRouter) always use the endpoint built into the
 dashboard: a stale or injected saved base URL is discarded. Only **Custom** can
@@ -36,10 +37,15 @@ use an operator-supplied base URL, and it must be a non-empty `http://` or
 The dashboard is a browser app, so the model call goes straight from your
 browser to the provider. Some providers allow that and some do not:
 
-- Work browser-direct: Claude (with the safe browser header, added
-  automatically), OpenRouter, Z.ai, and most OpenAI-compatible endpoints.
-- Blocked by the provider: OpenAI and native Google Gemini block direct browser
-  calls. Reach those through OpenRouter, or run behind a proxy.
+- Anthropic requests include its browser opt-in header. The dashboard also has
+  direct adapters for Google, Z.ai and OpenRouter; their availability depends on
+  the provider's current CORS and account policy.
+- OpenAI is marked as requiring a proxy in the provider selector. Use an endpoint
+  that explicitly supports browser requests; a local custom endpoint must allow
+  the dashboard origin too.
+- The local regression suite uses a scripted OpenAI-compatible HTTP endpoint to
+  verify streaming, tool confirmation, decline and Stop against a real broker.
+  It does not verify model inference or every external provider. See [Testing](/testing).
 
 ## What it can do
 

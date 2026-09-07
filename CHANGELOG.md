@@ -15,6 +15,35 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.45] - 2026-09-08
+
+### Added
+
+- Add thirteen managed-server browser scenarios for Workflow signals, compensation
+  and archives, Flow methods, job scheduling/logs, Queue SDK policy and telemetry,
+  SQLite inspection/export, MCP and workers, settings/process controls, Copilot
+  confirmation/cancellation and real local S3 backup/restore. Run them in Chromium CI.
+- Add browser-fixture typechecking, a dedicated Bulk Add Jobs guide and browser
+  regressions for every documentation URL on desktop/mobile plus search/history.
+
+### Changed
+
+- Pin Bun 1.4.2 across local tools, runtime, containers and CI.
+- Put the published documentation prominently in the README and update the
+  verification matrix, database timeout, webhook retries, S3 restart semantics,
+  provider compatibility and MCP installation/worker-ID guidance.
+
+### Fixed
+
+- Preserve VitePress router options during view transitions so direct clean
+  documentation URLs do not hydrate into a 404 page.
+- Give the Copilot custom Base URL input an explicit accessible label.
+- Apply a minimal, version-pinned AI SDK patch so cancelling a browser turn
+  handles its telemetry completion rejection without an unhandled AbortError.
+- Use a JSON import attribute in the Node-hosted Playwright operations fixture.
+- Isolate Queue SDK and Settings connection fixtures so Linux test order cannot
+  leave an invalid agent URL in unrelated save tests.
+
 ## [0.0.44] - 2026-09-05
 
 ### Added
@@ -1316,7 +1345,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.44...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.45...HEAD
+[0.0.45]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.44...v0.0.45
 [0.0.44]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.43...v0.0.44
 [0.0.43]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.42...v0.0.43
 [0.0.42]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.41...v0.0.42

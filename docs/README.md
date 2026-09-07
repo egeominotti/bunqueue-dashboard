@@ -4,8 +4,7 @@ Internal reference for the bunqueue dashboard. Everything here was verified
 against the current source (not written from memory or assumption), where
 the code has a rough edge, it's documented rather than glossed over.
 
-- [user-guide.md](user-guide.md), **illustrated tour of every page**: a real
-  screenshot per route plus what it shows, the actions it offers, and its
+- [user-guide.md](user-guide.md), **illustrated tour of every page**: screenshots of the main operator pages plus what each section shows, the actions it offers, and its
   gotchas. Start here if you want to *use* the dashboard rather than hack on it.
 - [architecture.md](architecture.md), components, data flow, the two API
   clients, the control agent, theming.
@@ -44,4 +43,4 @@ that token is configured; see [agent.md](agent.md).
 Two API clients coexist: `src/lib/api.ts` (original view pages, the
 **classic** family) and `src/lib/bq.ts` (the complete, shape-verified, strict-error-checked client behind every `pages/control/*` **Pro** page). New
 work always uses `bq`. The two families overlap by design, see
-[pages.md](pages.md#sidebar--page-mapping) for exactly where and why.
+[pages.md](pages.md#sidebar-page-mapping) for exactly where and why.

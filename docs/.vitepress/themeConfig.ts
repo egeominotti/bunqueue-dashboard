@@ -64,6 +64,7 @@ export function createThemeConfig(base: string): DefaultTheme.Config {
         items: [
           { text: 'Server Control', link: '/guide/server' },
           { text: 'Add Job', link: '/guide/add-job' },
+          { text: 'Bulk Add Jobs', link: '/guide/bulk-add' },
           { text: 'Job Inspector', link: '/guide/job-inspector' },
           { text: 'Queue Control', link: '/guide/queue-control' },
           { text: 'DLQ Control', link: '/guide/dlq-control' },

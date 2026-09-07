@@ -19,19 +19,19 @@ The six top cards:
 
 | Card | What it tells you |
 | --- | --- |
-| **Completed** | Total jobs that have finished successfully since the server started counting. Always shown in green. |
-| **Failed** | Total jobs that have failed. Turns red when the number is above zero. |
+| **Completed** | Retained completed jobs reported by the dashboard snapshot. Always shown in green. |
+| **Failed** | Current failed jobs summed across queue summaries. Turns red when the number is above zero. |
 | **Waiting** | Jobs queued right now, waiting for a worker. Shown in amber. |
 | **Active** | Jobs being processed at this very moment. Shown in blue. |
 | **Error Rate** | Share of finished jobs that failed, as a percentage. Green when healthy, red once it passes 5%. |
-| **Uptime** | How long the server process has been running. Shows a dash (`, `) if the server just started. |
+| **Uptime** | How long the server process has been running. Shows a dash (`—`) if the server just started. |
 
 The **Runtime** card breaks down the workload and process footprint:
 
 | Row | What it tells you |
 | --- | --- |
-| **Jobs pushed** | Total jobs ever added to the server. |
-| **Jobs pulled** | Total jobs ever picked up by workers. |
+| **Jobs pushed (since restart)** | Process-session push counter. |
+| **Jobs pulled (since restart)** | Process-session pull counter. |
 | **Heap used** | Memory actively in use by the server process. |
 | **RSS** | Total memory the process is holding. |
 | **Cron jobs** | How many scheduled (cron) jobs are registered. |
@@ -57,13 +57,13 @@ This screen is a dashboard, not a control panel, there are no buttons that chang
 
 - **It's read-only by design.** Nothing here mutates the server, to act on failures, head to DLQ Control, Queue Control, or the server host.
 - **Uptime shows a dash, not `0m`,** when the server has just started or can't be reached.
-- **If the server goes offline,** the layout stays put: an offline banner appears at the top while every card falls back to zeros and Storage shows "Healthy." That's intentional so a temporarily down server doesn't wipe the screen, trust the banner over the numbers when it's showing.
-- **This is the trustworthy Usage screen.** An older `/usage-classic` page still exists but reports uptime roughly 1,000× too large and always claims storage is "Healthy," even when the disk is full. This page fixes both and adds the Error Rate card. See [Known issues](/known-issues) for the full list.
+- **If the server goes offline,** an initial failure shows an error state. After a successful read, a refresh failure retains the last successful snapshot and labels it stale; missing storage data is not shown as a fresh healthy result.
+- **Counts have different lifetimes.** Completed/failed cards describe retained queue state; pushed/pulled are explicitly labelled since restart. Cleanup and retention can change state totals. The [classic appendix](/guide/classic) describes the older page.
 - **It's a focused summary.** Latency charts, throughput, and the full worker and cron lists aren't shown here, use Metrics and Workers for those.
 
 ::: details Under the hood (for developers)
 - Uses the `bq` client (not the legacy `api`).
-- Polls two endpoints in parallel each cycle: `GET /dashboard` (job stats, memory in MB, cron count) and `GET /storage` (disk-health flag, wrapped in `data`).
+- Polls three endpoints in parallel each cycle: `GET /dashboard` (job stats, memory in MB, cron count) `GET /storage` (disk-health flag, wrapped in `data`), and `GET /queues/summary` (failed counts).
 - Refresh cadence follows the global interval from Settings (default **3000 ms**, floored at 500 ms). No SSE, pure polling, with change-detection to skip redundant re-renders.
 - `/dashboard` reports `uptime` in milliseconds and memory in megabytes; the page converts both before display.
 :::

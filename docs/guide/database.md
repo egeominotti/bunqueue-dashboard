@@ -64,7 +64,7 @@ Every action is a read or a download, so nothing asks for confirmation. Even han
 - **No database yet?** Before you start the server for the first time, there's no database file. You'll see a *No database yet* message, start bunqueue once from **Control ▸ Server** to create it.
 - **Query history is per-browser.** Your last 10 successful queries are saved locally in this browser only; they aren't shared across devices.
 - **Counts can lag a few seconds.** The stats, table list, and rows refresh on their own timers, so on a busy server they may trail live writes slightly.
-- **One known limit:** in the standalone compiled builds, the 5-second timeout on custom queries isn't active, so a deliberately heavy query can tie up the agent until it finishes (it's still read-only and capped at 500 rows). This doesn't affect the normal `bun start` setup. See [Known issues](/known-issues).
+- **Custom queries have a 5-second response timeout in source and compiled builds.** Queries run in workers with bounded concurrency. A timeout cannot preempt SQLite's synchronous work immediately; the occupied worker slot stays reserved until that work exits. See [Known issues](/known-issues).
 
 ::: details Under the hood (for developers)
 This screen talks to the local control agent (`:6800`, `/db/*` endpoints) via the `bq` client, never the bunqueue HTTP API. The agent uses a read-only SQLite connection plus a statement allowlist, so writes are impossible.
@@ -85,5 +85,5 @@ export before starting the download; the response is `no-store` and `nosniff`.
 Server-side limits: 500-row cap per query, 2,000-character grid-cell truncation,
 the full-table TEXT rule described above, 1,000,000-character full-cell cap,
 200,000-row / 16 MiB full-table export caps, and a 5-second query timeout
-(active under `bun start`; see the compiled-binary caveat above).
+in both source and compiled builds, subject to the worker limitation above.
 :::

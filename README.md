@@ -13,9 +13,11 @@ process itself**, all from one place.
 
 For Bun developers and AI-agent builders running bunqueue who want to _operate_ their queue, not just watch it.
 
-### [▶ Try the live demo](https://egeominotti.github.io/bunqueue-dashboard/)
+### [📚 Read the documentation](https://egeominotti.github.io/bunqueue-dashboard/docs/) · [▶ Try the live demo](https://egeominotti.github.io/bunqueue-dashboard/)
 
-The full dashboard running on sample data, no server needed.
+[Quick start](https://egeominotti.github.io/bunqueue-dashboard/docs/quickstart) · [User guide](https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide) · [Deployment](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/) · [Verified test coverage](https://egeominotti.github.io/bunqueue-dashboard/docs/testing)
+
+The live demo uses sample data. The docs explain how to connect and operate a real Bunqueue server.
 
 [![npm](https://img.shields.io/npm/v/bunqueue-dashboard?logo=npm&color=cb3837)](https://www.npmjs.com/package/bunqueue-dashboard)
 [![CI](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml)
@@ -69,7 +71,7 @@ The full dashboard running on sample data, no server needed.
 - **[Deployment](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/)**, Docker (Caddy), Kubernetes, PM2, and hosting platforms (Vercel, Netlify, Cloudflare, Fly.io, Render, Cloud Run).
 - **[Architecture](https://egeominotti.github.io/bunqueue-dashboard/docs/architecture)** and **[API mapping](https://egeominotti.github.io/bunqueue-dashboard/docs/api-mapping)**, how it fits together and every endpoint it drives.
 - **[Testing matrix](docs/testing.md)**, real-server coverage, reproduction steps and verification limits.
-- **[llms.txt](https://egeominotti.github.io/bunqueue-dashboard/docs/llms.txt)**, the whole site as a single file for LLMs.
+- **[llms.txt](https://egeominotti.github.io/bunqueue-dashboard/docs/llms.txt)**, the documentation index for LLMs; **[llms-full.txt](https://egeominotti.github.io/bunqueue-dashboard/docs/llms-full.txt)** contains the full text.
 
 ## Table of contents
 
