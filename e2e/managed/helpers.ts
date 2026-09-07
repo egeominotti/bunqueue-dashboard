@@ -6,7 +6,10 @@ export { test, expect, unlockDashboard, expectNoBrowserErrors } from '../fixture
 
 export async function visit(page: Page, route: string): Promise<void> {
   await page.locator(`#app-nav nav a[href="/e2e/dashboard${route}"]`).click();
-  await expect(page).toHaveURL(`${E2E_APP_URL}${route}`);
+  const expected = new URL(`${E2E_APP_URL}${route}`);
+  await expect(page).toHaveURL(
+    (actual) => actual.origin === expected.origin && actual.pathname === expected.pathname
+  );
 }
 
 export async function api(request: APIRequestContext, path: string) {

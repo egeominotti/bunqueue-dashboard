@@ -15,6 +15,14 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.46] - 2026-09-08
+
+### Fixed
+
+- Make managed browser navigation checks tolerate page-owned query parameters
+  while checking the exact origin and route, and verify the selected Workflow
+  execution explicitly to avoid a timing-dependent CI failure.
+
 ## [0.0.45] - 2026-09-08
 
 ### Added
@@ -1345,7 +1353,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.45...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.46...HEAD
+[0.0.46]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.45...v0.0.46
 [0.0.45]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.44...v0.0.45
 [0.0.44]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.43...v0.0.44
 [0.0.43]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.42...v0.0.43

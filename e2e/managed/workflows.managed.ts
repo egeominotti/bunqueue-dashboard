@@ -24,6 +24,7 @@ test('starts a registered workflow, sends a durable signal, archives and inspect
   const id = started.result.run.id as string;
   await visit(page, '/workflows/waiting');
   await page.getByRole('button', { name: id, exact: true }).click();
+  await expect(page).toHaveURL((actual) => actual.searchParams.get('execution') === id);
   await page.getByLabel('Workflow signal event').fill('approved');
   await page.getByLabel('Workflow signal payload').fill('{"actor":"local-ui"}');
   page.once('dialog', (dialog) => dialog.accept());
@@ -40,6 +41,7 @@ test('starts a registered workflow, sends a durable signal, archives and inspect
     page.getByRole('button', { name: 'Archive eligible' }).click()
   );
   await page.getByRole('button', { name: id, exact: true }).click();
+  await expect(page).toHaveURL((actual) => actual.searchParams.get('execution') === id);
   await expect(page.getByText('Signal persisted: approved', { exact: false })).toBeVisible();
   const archived = await api(request, `/agent/workflows/${id}?kind=archive`);
   expect(archived.execution.signals.approved).toEqual({ actor: 'local-ui' });
@@ -62,6 +64,7 @@ for (const decision of ['resume', 'abandon'] as const) {
     const id = started.result.run.id as string;
     await visit(page, '/workflows/compensation');
     await page.getByRole('button', { name: id, exact: true }).click();
+    await expect(page).toHaveURL((actual) => actual.searchParams.get('execution') === id);
     page.once('dialog', (dialog) => dialog.accept());
     await command(page, `/workflows/${id}/${decision}-compensation`, () =>
       page
