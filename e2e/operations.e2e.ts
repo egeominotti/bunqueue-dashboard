@@ -1,5 +1,5 @@
 import type { APIRequestContext, Page } from '@playwright/test';
-import { dependencies } from '../package.json';
+import packageJson from '../package.json' with { type: 'json' };
 import { E2E_APP_URL, E2E_SERVER_TOKEN } from './config';
 import { control, expect, expectNoBrowserErrors, test, unlockDashboard } from './fixtures';
 
@@ -99,7 +99,9 @@ test('runs a real 40-job producer and worker benchmark and reconciles server cou
 
 test('reads live diagnostics and executes a real SQLite query', async ({ page, browserErrors }) => {
   await visit(page, '/diagnostics');
-  await expect(page.getByText(`v${dependencies.bunqueue}`, { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(`v${packageJson.dependencies.bunqueue}`, { exact: true })
+  ).toBeVisible();
   const ping = page.waitForResponse((r) => r.url().endsWith('/api/ping'));
   await page.getByRole('button', { name: 'Ping', exact: true }).click();
   expect((await ping).ok()).toBe(true);

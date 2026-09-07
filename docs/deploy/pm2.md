@@ -20,7 +20,7 @@ The all-in-one server (`scripts/serve.ts`) does three jobs in one process:
 Pick one:
 
 ```bash
-# A) Install from npm (needs Bun 1.4.0; dependencies are installed normally).
+# A) Install from npm (needs Bun 1.4.2; dependencies are installed normally).
 bun add -g bunqueue-dashboard        # then: bunqueue-dashboard
 # one-off, no install:  bunx bunqueue-dashboard
 
@@ -31,10 +31,10 @@ curl -L -o bunqueue-dashboard \
   https://github.com/egeominotti/bunqueue-dashboard/releases/latest/download/bunqueue-dashboard-<tag>-linux-x64
 chmod +x bunqueue-dashboard
 
-# C) Build the binary yourself (needs Bun 1.4.0).
+# C) Build the binary yourself (needs Bun 1.4.2).
 bun run build:bin      # → ./bunqueue-dashboard
 
-# D) Run from source (needs Bun 1.4.0).
+# D) Run from source (needs Bun 1.4.2).
 bun run scripts/serve.ts
 ```
 

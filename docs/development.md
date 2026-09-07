@@ -5,7 +5,7 @@ description: "Set up, run, build, and test the bunqueue dashboard locally: the o
 
 # Development
 
-This repository uses Bun **1.4.0** everywhere. `.bun-version` is the canonical
+This repository uses Bun **1.4.2** everywhere. `.bun-version` is the canonical
 pin consumed by local version managers and every GitHub Actions workflow;
 `bun run version:check` rejects drift in the runtime, package metadata, Docker
 base image, type definitions, CI, or publish job.

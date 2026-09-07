@@ -1,4 +1,4 @@
-export const REQUIRED_BUN_VERSION = '1.4.0';
+export const REQUIRED_BUN_VERSION = '1.4.2';
 
 export function assertRequiredBunVersion(version = Bun.version): void {
   if (version !== REQUIRED_BUN_VERSION) {

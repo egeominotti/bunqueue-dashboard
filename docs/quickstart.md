@@ -12,7 +12,7 @@ dashboard running on sample data with no server needed.
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) 1.4.0, pinned by the repository, CI and published package.
+- [Bun](https://bun.sh) 1.4.2, pinned by the repository, CI and published package.
 - A bunqueue server to drive, or let the control agent start one for you (step 3).
 
 ## The one-liner: run from npm

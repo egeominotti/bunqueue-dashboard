@@ -28,7 +28,7 @@ you can start / stop / restart the bunqueue process from the UI. Three ways to
 get it:
 
 ```bash
-bunx bunqueue-dashboard   # from npm, installs dependencies, needs Bun 1.4.0
+bunx bunqueue-dashboard   # from npm, installs dependencies, needs Bun 1.4.2
 ```
 
 or download a **standalone binary** from the

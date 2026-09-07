@@ -2,8 +2,8 @@
   "name": "bunqueue-dashboard",
   "version": "0.0.44",
   "type": "module",
-  "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun 1.4.0).",
-  "packageManager": "bun@1.4.0",
+  "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun 1.4.2).",
+  "packageManager": "bun@1.4.2",
   "bin": {
     "bunqueue-dashboard": "scripts/serve.ts"
   },
@@ -48,7 +48,7 @@
     "react"
   ],
   "engines": {
-    "bun": "1.4.0"
+    "bun": "1.4.2"
   },
   "scripts": {
     "prepack": "bun run version:check && bun run build && bun scripts/gen-embed.ts",
@@ -106,7 +106,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "ai": "^7.0.14",
-    "bun-types": "1.4.0",
+    "bun-types": "1.4.2",
     "bunqueue-v2-9-2": "npm:bunqueue@2.9.2",
     "happy-dom": "^20.10.6",
     "mermaid": "^11.16.0",
