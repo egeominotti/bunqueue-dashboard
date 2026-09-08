@@ -11,8 +11,8 @@ export async function runDatabaseReadProcess(): Promise<void> {
   try {
     trace('started', { module: import.meta.url, ipc: Boolean(process.send), connected: process.connected });
     if (!process.send || !process.connected) throw new Error('Database process requires an IPC parent');
-    // IPC stays separate from stdin, whose pending Windows pipe reads can
-    // block worker initialization. Disconnect also covers abrupt parent death.
+    // Keep request delivery and parent liveness separate from standard streams.
+    // Disconnect also covers abrupt parent death.
     process.once('disconnect', () => process.exit(1));
     const pending = new Promise<unknown>((resolve) => process.once('message', resolve));
     process.send('ready');

@@ -2,10 +2,13 @@
 function compiledRoot(moduleUrl: string): URL | null {
   const url = new URL(moduleUrl);
   if (url.protocol !== 'file:') return null;
+  // Windows import.meta.url escapes the virtual root as /B:/%7EBUN/root/.
+  let pathname: string;
+  try { pathname = decodeURIComponent(url.pathname); } catch { return null; }
   for (const marker of ['/$bunfs/root/', '/~BUN/root/']) {
-    const index = url.pathname.indexOf(marker);
+    const index = pathname.indexOf(marker);
     if (index !== -1) {
-      url.pathname = url.pathname.slice(0, index + marker.length);
+      url.pathname = pathname.slice(0, index + marker.length);
       url.search = '';
       url.hash = '';
       return url;
