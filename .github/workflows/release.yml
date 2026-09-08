@@ -5,7 +5,7 @@ name: Release
 # (the single source of truth, bumped on every push, starting at 0.0.1) and the
 # matching v<version> tag is created by the release step itself. If package.json
 # was not bumped, its tag already exists and the publish is skipped (never a
-# clobber). The canonical quality gate re-runs before publishing, and the built
+# clobber). The complete quality/browser/native gate passes before publishing, and the tested
 # dist/ is zipped and attached with generated notes.
 #
 # Note: tags created here use GITHUB_TOKEN, which by design does NOT trigger
@@ -29,8 +29,15 @@ permissions:
   attestations: write # write the attestation to the repo
 
 jobs:
+  validation:
+    name: Validation
+    uses: ./.github/workflows/validation.yml
+    with:
+      release_artifacts: true
+
   release:
     name: Build & publish release
+    needs: validation
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -49,8 +56,18 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Run quality gate
-        run: bun run quality
+      - name: Download validated application bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ github.sha }}
+          path: dist
+
+      - name: Download executables tested on native runners for this SHA
+        uses: actions/download-artifact@v4
+        with:
+          pattern: native-*-${{ github.sha }}
+          path: native-artifacts
+          merge-multiple: true
 
       - name: Resolve release tag
         id: ver
@@ -107,21 +124,17 @@ jobs:
           cp README.md dist/README.md
           (cd dist && zip -qr "../bunqueue-dashboard-${{ steps.ver.outputs.tag }}.zip" .)
 
-      # Standalone executables: one self-contained binary per platform that
-      # serves the embedded dashboard, proxies /api to the bunqueue server and
-      # runs the control agent (scripts/serve.ts). Cross-compiled with
-      # `bun build --compile --target=...`.
-      - name: Build standalone executables (all platforms)
+      - name: Name the tested executables for release
         if: steps.ver.outputs.publish == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.ver.outputs.tag }}
         run: |
-          bun run scripts/gen-embed.ts
-          for target in bun-linux-x64 bun-linux-arm64 bun-darwin-x64 bun-darwin-arm64 bun-windows-x64; do
-            suffix="${target#bun-}"
-            out="bunqueue-dashboard-${{ steps.ver.outputs.tag }}-${suffix}"
-            if [ "$target" = "bun-windows-x64" ]; then out="${out}.exe"; fi
-            bun build scripts/serve.ts agent/dbQueryWorker.ts agent/backup/standaloneWorker.ts --compile --minify --target="$target" --outfile "$out"
+          test "$(find native-artifacts -type f | wc -l)" -eq 5
+          for file in native-artifacts/*; do
+            suffix="${file##*/}"
+            suffix="${suffix#bunqueue-dashboard-}"
+            mv "$file" "bunqueue-dashboard-${RELEASE_TAG}-${suffix}"
           done
-          ls -la bunqueue-dashboard-*
 
       # SHA256SUMS lets anyone verify a downloaded artifact's integrity
       # (`sha256sum -c SHA256SUMS`). The two globs MUST stay disjoint — the zip

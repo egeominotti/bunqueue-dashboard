@@ -1,76 +1,88 @@
+import { ReadAdmission } from './readAdmission';
 import { createQueryWorker } from './workerFactory';
+import type { ReadArguments, ReadOperation, ReadResult } from './readOperations';
 import {
-  MAX_CONCURRENT_QUERIES,
-  MissingDbError,
-  QUERY_TIMEOUT_MS,
-  type DbQueryResult,
+  DbReadUnavailableError,
+  MissingDbError, QUERY_TIMEOUT_MS, type DbQueryResult,
 } from './types';
 
-let liveQueryWorkers = 0;
+const admission = new ReadAdmission();
+/** Active database read processes, including children being reaped after cancellation. */
+export const queryWorkerLoad = (): number => admission.load;
 
-/** Query worker threads currently alive, including timed-out queries. */
-export const queryWorkerLoad = (): number => liveQueryWorkers;
+export function queryWithTimeout(path: string, sql: string, signal?: AbortSignal): Promise<DbQueryResult> {
+  return runReadWorker({ path, sql }, signal);
+}
 
-export async function queryWithTimeout(path: string, sql: string): Promise<DbQueryResult> {
-  if (liveQueryWorkers >= MAX_CONCURRENT_QUERIES) {
-    throw new Error(
-      `Too many queries running (${liveQueryWorkers}/${MAX_CONCURRENT_QUERIES}). A previous query timed out and is still running inside SQLite — wait for it to finish, or restart the agent.`
-    );
-  }
-  let worker: Worker;
+/** Every HTTP SQLite read shares the same bounded admission pool. */
+export function readWithTimeout<K extends ReadOperation>(
+  operation: K, args: ReadArguments<K>, signal?: AbortSignal,
+  timeoutMs = QUERY_TIMEOUT_MS
+): Promise<ReadResult<K>> {
+  return runReadWorker({ operation, args }, signal, timeoutMs, true);
+}
+
+async function runReadWorker<T>(request: unknown, signal?: AbortSignal, timeoutMs = QUERY_TIMEOUT_MS, queue = false): Promise<T> {
+  const limit = Math.max(1, Math.min(timeoutMs, QUERY_TIMEOUT_MS));
+  const deadline = performance.now() + limit;
+  const ticket = admission.acquire(queue, deadline, signal);
+  const release = typeof ticket === 'function' ? ticket : await ticket;
+  let worker;
   try {
+    signal?.throwIfAborted();
+    if (performance.now() >= deadline) throw new Error('Database read exceeded the time limit while waiting for capacity');
     worker = createQueryWorker();
   } catch (error) {
-    throw new Error(`Query worker unavailable: ${(error as Error).message ?? String(error)}`);
+    release();
+    throw new DbReadUnavailableError(`Query worker unavailable: ${(error as Error).message}`);
   }
-  liveQueryWorkers++;
-  let released = false;
-  const release = () => {
-    if (released) return;
-    released = true;
-    liveQueryWorkers--;
-  };
-  worker.addEventListener('close', release);
+  let cleanup = () => {};
   try {
-    return await new Promise<DbQueryResult>((resolve, reject) => {
+    return await new Promise<T>((resolve, reject) => {
       let settled = false;
-      const timer = setTimeout(() => {
+      const fail = (error: Error) => {
         if (settled) return;
         settled = true;
+        cleanup();
         worker.terminate();
-        reject(
-          new Error(
-            `Query exceeded the ${QUERY_TIMEOUT_MS / 1000}s time limit and was abandoned (it may keep running inside SQLite until it completes).`
-          )
-        );
-      }, QUERY_TIMEOUT_MS);
-      worker.addEventListener('message', (event: MessageEvent) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
+        reject(error);
+      };
+      const onAbort = () => fail(signal?.reason instanceof Error ? signal.reason : new Error('Database read aborted'));
+      const timer = setTimeout(() => fail(new DbReadUnavailableError(
+        `Query exceeded the ${limit / 1000}s time limit and was terminated.`
+      )), Math.max(1, deadline - performance.now()));
+      cleanup = () => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); };
+      worker.addEventListener('close', () => {
         release();
-        const response = event.data as {
-          ok: boolean;
-          result?: DbQueryResult;
-          error?: string;
-          missing?: boolean;
-        };
-        if (response.ok && response.result) resolve(response.result);
-        else if (response.missing) {
-          reject(new MissingDbError(response.error ?? 'Database not found'));
-        } else reject(new Error(response.error ?? 'Query failed'));
+        if (!settled) fail(new DbReadUnavailableError('Query worker exited unexpectedly'));
       });
-      worker.addEventListener('error', (event: ErrorEvent) => {
+      worker.addEventListener('message', (event) => {
         if (settled) return;
+        const response = event.data as { ok?: unknown; result?: unknown; missing?: unknown; error?: unknown } | null;
+        if (!response || typeof response !== 'object' || typeof response.ok !== 'boolean') {
+          fail(new DbReadUnavailableError('Query worker returned a malformed response'));
+          return;
+        }
         settled = true;
-        clearTimeout(timer);
-        release();
+        cleanup();
+        if (!worker.exited) release();
+        if (response.ok && Object.hasOwn(response, 'result')) resolve(response.result as T);
+        else if (response.missing === true) reject(new MissingDbError(typeof response.error === 'string' ? response.error : 'Database not found'));
+        else reject(new Error(typeof response.error === 'string' ? response.error : 'Query failed'));
+      });
+      worker.addEventListener('error', (event) => {
         event.preventDefault?.();
-        reject(new Error(`Query worker failed: ${event.message || 'unknown worker error'}`));
+        fail(new DbReadUnavailableError(`Query worker failed: ${event.message || 'unknown worker error'}`));
       });
-      worker.postMessage({ path, sql });
+      signal?.addEventListener('abort', onAbort, { once: true });
+      if (signal?.aborted) { onAbort(); return; }
+      try { worker.postMessage(request); } catch (error) {
+        fail(new DbReadUnavailableError(`Could not start database read: ${(error as Error).message}`));
+      }
     });
   } finally {
+    cleanup();
     worker.terminate();
+    if (worker.exited) { await worker.exited; release(); }
   }
 }

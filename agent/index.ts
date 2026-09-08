@@ -15,6 +15,7 @@
 import { assertRequiredBunVersion } from '../scripts/bunVersion';
 import { logger } from './logger';
 import { ProcessManager } from './manager';
+import { agentConfigStore } from './manager/configStore';
 import {
   createFetchHandler,
   resolveAllowedHosts,
@@ -25,7 +26,7 @@ import { installAgentShutdown } from './shutdown';
 
 assertRequiredBunVersion();
 
-const mgr = new ProcessManager();
+const mgr = new ProcessManager(undefined, agentConfigStore());
 const PORT = Number(process.env.AGENT_PORT) || 6800;
 const allowedOrigins = resolveAllowedOrigins();
 // The agent binds loopback only, so a legitimate Host is always a loopback

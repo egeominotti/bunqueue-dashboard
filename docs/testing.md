@@ -25,9 +25,42 @@ bun run test:e2e:docs
 ```
 
 `quality` includes version and architecture checks, lint/format, typechecks, production and docs
-builds, bundle budgets, coverage, real runtime E2E, package installation smoke tests, and the
-HIGH/CRITICAL dependency audit. It does **not** include Playwright. CI runs the regular browser
-matrix separately and the PostgreSQL and managed-server scenarios in its Chromium job.
+builds, bundle budgets, coverage, real runtime E2E, package installation and restart smoke tests,
+a short database resilience run, and the HIGH/CRITICAL dependency audit. Playwright runs as
+separate jobs in `.github/workflows/validation.yml`: Chromium, Firefox and WebKit, with
+PostgreSQL Fleet, managed-server and documentation scenarios in Chromium. Every publishing
+workflow calls that complete validation workflow and waits for all jobs. CI exposes one
+`Stability gate` status for branch protection; failed, cancelled or skipped validation cannot pass it.
+The active main-only ruleset requires a pull request, resolved review threads and this check from
+GitHub Actions against an up-to-date branch. Its declarative configuration is `.github/main-ruleset.json`.
+
+The validation workflow also compiles and executes each release binary on its native runner:
+Ubuntu x64/arm64, macOS x64/arm64 and Windows x64. The smoke test checks embedded assets,
+BASE_PATH, authentication, API proxying, SQLite browsing/query/export, timeout recovery,
+configuration persistence and shutdown with no Bun executable on PATH. GitHub Release downloads
+these exact tested artifacts for the same SHA. Windows process termination uses TerminateProcess;
+POSIX additionally verifies graceful signal handling. Native x64 CI provides the x64 evidence.
+
+Coverage floors are 88% of logic lines and 89% of logic functions. Critical lifecycle, policy,
+configuration and database modules also have individual floors in `scripts/criticalCoveragePolicy.ts`.
+
+For repeatable resilience checks:
+
+```bash
+bun run build:bin
+bun run test:binary
+BQ_SOAK_SECONDS=1800 BQ_SOAK_ROWS=1000000 bun run test:soak
+BQ_RECONNECT_CYCLES=100 bun run test:e2e:browser --project=chromium --grep=resilience
+```
+
+The short gate uses 100,000 rows and at least 30 seconds. The scheduled/manual resilience workflow
+uses one million rows for 30 minutes plus 100 actual upstream restarts in Chromium. It records
+agent RSS (in a separate process from the load generator), control latency, pool/child cleanup and browser heap usage, and fails on unexpected
+responses or unbounded growth. These are regression budgets, not publishable benchmarks.
+The 128 MiB growth budget uses Bun's native memory footprint measurement, which excludes
+macOS pages already returned to the kernel; RSS is also logged as a diagnostic. Platforms
+without that measurement fall back to RSS. Measurements do not force garbage collection.
+All databases, configuration snapshots and test containers are disposable.
 
 The browser fixture starts an authenticated Bunqueue **2.9.4** server and the production
 all-in-one dashboard under `/e2e/dashboard`. It uses a temporary SQLite database, loopback

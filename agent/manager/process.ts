@@ -1,5 +1,6 @@
 import { copyConfig, defaultConfig, validateConfigPatch, validateServerConfig } from './config';
 import { ProcessLogs } from './logs';
+import type { ConfigStore } from './configStore';
 import { databaseStats } from './storage';
 import { removeSqlitePaths, validateManagedStorage } from './storageMode';
 import type {
@@ -40,7 +41,12 @@ export class ProcessManager {
   private maintenance: string | null = null;
   private output = new ProcessLogs();
 
-  constructor(private readonly stopTimeoutMs = STOP_TIMEOUT_MS) {}
+  constructor(
+    private readonly stopTimeoutMs = STOP_TIMEOUT_MS,
+    private readonly configStore?: ConfigStore
+  ) {
+    this.config = configStore?.load(this.config) ?? this.config;
+  }
 
   getConfig(): ServerConfig {
     return copyConfig(this.config);
@@ -63,6 +69,7 @@ export class ProcessManager {
       extraEnv: valid.extraEnv ?? this.config.extraEnv,
     });
     if (!sameConfig(this.config, next)) {
+      this.configStore?.save(next);
       this.config = next;
       this.configRevision = nextConfigRevision(this.configRevision);
     }

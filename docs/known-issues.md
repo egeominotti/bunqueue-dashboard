@@ -133,16 +133,9 @@ What matters for operators:
   because a direct caller could otherwise declare itself same-origin. Listing
   the exact public origin in `AGENT_ALLOWED_ORIGINS` can replace the forwarded
   value for Origin policy, but never bypasses validation of the raw Host.
-- **A timed-out `/db/query` is abandoned, not killed.** `Worker.terminate()`
-  cannot preempt a synchronous `sqlite3_step`, so a runaway scan keeps burning
-  its thread until SQLite finishes it. That thread is now counted and the number
-  alive at once is capped (`MAX_CONCURRENT_QUERIES`), so the worst case is a
-  bounded number of busy cores plus a clear "too many queries running" error
-  rather than one leaked core per request. The timeout message no longer claims
-  the query was aborted. Reducing this further needs a killable child process
-  instead of a Worker — not done here.
 - **Coverage floors are enforced on non-`.tsx` code** and were raised to
-  71% lines / 66% functions. A JSX module enters the lcov denominator merely by
+  88% lines / 89% functions, with additional per-module floors for lifecycle,
+  authentication, configuration persistence and database execution. A JSX module enters the lcov denominator merely by
   being imported, so the aggregate tracked test *scope* rather than tested
   *behaviour*; the overall number is still reported by
   `scripts/check-coverage.ts`. React components remain largely uncovered by
@@ -151,6 +144,17 @@ What matters for operators:
 ## Recently fixed (kept here for history)
 
 A security + gate pass resolved these, no longer present:
+
+- **SQLite deadlines now kill the work.** Database browsing, custom queries and
+  Workflow storage reads run in bounded disposable processes. Timeouts and
+  request aborts wait for the child to exit before releasing lifecycle leases;
+  a pipe supervisor also terminates work after abrupt agent death.
+- **Server configuration survives agent restarts.** Successful changes are
+  atomically saved to `AGENT_CONFIG_PATH` (default `.bunqueue-dashboard/config.json`).
+  Invalid saved state fails startup explicitly; restarting does not start the broker.
+- **Publishing waits for the complete validation gate.** Release, npm, Docker and
+  Pages depend on quality, all three Playwright browsers and native execution
+  checks for the five release platforms. Release assets are the tested binaries.
 
 - **`AGENT_TOKEN` end-to-end.** The browser agent client never sent the token,
   so a token-protected agent 401'd every control action, and the 401 popped the
@@ -232,10 +236,10 @@ were the root cause of the recurring orphaned vite/agent processes.
 
 ## Database inspector, standalone timeout fixed
 
-- **Compiled binaries now embed the disposable query Worker.** The standalone
-  build passes both `scripts/serve.ts` and `agent/dbQueryWorker.ts` as
-  entrypoints, so `/db/query` keeps the same 5-second wall-clock timeout as
-  `bun start`. Queries remain read-only, statement-allowlisted and capped at
+- **Compiled binaries embed the supervised SQLite reader.** The standalone
+  build includes `scripts/serve.ts`, `agent/dbReadWorker.ts` and the backup
+  worker. The executable re-executes itself to isolate each read, so `/db/query`
+  keeps the same enforceable 5-second deadline as `bun start`. Queries remain read-only, statement-allowlisted and capped at
   500 rows in every distribution mode.
 
 ## Stability sweep (adversarially verified, earlier change-set)

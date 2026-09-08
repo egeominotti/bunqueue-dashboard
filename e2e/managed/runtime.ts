@@ -40,6 +40,7 @@ try {
       BIND_ADDR: '127.0.0.1',
       HOST: '127.0.0.1',
       PORT: String(E2E_DASHBOARD_PORT),
+      AGENT_CONFIG_PATH: join(scratch, 'agent-config.json'),
       AGENT_PORT: String(E2E_AGENT_PORT),
       HTTP_PORT: String(E2E_HTTP_PORT),
       TCP_PORT: String(E2E_TCP_PORT),

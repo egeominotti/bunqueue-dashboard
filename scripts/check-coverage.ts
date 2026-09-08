@@ -51,12 +51,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { logger } from '../agent/logger';
 
-// Floors sit ~1pt under the measured logic-scope totals at v0.0.32 (72.2%
-// lines, 68.2% functions after the audit regression suites — note lcov weights
-// by line count, so it reads lower than `bun test --coverage`'s per-file table
-// average). Previous floors: 0.70 / 0.58 at v0.0.22.
-const LINES_FLOOR = 0.71;
-const FUNCTIONS_FLOOR = 0.66;
+// Keep about two points of headroom below the measured 89.8% / 90.8% logic coverage.
+// Individual critical-module floors are enforced by check-critical-coverage.ts.
+const LINES_FLOOR = 0.88;
+const FUNCTIONS_FLOOR = 0.89;
 
 /** Files whose lcov LINE record is untrustworthy (see LINE_BLIND above). */
 const LINE_BLIND = ['agent/manager.ts'];

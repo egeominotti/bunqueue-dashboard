@@ -1,0 +1,45 @@
+name: Scheduled resilience
+
+on:
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: resilience
+  cancel-in-progress: false
+
+jobs:
+  soak:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: Large database and process resilience for 30 minutes
+        shell: bash
+        env:
+          BQ_SOAK_SECONDS: '1800'
+          BQ_SOAK_ROWS: '1000000'
+        run: |
+          mkdir -p resilience-results
+          bun run test:soak 2>&1 | tee resilience-results/resilience.log
+      - run: bunx playwright install --with-deps chromium
+      - name: Repeated real-browser reconnection and heap checks
+        env:
+          BQ_RECONNECT_CYCLES: '100'
+        run: bun run test:e2e:browser --project=chromium --grep=resilience
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resilience-${{ github.sha }}
+          path: |
+            resilience-results
+            test-results
+          retention-days: 14

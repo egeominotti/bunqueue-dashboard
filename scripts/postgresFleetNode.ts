@@ -34,6 +34,7 @@ export async function spawnPostgresFleetNode(
       ...process.env,
       AGENT_ALLOWED_HOSTS: '',
       AGENT_ALLOWED_ORIGINS: options.corsAllowOrigin ?? '',
+      AGENT_CONFIG_PATH: join(options.root, `${name}-agent-config.json`),
       AGENT_PORT: String(agentPort),
       AGENT_TOKEN: agentToken,
       AUTH_TOKENS: serverToken,

@@ -8,6 +8,8 @@ const lcovPath = process.env.LCOV_PATH || resolve(projectRoot, 'coverage/lcov.in
 
 const externalEntrypoints = new Map([
   ['agent/backup/standaloneWorker.ts', 'spawned by the backup process executor'],
+  ['agent/dbReadWorker.ts', 'SQLite thread inside the supervised disposable process'],
+  ['agent/db/readProcessMain.ts', 'executed by real SQLite process, source and native-binary smoke tests'],
   ['agent/dbQueryWorker.ts', 'spawned by the database worker factory'],
   ['agent/index.ts', 'started by agent and package runtime tests'],
   ['src/main.tsx', 'started by the Playwright production-browser suite'],

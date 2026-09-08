@@ -64,7 +64,7 @@ Every action is a read or a download, so nothing asks for confirmation. Even han
 - **No database yet?** Before you start the server for the first time, there's no database file. You'll see a *No database yet* message, start bunqueue once from **Control ▸ Server** to create it.
 - **Query history is per-browser.** Your last 10 successful queries are saved locally in this browser only; they aren't shared across devices.
 - **Counts can lag a few seconds.** The stats, table list, and rows refresh on their own timers, so on a busy server they may trail live writes slightly.
-- **Custom queries have a 5-second response timeout in source and compiled builds.** Queries run in workers with bounded concurrency. A timeout cannot preempt SQLite's synchronous work immediately; the occupied worker slot stays reserved until that work exits. See [Known issues](/known-issues).
+- **Database and Workflow reads have a 5-second deadline; CSV exports have 15 seconds.** Each read runs in a disposable process in both source and compiled builds. A timeout or disconnected request kills that process and waits for it to exit. Two reads and one export can run concurrently. Up to 32 ordinary page reads may wait in a fair queue within the same five-second deadline; custom SQL refuses overload immediately. Full queues receive HTTP 429. Process-control endpoints remain available during slow scans.
 
 ::: details Under the hood (for developers)
 This screen talks to the local control agent (`:6800`, `/db/*` endpoints) via the `bq` client, never the bunqueue HTTP API. The agent uses a read-only SQLite connection plus a statement allowlist, so writes are impossible.
@@ -84,6 +84,7 @@ export before starting the download; the response is `no-store` and `nosniff`.
 
 Server-side limits: 500-row cap per query, 2,000-character grid-cell truncation,
 the full-table TEXT rule described above, 1,000,000-character full-cell cap,
-200,000-row / 16 MiB full-table export caps, and a 5-second query timeout
-in both source and compiled builds, subject to the worker limitation above.
+200,000-row / 16 MiB full-table export caps, a 32 MiB child-response ceiling,
+and process deadlines of 5 seconds for reads and 15 seconds for exports. The
+child supervisor also exits if the agent disappears, including an abrupt kill.
 :::

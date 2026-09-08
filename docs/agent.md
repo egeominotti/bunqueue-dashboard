@@ -38,6 +38,27 @@ exposes read-only SQLite observability that the browser cannot perform directly.
 - `agent/index.ts`, thin `Bun.serve` wrapper. **Binds `127.0.0.1` only** and
   applies the security policy below.
 
+## Saved server configuration
+
+The source agent and standalone dashboard load `.bunqueue-dashboard/config.json`
+relative to their launch directory. Set `AGENT_CONFIG_PATH` to a stable absolute
+path for services, and use a separate path for each agent. Environment variables
+supply initial defaults only when no saved configuration exists. The saved snapshot
+contains the complete command, ports, database path and `extraEnv` values.
+
+`PUT /control/config` validates the change, writes and syncs a private temporary
+file, then atomically replaces the snapshot before updating memory or returning
+success. A failed save keeps the previous configuration and revision. A corrupt
+or unsupported saved file stops startup with an explicit error. Remove the file
+to reset to environment defaults. Every restart receives a fresh revision seed,
+so browser edits captured before that restart cannot overwrite the new state.
+
+The agent never auto-starts the managed server after loading settings. Saved
+changes to a running server take effect on its next start; `runningConfig` keeps
+describing the current child. The file includes environment secrets: POSIX files
+are created with mode `0600` in a `0700` directory; Windows access follows the
+containing directory's ACL. Keep this directory private and outside version control.
+
 ## Security
 
 The agent can spawn arbitrary processes (`PUT /control/config` sets the launch

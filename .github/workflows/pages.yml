@@ -35,8 +35,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validation:
+    name: Validation
+    uses: ./.github/workflows/validation.yml
+
   build:
     name: Build
+    needs: validation
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -50,11 +55,6 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      # The same canonical gate as ci.yml. The base-specific app/docs builds
-      # below run again because their published URLs differ from local builds.
-      - name: Run quality gate
-        run: bun run quality
 
       - name: Configure Pages
         id: pages

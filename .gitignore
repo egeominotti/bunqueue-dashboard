@@ -1,4 +1,5 @@
 node_modules/
+.bunqueue-dashboard/
 dist/
 dist-ssr/
 *.local
