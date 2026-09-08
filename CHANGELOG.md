@@ -28,6 +28,7 @@ the GitHub Release body.
   the percent-encoded virtual root emitted by Windows executables.
 - Use a dedicated IPC channel for SQLite process requests and parent liveness,
   keeping supervision responsive while a database read is running.
+- Preserve explicit query/export worker URL overrides inside the isolated process.
 - Require the complete quality, Playwright and native-binary validation gate
   before publishing releases, npm packages, Docker images or GitHub Pages.
   Release artifacts are the exact executables tested on all five native platforms.

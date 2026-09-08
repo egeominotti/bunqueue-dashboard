@@ -90,6 +90,9 @@ test('IPC rejects malformed and oversized requests without starting a database r
     { operation: 'dbQuery' },
     Buffer.alloc(128 * 1024 + 1),
     Buffer.from('invalid'),
+    serialize({ customWorkerUrl: '', request: {} }),
+    serialize({ customWorkerUrl: 1, request: {} }),
+    serialize({ customWorkerUrl: 'file:///missing.ts' }),
   ]) {
     const result = await invoke(message);
     expect(result.code).toBe(0);
@@ -108,4 +111,22 @@ test('phase diagnostics omit query contents, results and environment secrets', a
   expect(result.errors).toContain('output-written');
   expect(result.errors).not.toContain('private-query-marker');
   expect(result.errors).not.toContain('ipc-private-test-token');
+});
+
+test('phase diagnostics omit custom worker URLs and their query parameters', async () => {
+  const workerUrl = new URL('../agent/dbReadWorker.ts', import.meta.url);
+  workerUrl.searchParams.set('token', 'private-worker-url-token');
+  const result = await invoke(
+    serialize({
+      customWorkerUrl: workerUrl.href,
+      request: { operation: 'dbQuery', args: [path, 'SELECT 42 AS answer'] },
+    }),
+    false,
+    true
+  );
+  expect(result.code).toBe(0);
+  expect(deserialize(result.output)).toMatchObject({ ok: true, result: { rows: [[42]] } });
+  expect(result.errors).toContain('output-written');
+  expect(result.errors).not.toContain('private-worker-url-token');
+  expect(result.errors).not.toContain(workerUrl.href);
 });

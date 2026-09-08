@@ -3,7 +3,7 @@ import { MissingDbError } from './db/types';
 
 declare const self: Worker;
 
-if (process.env.BQ_DB_PROCESS_TRACE === '1') console.error(JSON.stringify({ component: 'db-thread', phase: 'listening', module: import.meta.url }));
+if (process.env.BQ_DB_PROCESS_TRACE === '1') console.error(JSON.stringify({ component: 'db-thread', phase: 'listening' }));
 
 // Runs inside a disposable PROCESS. Its supervisor remains responsive to IPC
 // disconnects when the agent dies, even while this thread is in sqlite3_step.

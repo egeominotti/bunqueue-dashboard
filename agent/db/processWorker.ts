@@ -36,6 +36,8 @@ export class DatabaseProcessWorker implements DatabaseWorker {
   readonly exited = new Promise<void>((resolve) => { this.resolveExit = resolve; });
   get pid(): number | undefined { return this.child?.pid; }
 
+  constructor(private readonly workerUrl?: string) {}
+
   addEventListener<K extends keyof WorkerEvents>(type: K, listener: (event: WorkerEvents[K]) => void): void {
     this.listeners.set(type, [...(this.listeners.get(type) ?? []), (event) => listener(event as WorkerEvents[K])]);
   }
@@ -72,7 +74,10 @@ export class DatabaseProcessWorker implements DatabaseWorker {
       const operation = message.operation ? request : message.kind === 'export'
         ? { operation: 'dbExportCsv', args: [message.path, message.table, message.orderBy, message.dir, message.filter] }
         : { operation: 'dbQuery', args: [message.path, message.sql] };
-      const input = serialize(operation);
+      // Legacy overrides never handled the newly isolated browse/workflow operations.
+      const input = serialize(this.workerUrl !== undefined && !message.operation
+        ? { customWorkerUrl: this.workerUrl, request }
+        : operation);
       if (input.byteLength > 128 * 1024) throw new Error('Database request exceeds 128 KiB');
       const compiled = isCompiledModule(import.meta.url);
       const trace = process.env.BQ_DB_PROCESS_TRACE === '1';
@@ -98,7 +103,9 @@ export class DatabaseProcessWorker implements DatabaseWorker {
       if (this.stopped) return;
       if (code !== 0) throw new Error(`Database process exited with code ${code}`);
       const response = deserialize(output) as Record<string, unknown>;
-      if (message.kind === 'export' && response.ok) response.export = response.result;
+      if (message.kind === 'export' && response.ok && !Object.hasOwn(response, 'export') && Object.hasOwn(response, 'result')) {
+        response.export = response.result;
+      }
       // The process has exited before any caller can release its lifecycle lease.
       this.emit('message', { data: response });
     } catch (error) {

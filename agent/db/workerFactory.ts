@@ -1,6 +1,7 @@
 import { DatabaseProcessWorker, type DatabaseWorker } from './processWorker';
 
-const spawnWorker = (): DatabaseWorker => new DatabaseProcessWorker();
+let workerUrl: string | undefined;
+const spawnWorker = (): DatabaseWorker => new DatabaseProcessWorker(workerUrl);
 let queryFactory: () => DatabaseWorker = spawnWorker;
 let exportFactory: () => DatabaseWorker = spawnWorker;
 
@@ -12,8 +13,10 @@ export function createExportWorker(): DatabaseWorker {
   return exportFactory();
 }
 
-/** @deprecated SQLite now runs in a self-reexecuted process; no worker URL is needed. */
-export function setQueryWorkerUrl(_url: string): void {}
+/** Optional legacy query/export worker override, still hosted in a killable process. */
+export function setQueryWorkerUrl(url: string | null): void {
+  workerUrl = url ?? undefined;
+}
 
 export function setQueryWorkerFactory(factory: (() => DatabaseWorker) | null): void {
   queryFactory = factory ?? spawnWorker;

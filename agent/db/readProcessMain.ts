@@ -21,10 +21,19 @@ export async function runDatabaseReadProcess(): Promise<void> {
     if (!(message instanceof Uint8Array) || message.byteLength > 128 * 1024) {
       throw new Error('Invalid database request or request exceeds 128 KiB');
     }
-    const input = deserialize(message);
-    const workerUrl = compiledWorkerUrl(import.meta.url, 'agent/dbReadWorker.js')
+    let input: unknown = deserialize(message);
+    let workerUrl = compiledWorkerUrl(import.meta.url, 'agent/dbReadWorker.js')
       ?? new URL('../dbReadWorker.ts', import.meta.url).href;
-    trace('creating-worker', { workerUrl });
+    let customWorker = false;
+    if (input && typeof input === 'object' && 'customWorkerUrl' in input) {
+      if (typeof input.customWorkerUrl !== 'string' || !input.customWorkerUrl || !('request' in input)) {
+        throw new Error('Invalid database worker override');
+      }
+      workerUrl = input.customWorkerUrl;
+      input = input.request;
+      customWorker = true;
+    }
+    trace('creating-worker', customWorker ? { customWorker: true } : { workerUrl });
     worker = new Worker(workerUrl, { type: 'module' });
     trace('worker-created');
     response = await new Promise<unknown>((resolve, reject) => {
