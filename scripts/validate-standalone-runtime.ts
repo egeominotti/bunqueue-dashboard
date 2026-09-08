@@ -81,27 +81,31 @@ async function request(url: string, path: string, init: RequestInit = {}, bearer
 }
 
 async function verifyParentDisconnect(): Promise<void> {
+  const input = serialize({ operation: 'dbQuery', args: [databasePath,
+    'WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n) SELECT sum(x) FROM n',
+  ] });
+  const ready = Promise.withResolvers<void>();
   const child = Bun.spawn([...command, '--bq-db-read'], {
     cwd: scratch,
     env: { PATH: join(scratch, 'empty-bin'), SystemRoot: process.env.SystemRoot, TEMP: scratch, TMPDIR: scratch },
-    stdin: 'pipe', stdout: 'ignore', stderr: 'ignore',
+    stdin: 'ignore', stdout: 'ignore', stderr: 'ignore',
+    ipc: (message, subprocess) => {
+      if (message !== 'ready') return;
+      try { subprocess.send(input); ready.resolve(); } catch (error) { ready.reject(error); }
+    },
   });
   let deadline: ReturnType<typeof setTimeout> | undefined;
   try {
-    const input = serialize({ operation: 'dbQuery', args: [databasePath,
-      'WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n) SELECT sum(x) FROM n',
-    ] });
-    const prefix = Buffer.alloc(4);
-    prefix.writeUInt32LE(input.byteLength);
-    child.stdin.write(Buffer.concat([prefix, input]));
-    await child.stdin.flush();
+    deadline = setTimeout(() => ready.reject(new Error('SQLite IPC readiness timed out')), 3000);
+    await ready.promise;
+    clearTimeout(deadline);
     await Bun.sleep(200);
     assert(child.exitCode === null, 'Isolated query exited before the disconnect test');
-    child.stdin.end();
+    child.disconnect();
     const code = await Promise.race([child.exited, new Promise<null>((done) => {
       deadline = setTimeout(() => done(null), 3000);
     })]);
-    assert(code === 1, 'SQLite process survived the parent pipe disconnect');
+    assert(code === 1, 'SQLite process survived the parent IPC disconnect');
   } finally {
     clearTimeout(deadline);
     if (child.exitCode === null) { child.kill('SIGKILL'); await child.exited; }

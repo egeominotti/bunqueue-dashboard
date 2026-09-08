@@ -25,6 +25,8 @@ the GitHub Release body.
   disposable processes, with real cancellation, bounded output and cleanup even
   after abrupt agent termination.
 - Resolve embedded worker paths on Windows as well as macOS and Linux.
+- Use a dedicated IPC channel for SQLite process requests and parent liveness,
+  avoiding a pending stdin read during worker initialization on Windows.
 - Require the complete quality, Playwright and native-binary validation gate
   before publishing releases, npm packages, Docker images or GitHub Pages.
   Release artifacts are the exact executables tested on all five native platforms.

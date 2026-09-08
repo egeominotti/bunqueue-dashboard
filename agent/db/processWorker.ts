@@ -28,7 +28,7 @@ process.once('exit', terminateDatabaseProcesses);
 /** Unlike Worker.terminate(), SIGKILL interrupts synchronous sqlite3_step. */
 export class DatabaseProcessWorker implements DatabaseWorker {
   private listeners = new Map<string, Array<(event: unknown) => void>>();
-  private child?: Bun.Subprocess<'pipe', 'pipe', 'ignore'>;
+  private child?: Bun.Subprocess<'ignore', 'pipe', 'ignore'>;
   private stopped = false;
   private started = false;
   private closed = false;
@@ -75,17 +75,19 @@ export class DatabaseProcessWorker implements DatabaseWorker {
       const input = serialize(operation);
       if (input.byteLength > 128 * 1024) throw new Error('Database request exceeds 128 KiB');
       const compiled = isCompiledModule(import.meta.url);
+      let delivered = false;
       this.child = Bun.spawn(compiled
         ? [process.execPath, '--bq-db-read']
         : [process.execPath, fileURLToPath(new URL('./readProcessMain.ts', import.meta.url))], {
         // Database readers need no managed-server tokens or cloud credentials.
         env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMPDIR: process.env.TMPDIR },
-        stdin: 'pipe', stdout: 'pipe', stderr: 'ignore',
+        stdin: 'ignore', stdout: 'pipe', stderr: 'ignore',
+        ipc: (message, subprocess) => {
+          if (message !== 'ready' || delivered || this.stopped) return;
+          delivered = true;
+          try { subprocess.send(input); } catch { this.terminate(); }
+        },
       });
-      const header = Buffer.alloc(4);
-      header.writeUInt32LE(input.byteLength);
-      this.child.stdin.write(Buffer.concat([header, input]));
-      await this.child.stdin.flush();
       const [output, code] = await Promise.all([
         readBoundedBytes(this.child.stdout, 32 * 1024 * 1024), this.child.exited,
       ]);
@@ -100,9 +102,7 @@ export class DatabaseProcessWorker implements DatabaseWorker {
       if (this.child) await this.child.exited;
       this.emit('error', { message: error instanceof Error ? error.message : 'Database process failed' });
     } finally {
-      // Explicitly close the liveness pipe after exit; don't leave FileSink
-      // descriptors and native buffers waiting for a future garbage collection.
-      try { await this.child?.stdin.end(); } catch { /* child already closed its pipe */ }
+      try { this.child?.disconnect(); } catch { /* child already closed its IPC channel */ }
       this.child = undefined;
       this.close();
     }

@@ -3,8 +3,8 @@ import { MissingDbError } from './db/types';
 
 declare const self: Worker;
 
-// Runs inside a disposable PROCESS. Its supervisor remains responsive to stdin
-// closing when the agent dies, even while this thread is in sqlite3_step.
+// Runs inside a disposable PROCESS. Its supervisor remains responsive to IPC
+// disconnects when the agent dies, even while this thread is in sqlite3_step.
 self.addEventListener('message', (event: MessageEvent) => {
   try {
     const result = dispatchRead(event.data);

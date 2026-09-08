@@ -6,11 +6,17 @@ export async function runDatabaseReadProcess(): Promise<void> {
   let response: unknown;
   let worker: Worker | undefined;
   try {
-    const reader = Bun.stdin.stream().getReader();
-    const input = deserialize(await readRequest(reader));
-    // Parent keeps this pipe open. EOF also covers SIGKILL/TerminateProcess,
-    // where the agent cannot run signal handlers or its ordinary exit hook.
-    void reader.read().then(() => process.exit(1), () => process.exit(1));
+    if (!process.send || !process.connected) throw new Error('Database process requires an IPC parent');
+    // IPC stays separate from stdin, whose pending Windows pipe reads can
+    // block worker initialization. Disconnect also covers abrupt parent death.
+    process.once('disconnect', () => process.exit(1));
+    const pending = new Promise<unknown>((resolve) => process.once('message', resolve));
+    process.send('ready');
+    const message = await pending;
+    if (!(message instanceof Uint8Array) || message.byteLength > 128 * 1024) {
+      throw new Error('Invalid database request or request exceeds 128 KiB');
+    }
+    const input = deserialize(message);
     worker = new Worker(compiledWorkerUrl(import.meta.url, 'agent/dbReadWorker.js')
       ?? new URL('../dbReadWorker.ts', import.meta.url).href, { type: 'module' });
     response = await new Promise<unknown>((resolve, reject) => {
@@ -31,24 +37,9 @@ export async function runDatabaseReadProcess(): Promise<void> {
   await Bun.write(Bun.stdout, output.byteLength <= 32 * 1024 * 1024
     ? output
     : serialize({ ok: false, error: 'Database result exceeded 32 MiB' }));
-  // Exit the whole process, including its SQLite thread and liveness reader.
+  // Exit the whole process, including its SQLite thread and IPC channel.
   worker?.terminate();
   process.exit(0);
-}
-
-async function readRequest(reader: { read(): Promise<{ done: boolean; value?: Uint8Array }> }): Promise<Buffer> {
-  let buffer = Buffer.alloc(0);
-  for (;;) {
-    const chunk = await reader.read();
-    if (chunk.done || !chunk.value) throw new Error('Truncated database request');
-    if (buffer.byteLength + chunk.value.byteLength > 128 * 1024 + 4) throw new Error('Database request exceeds 128 KiB');
-    buffer = Buffer.concat([buffer, chunk.value]);
-    if (buffer.byteLength < 4) continue;
-    const length = buffer.readUInt32LE(0);
-    if (length > 128 * 1024) throw new Error('Database request exceeds 128 KiB');
-    if (buffer.byteLength === length + 4) return buffer.subarray(4);
-    if (buffer.byteLength > length + 4) throw new Error('Unexpected database request bytes');
-  }
 }
 
 if (import.meta.main) await runDatabaseReadProcess();

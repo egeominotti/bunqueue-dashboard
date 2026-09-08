@@ -148,7 +148,7 @@ A security + gate pass resolved these, no longer present:
 - **SQLite deadlines now kill the work.** Database browsing, custom queries and
   Workflow storage reads run in bounded disposable processes. Timeouts and
   request aborts wait for the child to exit before releasing lifecycle leases;
-  a pipe supervisor also terminates work after abrupt agent death.
+  an IPC supervisor also terminates work after abrupt agent death.
 - **Server configuration survives agent restarts.** Successful changes are
   atomically saved to `AGENT_CONFIG_PATH` (default `.bunqueue-dashboard/config.json`).
   Invalid saved state fails startup explicitly; restarting does not start the broker.
