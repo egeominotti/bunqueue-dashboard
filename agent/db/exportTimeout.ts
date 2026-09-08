@@ -1,4 +1,5 @@
 import { validateWorkerBounds } from './core';
+import type { DatabaseWorker } from './processWorker';
 import { createExportWorker } from './workerFactory';
 import {
   DB_EXPORT_MAX_ROWS,
@@ -14,7 +15,7 @@ import {
 
 let liveExportWorkers = 0;
 
-/** Export workers alive now, including abandoned SQLite calls still unwinding. */
+/** Export workers alive now, including cancelled children being reaped. */
 export const exportWorkerLoad = (): number => liveExportWorkers;
 
 function validatedWorkerExport(value: unknown, expectedTable: string): DbCsvExport {
@@ -67,11 +68,11 @@ export async function exportWithTimeout(
   signal?.throwIfAborted();
   if (liveExportWorkers >= MAX_CONCURRENT_EXPORTS) {
     throw new DbExportBusyError(
-      'A database export is already running. Wait for it to finish, or restart the agent if it was abandoned.'
+      'A database export is already running. Retry after it finishes.'
     );
   }
 
-  let worker: Worker;
+  let worker: DatabaseWorker;
   try {
     worker = createExportWorker();
   } catch (error) {
@@ -117,7 +118,7 @@ export async function exportWithTimeout(
           reject(new DbExportUnavailableError('Database export worker exited unexpectedly'));
         }
       });
-      worker.addEventListener('message', (event: MessageEvent) => {
+      worker.addEventListener('message', (event) => {
         if (settled) return;
         settled = true;
         cleanup();
@@ -147,7 +148,7 @@ export async function exportWithTimeout(
           );
         }
       });
-      worker.addEventListener('error', (event: ErrorEvent) => {
+      worker.addEventListener('error', (event) => {
         if (settled) return;
         event.preventDefault?.();
         abandon(
@@ -161,7 +162,7 @@ export async function exportWithTimeout(
         () =>
           abandon(
             new DbExportUnavailableError(
-              `Database export exceeded the ${DB_EXPORT_TIMEOUT_MS / 1000}s time limit and was abandoned (SQLite may keep scanning until the worker exits).`
+              `Database export exceeded the ${DB_EXPORT_TIMEOUT_MS / 1000}s time limit and was terminated.`
             )
           ),
         DB_EXPORT_TIMEOUT_MS
@@ -186,5 +187,6 @@ export async function exportWithTimeout(
     });
   } finally {
     worker.terminate();
+    if (worker.exited) { await worker.exited; release(); }
   }
 }

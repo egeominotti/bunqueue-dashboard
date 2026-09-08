@@ -15,6 +15,33 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [0.0.47] - 2026-09-08
+
+### Fixed
+
+- Preserve validated server settings across agent restarts using a private atomic
+  configuration snapshot; failed writes leave the previous state intact.
+- Run database browsing, custom SQL, CSV exports and Workflow storage reads in
+  disposable processes, with real cancellation, bounded output and cleanup even
+  after abrupt agent termination.
+- Resolve embedded worker paths on Windows as well as macOS and Linux, including
+  the percent-encoded virtual root emitted by Windows executables.
+- Use a dedicated IPC channel for SQLite process requests and parent liveness,
+  keeping supervision responsive while a database read is running.
+- Preserve explicit query/export worker URL overrides inside the isolated process.
+- Require the complete quality, Playwright and native-binary validation gate
+  before publishing releases, npm packages, Docker images or GitHub Pages.
+  Release artifacts are the exact executables tested on all five native platforms.
+- Protect `main` with mandatory pull requests and an up-to-date Stability gate
+  from GitHub Actions.
+
+### Added
+
+- Enforced 88% line / 89% function coverage floors for logic and individual
+  minimums for critical lifecycle, authentication, persistence and SQLite modules.
+- Short CI and extended scheduled resilience checks for large databases, process
+  cleanup, memory growth, control responsiveness and real-browser reconnections.
+
 ## [0.0.46] - 2026-09-08
 
 ### Fixed
@@ -1353,7 +1380,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.46...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.47...HEAD
+[0.0.47]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.46...v0.0.47
 [0.0.46]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.45...v0.0.46
 [0.0.45]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.44...v0.0.45
 [0.0.44]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.43...v0.0.44

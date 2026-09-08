@@ -63,7 +63,8 @@ export async function readPackageAgentStatus(
 
 export async function waitForPackageResponse(
   url: string,
-  child: RuntimeChild
+  child: RuntimeChild,
+  init?: RequestInit
 ): Promise<Response> {
   const deadline = Date.now() + startupTimeoutMs;
   let lastFailure = 'no response';
@@ -72,7 +73,7 @@ export async function waitForPackageResponse(
       throw new Error(`Published bin exited early with code ${child.exitCode}`);
     }
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(1_500) });
+      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(1_500) });
       if (response.ok) return response;
       lastFailure = `HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`;
     } catch (error) {

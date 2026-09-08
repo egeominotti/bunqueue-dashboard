@@ -114,7 +114,12 @@ Both **Save config** and **Save & restart** validate your ports first: each must
 - **Memory and Connections need a running server.** Those vitals come from the live server, so they read `, ` whenever it's stopped.
 
 ::: details Under the hood (for developers)
-- Lifecycle, configuration, and logs all go through the local **control agent** (`bq.control.*`, default `http://localhost:6800`): `GET /control/status` is the primary poll, `POST /control/start|stop|restart` drive the process, `PUT /control/config` persists config, and `GET /control/logs` feeds the log tail.
+- Lifecycle, configuration, and logs all go through the local **control agent** (`bq.control.*`, default `http://localhost:6800`): `GET /control/status` is the primary poll, `POST /control/start|stop|restart` drive the process, `PUT /control/config` persists config to the agent's private settings file, and `GET /control/logs` feeds the log tail.
 - The live **Memory** and **Connections** vitals come from the bunqueue server's own `GET /health` (via `bq.health()`, called with `strict:false`) and are polled only while the process is running.
 - Polling uses the global refresh interval from Settings, **3000 ms by default** (floored at 500 ms), at most one request in flight. There is no SSE on this page; the uptime clock is a separate client-side 1-second ticker.
 :::
+
+Saved server settings survive agent and dashboard restarts. The default file is
+`.bunqueue-dashboard/config.json` in the launch directory; service installations
+can select an absolute `AGENT_CONFIG_PATH`. Saved settings take precedence over
+initial environment defaults. Loading them does not start the server automatically.

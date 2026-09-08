@@ -3,6 +3,7 @@ import {
   DbExportUnavailableError,
   MissingDbError,
 } from '../db';
+import { DbReadBusyError, DbReadUnavailableError } from '../db/types';
 import { safeErrorMessage } from '../errorMessage';
 import { QueueOperationsUnavailableError } from '../queue/types';
 import { WorkflowRuntimeUnavailableError } from '../workflow/runtime';
@@ -26,6 +27,8 @@ export function errorStatus(error: unknown): number {
   try {
     if (error instanceof AgentLifecycleClosedError) return 503;
     if (error instanceof MissingDbError) return 404;
+    if (error instanceof DbReadBusyError) return 429;
+    if (error instanceof DbReadUnavailableError) return 503;
     if (error instanceof DbExportBusyError) return 429;
     if (error instanceof DbExportUnavailableError) return 503;
     if (error instanceof QueueOperationsUnavailableError) {

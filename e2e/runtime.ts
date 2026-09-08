@@ -178,6 +178,7 @@ function spawnDashboard(): Child {
     cwd: repository,
     env: {
       ...process.env,
+      AGENT_CONFIG_PATH: join(scratch, 'agent-config.json'),
       AGENT_ALLOWED_HOSTS: '',
       AGENT_ALLOWED_ORIGINS: '',
       AGENT_PORT: String(E2E_AGENT_PORT),

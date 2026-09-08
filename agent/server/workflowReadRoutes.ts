@@ -1,9 +1,7 @@
+import { readWithTimeout } from '../db/queryTimeout';
 import {
   type WorkflowStateFilter,
   type WorkflowStoreKind,
-  workflowExecution,
-  workflowExecutions,
-  workflowStats,
   WORKFLOW_STATES,
 } from '../workflows';
 import type { RouteResponse } from './types';
@@ -32,9 +30,9 @@ export async function routeWorkflowReadRequest(
   admission?: ManagedDatabaseAdmission
 ): Promise<RouteResponse | null> {
   if (pathname === '/workflows/stats' && method === 'GET') {
-    return withDatabase(dataPath, admission, (path) => ({
+    return withDatabase(dataPath, admission, async (path) => ({
       status: 200,
-      body: { ok: true, ...workflowStats(path) },
+      body: { ok: true, ...(await readWithTimeout('workflowStats', [path], request.signal)) },
     }));
   }
   if (pathname === '/workflows' && method === 'GET') {
@@ -52,17 +50,17 @@ export async function routeWorkflowReadRequest(
     ) {
       throw new Error('Unknown workflow execution state');
     }
-    return withDatabase(dataPath, admission, (path) => ({
+    return withDatabase(dataPath, admission, async (path) => ({
       status: 200,
       body: {
         ok: true,
-        ...workflowExecutions(path, {
+        ...(await readWithTimeout('workflowExecutions', [path, {
           kind: workflowKind(query),
           workflowName: query.get('workflowName') || undefined,
           state: state as WorkflowStateFilter | undefined,
           limit: integer(query, 'limit', 50),
           offset: integer(query, 'offset', 0),
-        }),
+        }], request.signal)),
       },
     }));
   }
@@ -78,8 +76,8 @@ export async function routeWorkflowReadRequest(
       throw new Error(`Duplicate workflow detail option: ${key}`);
     }
   }
-  return withDatabase(dataPath, admission, (path) => {
-    const execution = workflowExecution(path, decodeURIComponent(rawId), workflowKind(query));
+  return withDatabase(dataPath, admission, async (path) => {
+    const execution = await readWithTimeout('workflowExecution', [path, decodeURIComponent(rawId), workflowKind(query)], request.signal);
     return execution
       ? { status: 200, body: { ok: true, execution } }
       : { status: 404, body: { ok: false, error: 'Workflow execution not found' } };
@@ -89,7 +87,7 @@ export async function routeWorkflowReadRequest(
 function withDatabase<T>(
   dataPath: string,
   admission: ManagedDatabaseAdmission | undefined,
-  operation: (path: string) => T
+  operation: (path: string) => T | Promise<T>
 ): Promise<T> {
   return admission
     ? admission((snapshot) => operation(snapshot.dataPath))

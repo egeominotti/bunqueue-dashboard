@@ -1,0 +1,140 @@
+name: Complete validation
+
+on:
+  workflow_call:
+    inputs:
+      release_artifacts:
+        description: Keep tested executables for the release job in this run
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Single source of truth: lint/format, both TypeScript projects, app and
+      # docs builds, bundle budget, coverage floor, and the blocking HIGH audit.
+      - name: Run quality gate
+        run: bun run quality
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.sha }}
+          path: dist
+          retention-days: 7
+          if-no-files-found: error
+
+  browser-e2e:
+    name: Browser E2E (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install browser and OS dependencies
+        run: bunx playwright install --with-deps ${{ matrix.browser }}
+
+      - name: Build production browser fixture
+        run: bun run build && bun scripts/gen-embed.ts
+
+      - name: Run real-browser E2E
+        run: bunx playwright test --project=${{ matrix.browser }}
+
+      - name: Run three-broker PostgreSQL Dashboard E2E
+        if: matrix.browser == 'chromium'
+        run: bun run test:e2e:browser:postgres-fleet
+
+      - name: Run managed server, Workflow, Copilot, MCP and S3 browser E2E
+        if: matrix.browser == 'chromium'
+        run: bunx playwright test -c playwright.managed.config.ts
+
+      - name: Verify documentation URLs, hydration and navigation
+        if: matrix.browser == 'chromium'
+        run: bun run test:e2e:docs
+
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ matrix.browser }}-${{ github.sha }}
+          path: test-results
+          retention-days: 7
+          if-no-files-found: ignore
+
+  native:
+    name: Native binary (${{ matrix.platform }})
+    needs: gate
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: linux-x64, runner: ubuntu-24.04, arch: x64, suffix: '' }
+          - { platform: linux-arm64, runner: ubuntu-24.04-arm, arch: arm64, suffix: '' }
+          - { platform: darwin-x64, runner: macos-15-intel, arch: x64, suffix: '' }
+          - { platform: darwin-arm64, runner: macos-15, arch: arm64, suffix: '' }
+          - { platform: windows-x64, runner: windows-2025, arch: x64, suffix: '.exe' }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: Verify native architecture and runtime
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          bun run version:check
+          bun -e 'if (process.arch !== process.env.EXPECTED_ARCH) throw new Error("Native architecture mismatch"); console.log(process.platform, process.arch, Bun.version)'
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ github.sha }}
+          path: dist
+      - name: Compile native release artifact
+        run: |
+          bun scripts/gen-embed.ts
+          bun build scripts/serve.ts agent/dbReadWorker.ts agent/backup/standaloneWorker.ts --compile --minify --target=bun-${{ matrix.platform }} --outfile bunqueue-dashboard-${{ matrix.platform }}${{ matrix.suffix }}
+      - name: Execute the exact artifact with no Bun on PATH
+        run: bun scripts/validate-standalone-runtime.ts ./bunqueue-dashboard-${{ matrix.platform }}${{ matrix.suffix }}
+      - name: Upload tested executable
+        if: inputs.release_artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.platform }}-${{ github.sha }}
+          path: bunqueue-dashboard-${{ matrix.platform }}${{ matrix.suffix }}
+          if-no-files-found: error
+          retention-days: 1

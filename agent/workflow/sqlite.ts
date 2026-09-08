@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { Database } from 'bun:sqlite';
-import { MissingDbError } from '../db';
+import { MissingDbError } from '../db/types';
 import type { WorkflowStoreKind } from './types';
 
 export interface WorkflowSchema {

@@ -1,8 +1,5 @@
 name: CI
 
-# Runs the canonical `bun run quality` gate on every push to main and every
-# pull request. Publishing workflows invoke this same script before releasing.
-
 on:
   push:
     branches: [main]
@@ -10,90 +7,25 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Cancel superseded runs on the same ref so only the latest commit is verified.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  validation:
+    name: Validation
+    uses: ./.github/workflows/validation.yml
+
   gate:
-    name: Quality gate
+    name: Stability gate
+    if: always()
+    needs: validation
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      # Single source of truth: lint/format, both TypeScript projects, app and
-      # docs builds, bundle budget, coverage floor, and the blocking HIGH audit.
-      - name: Run quality gate
-        run: bun run quality
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-${{ github.sha }}
-          path: dist
-          retention-days: 7
-          if-no-files-found: error
-
-  browser-e2e:
-    name: Browser E2E (${{ matrix.browser }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chromium, firefox, webkit]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: .bun-version
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Install browser and OS dependencies
-        run: bunx playwright install --with-deps ${{ matrix.browser }}
-
-      - name: Build production browser fixture
-        run: bun run build && bun scripts/gen-embed.ts
-
-      - name: Run real-browser E2E
-        run: bunx playwright test --project=${{ matrix.browser }}
-
-      - name: Run three-broker PostgreSQL Dashboard E2E
-        if: matrix.browser == 'chromium'
-        run: bun run test:e2e:browser:postgres-fleet
-
-      - name: Run managed server, Workflow, Copilot, MCP and S3 browser E2E
-        if: matrix.browser == 'chromium'
-        run: bunx playwright test -c playwright.managed.config.ts
-
-      - name: Verify documentation URLs, hydration and navigation
-        if: matrix.browser == 'chromium'
-        run: bun run test:e2e:docs
-
-      - name: Upload browser diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-${{ matrix.browser }}-${{ github.sha }}
-          path: test-results
-          retention-days: 7
-          if-no-files-found: ignore
+      - name: Require every quality, browser and native binary check
+        env:
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+        run: test "$VALIDATION_RESULT" = success

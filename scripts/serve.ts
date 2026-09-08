@@ -4,9 +4,10 @@
  * local control agent through a same-origin /agent bridge.
  */
 import { logger } from '../agent/logger';
+import { compiledWorkerUrl } from '../agent/compiledRuntime';
+import { agentConfigStore } from '../agent/manager/configStore';
 import { BunqueueBackupRunner } from '../agent/backup/runner';
 import { setBackupWorkerUrl } from '../agent/backup/workerFactory';
-import { setQueryWorkerUrl } from '../agent/db';
 import { QueueOperationsRuntime } from '../agent/queue/runtime';
 import {
   AgentLifecycleGate,
@@ -50,18 +51,7 @@ export {
 } from './servePolicy';
 
 async function main(): Promise<void> {
-  // Compiled Bun entrypoints load the query worker from the embedded bundle.
-  const compiled = import.meta.url.includes('/$bunfs/');
-  setQueryWorkerUrl(
-    compiled
-      ? new URL('/$bunfs/root/agent/dbQueryWorker.js', 'file:///').href
-      : new URL('../agent/dbQueryWorker.ts', import.meta.url).href
-  );
-  setBackupWorkerUrl(
-    compiled
-      ? new URL('/$bunfs/root/agent/backup/standaloneWorker.js', 'file:///').href
-      : null
-  );
+  setBackupWorkerUrl(compiledWorkerUrl(import.meta.url, 'agent/backup/standaloneWorker.js'));
 
   const port = Number(process.env.PORT) || 8080;
   const host = process.env.BIND_ADDR || '127.0.0.1';
@@ -109,7 +99,7 @@ async function main(): Promise<void> {
 
   // Keep ProcessManager out of policy-only test imports.
   const { ProcessManager } = await import('../agent/manager');
-  const mgr = new ProcessManager();
+  const mgr = new ProcessManager(undefined, agentConfigStore());
   const workflowRuntime = new WorkflowRuntime();
   const backupRunner = new BunqueueBackupRunner();
   const queueRuntime = new QueueOperationsRuntime();
@@ -198,4 +188,9 @@ async function main(): Promise<void> {
   );
 }
 
-if (import.meta.main) await main();
+if (import.meta.main) {
+  if (process.argv.includes('--bq-db-read')) {
+    const { runDatabaseReadProcess } = await import('../agent/db/readProcessMain');
+    await runDatabaseReadProcess();
+  } else await main();
+}

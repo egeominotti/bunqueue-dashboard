@@ -1,25 +1,27 @@
-let workerUrl = new URL('../dbQueryWorker.ts', import.meta.url).href;
+import { DatabaseProcessWorker, type DatabaseWorker } from './processWorker';
 
-const spawnWorker = (): Worker => new Worker(workerUrl, { type: 'module' });
-let queryFactory: () => Worker = spawnWorker;
-let exportFactory: () => Worker = spawnWorker;
+let workerUrl: string | undefined;
+const spawnWorker = (): DatabaseWorker => new DatabaseProcessWorker(workerUrl);
+let queryFactory: () => DatabaseWorker = spawnWorker;
+let exportFactory: () => DatabaseWorker = spawnWorker;
 
-export function createQueryWorker(): Worker {
+export function createQueryWorker(): DatabaseWorker {
   return queryFactory();
 }
 
-export function createExportWorker(): Worker {
+export function createExportWorker(): DatabaseWorker {
   return exportFactory();
 }
 
-export function setQueryWorkerUrl(url: string): void {
-  workerUrl = url;
+/** Optional legacy query/export worker override, still hosted in a killable process. */
+export function setQueryWorkerUrl(url: string | null): void {
+  workerUrl = url ?? undefined;
 }
 
-export function setQueryWorkerFactory(factory: (() => Worker) | null): void {
+export function setQueryWorkerFactory(factory: (() => DatabaseWorker) | null): void {
   queryFactory = factory ?? spawnWorker;
 }
 
-export function setExportWorkerFactory(factory: (() => Worker) | null): void {
+export function setExportWorkerFactory(factory: (() => DatabaseWorker) | null): void {
   exportFactory = factory ?? spawnWorker;
 }

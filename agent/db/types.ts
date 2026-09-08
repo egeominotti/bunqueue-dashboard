@@ -19,6 +19,9 @@ export class MissingDbError extends Error {
   readonly missing = true;
 }
 
+export class DbReadBusyError extends Error {}
+export class DbReadUnavailableError extends Error {}
+
 /** Maps a saturated export worker pool to HTTP 429. */
 export class DbExportBusyError extends Error {}
 

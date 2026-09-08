@@ -1,3 +1,4 @@
+import { terminateDatabaseProcesses } from '../db/processWorker';
 import { BunqueueBackupRunner, type BackupRunnerPort } from '../backup/runner';
 import type { ProcessManager } from '../manager';
 import { QueueOperationsRuntime } from '../queue/runtime';
@@ -110,7 +111,7 @@ export function createFetchHandler(
     shuttingDown ??= closeThenShutdown(beginShutdown, manager);
     return shuttingDown;
   };
-  const forceShutdown = () => manager.forceShutdown();
+  const forceShutdown = () => { terminateDatabaseProcesses(); manager.forceShutdown(); };
   return Object.assign(handle, { close, beginShutdown, shutdown, forceShutdown });
 }
 

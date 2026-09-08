@@ -1,10 +1,6 @@
+import { readWithTimeout } from '../db/queryTimeout';
 import {
   type DbFilter,
-  dbCell,
-  dbInfo,
-  dbRows,
-  dbSchema,
-  dbTables,
   exportWithTimeout,
   queryWithTimeout,
 } from '../db';
@@ -105,15 +101,15 @@ export async function routeDatabaseRequest(
   admission?: ManagedDatabaseAdmission
 ): Promise<RouteResponse | Response | null> {
   if (pathname === '/db/info' && method === 'GET') {
-    return withDatabase(dataPath, admission, (path) => ({
+    return withDatabase(dataPath, admission, async (path) => ({
       status: 200,
-      body: { ok: true, ...dbInfo(path) },
+      body: { ok: true, ...(await readWithTimeout('dbInfo', [path], request.signal)) },
     }));
   }
   if (pathname === '/db/tables' && method === 'GET') {
-    return withDatabase(dataPath, admission, (path) => ({
+    return withDatabase(dataPath, admission, async (path) => ({
       status: 200,
-      body: { ok: true, tables: dbTables(path) },
+      body: { ok: true, tables: await readWithTimeout('dbTables', [path], request.signal) },
     }));
   }
   if (pathname.startsWith('/db/tables/') && method === 'GET') {
@@ -126,20 +122,20 @@ export async function routeDatabaseRequest(
       );
     }
     if (segments.length === 2 && subresource === 'schema') {
-      return withDatabase(dataPath, admission, (path) => ({
+      return withDatabase(dataPath, admission, async (path) => ({
         status: 200,
-        body: { ok: true, ...dbSchema(path, table) },
+        body: { ok: true, ...(await readWithTimeout('dbSchema', [path, table], request.signal)) },
       }));
     }
     if (segments.length === 2 && subresource === 'cell') {
       const query = new URL(request.url).searchParams;
       const rowid = query.get('rowid');
       if (rowid === null) throw new Error('rowid is required');
-      return withDatabase(dataPath, admission, (path) => ({
+      return withDatabase(dataPath, admission, async (path) => ({
         status: 200,
         body: {
           ok: true,
-          ...dbCell(path, table, rowid, query.get('column') ?? ''),
+          ...(await readWithTimeout('dbCell', [path, table, rowid, query.get('column') ?? ''], request.signal)),
         },
       }));
     }
@@ -147,11 +143,11 @@ export async function routeDatabaseRequest(
       return { status: 404, body: { ok: false, error: 'Not found' } };
     }
     const query = new URL(request.url).searchParams;
-    return withDatabase(dataPath, admission, (path) => ({
+    return withDatabase(dataPath, admission, async (path) => ({
       status: 200,
       body: {
         ok: true,
-        ...dbRows(
+        ...(await readWithTimeout('dbRows', [
           path,
           table,
           Number(query.get('limit')) || 50,
@@ -159,7 +155,7 @@ export async function routeDatabaseRequest(
           query.get('orderBy') || undefined,
           query.get('dir') === 'desc' ? 'desc' : 'asc',
           browseFilter(query)
-        ),
+        ], request.signal)),
       },
     }));
   }
@@ -171,7 +167,7 @@ export async function routeDatabaseRequest(
     })) as { sql?: string };
     return withDatabase(dataPath, admission, async (path) => ({
       status: 200,
-      body: { ok: true, ...(await queryWithTimeout(path, sql ?? '')) },
+      body: { ok: true, ...(await queryWithTimeout(path, sql ?? '', request.signal)) },
     }));
   }
   return null;
