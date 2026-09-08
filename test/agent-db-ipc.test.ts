@@ -19,11 +19,16 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(directory, { recursive: true, force: true }));
 
-async function invoke(message: unknown, disconnect = false) {
+async function invoke(message: unknown, disconnect = false, trace = false) {
   let readyCount = 0;
   let timedOut = false;
   let sendError: unknown;
   const child = Bun.spawn(command, {
+    env: {
+      ...process.env,
+      BQ_DB_PROCESS_TRACE: trace ? '1' : undefined,
+      BUNQUEUE_TOKEN: 'ipc-private-test-token',
+    },
     // Keep stdin open and empty: the IPC supervisor must never wait on it.
     stdin: 'pipe',
     stdout: 'pipe',
@@ -53,8 +58,8 @@ async function invoke(message: unknown, disconnect = false) {
     expect(timedOut).toBe(false);
     expect(sendError).toBeUndefined();
     expect(readyCount).toBe(1);
-    expect(errors).toBe('');
-    return { code, output: Buffer.from(output) };
+    if (!trace) expect(errors).toBe('');
+    return { code, output: Buffer.from(output), errors };
   } finally {
     clearTimeout(timer);
     try {
@@ -90,4 +95,17 @@ test('IPC rejects malformed and oversized requests without starting a database r
     expect(result.code).toBe(0);
     expect(deserialize(result.output)).toMatchObject({ ok: false, error: expect.any(String) });
   }
+});
+
+test('phase diagnostics omit query contents, results and environment secrets', async () => {
+  const result = await invoke(
+    serialize({ operation: 'dbQuery', args: [path, "SELECT 'private-query-marker' AS value"] }),
+    false,
+    true
+  );
+  expect(result.code).toBe(0);
+  expect(result.errors).toContain('worker-created');
+  expect(result.errors).toContain('output-written');
+  expect(result.errors).not.toContain('private-query-marker');
+  expect(result.errors).not.toContain('ipc-private-test-token');
 });

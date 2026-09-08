@@ -59,6 +59,8 @@ async function launch(): Promise<string> {
       // An empty PATH proves compiled SQLite reads do not require an installed Bun.
       PATH: join(scratch, 'empty-bin'), SystemRoot: process.env.SystemRoot,
       TEMP: scratch, TMPDIR: scratch,
+      // Phase-only diagnostics are printed if validation fails; no query or environment contents.
+      BQ_DB_PROCESS_TRACE: '1',
       PORT: String(port), AGENT_PORT: String(agentPort), BIND_ADDR: '127.0.0.1',
       AGENT_CONFIG_PATH: configPath, BUNQUEUE_DATA_PATH: databasePath,
       AGENT_TOKEN: token, BUNQUEUE_TOKEN: apiToken, TRUST_PROXY: '1',

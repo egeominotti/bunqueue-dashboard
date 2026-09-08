@@ -28,7 +28,7 @@ process.once('exit', terminateDatabaseProcesses);
 /** Unlike Worker.terminate(), SIGKILL interrupts synchronous sqlite3_step. */
 export class DatabaseProcessWorker implements DatabaseWorker {
   private listeners = new Map<string, Array<(event: unknown) => void>>();
-  private child?: Bun.Subprocess<'ignore', 'pipe', 'ignore'>;
+  private child?: Bun.Subprocess<'ignore', 'pipe', 'ignore' | 'inherit'>;
   private stopped = false;
   private started = false;
   private closed = false;
@@ -75,22 +75,26 @@ export class DatabaseProcessWorker implements DatabaseWorker {
       const input = serialize(operation);
       if (input.byteLength > 128 * 1024) throw new Error('Database request exceeds 128 KiB');
       const compiled = isCompiledModule(import.meta.url);
+      const trace = process.env.BQ_DB_PROCESS_TRACE === '1';
+      if (trace) console.error(JSON.stringify({ component: 'db-process', phase: 'spawn', module: import.meta.url, compiled, executable: process.execPath }));
       let delivered = false;
       this.child = Bun.spawn(compiled
         ? [process.execPath, '--bq-db-read']
         : [process.execPath, fileURLToPath(new URL('./readProcessMain.ts', import.meta.url))], {
         // Database readers need no managed-server tokens or cloud credentials.
-        env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMPDIR: process.env.TMPDIR },
-        stdin: 'ignore', stdout: 'pipe', stderr: 'ignore',
+        env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMPDIR: process.env.TMPDIR, BQ_DB_PROCESS_TRACE: trace ? '1' : undefined },
+        stdin: 'ignore', stdout: 'pipe', stderr: trace ? 'inherit' : 'ignore',
         ipc: (message, subprocess) => {
           if (message !== 'ready' || delivered || this.stopped) return;
           delivered = true;
+          if (trace) console.error(JSON.stringify({ component: 'db-process', phase: 'ready', pid: subprocess.pid }));
           try { subprocess.send(input); } catch { this.terminate(); }
         },
       });
       const [output, code] = await Promise.all([
         readBoundedBytes(this.child.stdout, 32 * 1024 * 1024), this.child.exited,
       ]);
+      if (trace) console.error(JSON.stringify({ component: 'db-process', phase: 'exited', code, bytes: output.byteLength }));
       if (this.stopped) return;
       if (code !== 0) throw new Error(`Database process exited with code ${code}`);
       const response = deserialize(output) as Record<string, unknown>;
