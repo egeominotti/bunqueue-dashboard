@@ -106,7 +106,7 @@
     "@fontsource-variable/inter": "^5.2.8",
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@modelcontextprotocol/sdk": "1.30.0",
-    "@playwright/test": "1.62.1",
+    "@playwright/test": "1.63.0",
     "@shikijs/vitepress-twoslash": "^4.3.0",
     "@tailwindcss/vite": "^4.3.2",
     "@types/node": "^26.0.1",
