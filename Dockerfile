@@ -4,7 +4,7 @@
 # The output is static files, identical for every target architecture, so this
 # stage runs once on the builder's native platform; the runtime stage below only
 # copies files, so multi-arch images need no emulation.
-FROM --platform=$BUILDPLATFORM oven/bun:1.4.2-alpine AS build
+FROM --platform=$BUILDPLATFORM oven/bun:1.4.3-alpine AS build
 WORKDIR /app
 
 # Install dependencies first (cached until the lockfile changes).
