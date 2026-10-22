@@ -15,6 +15,13 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+### Changed
+
+- npm releases are published through npm trusted publishing (OIDC) with a
+  signed provenance attestation, instead of a long-lived `NPM_TOKEN`. The
+  package is packed with Bun in a job that holds no credential; a separate job
+  only downloads that tarball and publishes it with the npm CLI.
+
 ## [1.0.2] - 2026-10-22
 
 ### Changed

@@ -190,51 +190,113 @@ jobs:
           fail_on_unmatched_files: true
 
   # Publishes the package to npm (`bunx bunqueue-dashboard`) after the release
-  # job's gate has passed. Independently idempotent: it publishes iff the
-  # NPM_TOKEN secret is configured AND package.json's version is not already on
-  # the registry — so an un-bumped push or a missing secret is a clean skip,
-  # never a failure. `bun publish` runs the `prepack` script (vite build +
-  # embed manifest), so the tarball always carries a fresh dist/.
-  npm:
-    name: Publish to npm
+  # job's gate has passed, through npm trusted publishing (OIDC, trusted
+  # publisher: release.yml, environment `npm`) with a signed provenance
+  # attestation and no long-lived npm token. It is split in two jobs so the
+  # publish credential never reaches code that installs dependencies or builds:
+  # `npm-pack` packs with Bun and holds no credential; `npm` only downloads that
+  # tarball and publishes it. Idempotent: an un-bumped push (version already on
+  # the registry) is a clean skip; any other registry answer fails closed.
+  npm-pack:
+    name: Pack for npm
     runs-on: ubuntu-latest
     needs: release
     # Same rule as the GitHub Release: only main or a version tag may publish.
     if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
     timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      publish: ${{ steps.pre.outputs.publish }}
+      version: ${{ steps.pre.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: .bun-version
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
       - name: Check publish preconditions
         id: pre
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "$NPM_TOKEN" ]; then
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "No NPM_TOKEN secret configured — skipping npm publish."
-            exit 0
-          fi
-          VER=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' package.json | head -1)
+          set -euo pipefail
+          VER=$(bun -p "require('./package.json').version")
           echo "version=${VER}" >> "$GITHUB_OUTPUT"
-          if bun info "bunqueue-dashboard@${VER}" version >/dev/null 2>&1; then
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "bunqueue-dashboard@${VER} already on npm — skipping."
-          else
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          fi
+          # 404 = unpublished, 200 = already on npm (clean skip); anything else
+          # (network or registry error) stops instead of guessing.
+          STATUS=$(bun -e '
+            const r = await fetch("https://registry.npmjs.org/bunqueue-dashboard/" + encodeURIComponent(process.argv[1]));
+            console.log(r.status);
+          ' "$VER")
+          case "$STATUS" in
+            404) echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+            200)
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "bunqueue-dashboard@${VER} already on npm — skipping." ;;
+            *) echo "::error::Registry returned $STATUS for bunqueue-dashboard@${VER}"; exit 1 ;;
+          esac
 
-      - name: Publish
+      - name: Install dependencies
         if: steps.pre.outputs.publish == 'true'
-        env:
-          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: bun publish --access public --registry https://registry.npmjs.org
+        run: bun install --frozen-lockfile
+
+      # `bun pm pack` runs the `prepack` script (version check, vite build, embed
+      # manifest), so the tarball always carries a fresh dist/.
+      - name: Pack
+        if: steps.pre.outputs.publish == 'true'
+        run: |
+          mkdir -p /tmp/npm-package
+          bun pm pack --destination /tmp/npm-package
+
+      - name: Upload the packed tarball
+        if: steps.pre.outputs.publish == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: npm-bunqueue-dashboard-${{ steps.pre.outputs.version }}
+          path: /tmp/npm-package/bunqueue-dashboard-${{ steps.pre.outputs.version }}.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: npm-pack
+    if: needs.npm-pack.outputs.publish == 'true'
+    timeout-minutes: 10
+    environment: npm
+    # Only the OIDC permission: this job checks out nothing and runs no
+    # repository or dependency code.
+    permissions:
+      id-token: write
+    env:
+      VERSION: ${{ needs.npm-pack.outputs.version }}
+    steps:
+      - name: Download the packed tarball
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: npm-bunqueue-dashboard-${{ needs.npm-pack.outputs.version }}
+          path: /tmp/npm-package
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; Bun's publisher has no OIDC support.
+      - name: Install the npm CLI used for trusted publishing
+        run: |
+          set -euo pipefail
+          npm install -g npm@11.6.2
+          node -e '
+            const [major, minor, patch] = process.argv[1].trim().split(".").map(Number);
+            if (major * 1e6 + minor * 1e3 + patch < 11005001) throw new Error("npm " + process.argv[1] + " cannot use trusted publishing");
+          ' "$(npm --version)"
+
+      - name: Publication dry run
+        run: npm publish --dry-run --ignore-scripts --access public "/tmp/npm-package/bunqueue-dashboard-$VERSION.tgz"
+
+      - name: Publish with provenance
+        run: npm publish --ignore-scripts --access public --provenance "/tmp/npm-package/bunqueue-dashboard-$VERSION.tgz"
