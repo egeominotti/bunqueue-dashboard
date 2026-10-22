@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { assertRequiredBunVersion, REQUIRED_BUN_VERSION } from './bunVersion';
 
 const root = resolve(import.meta.dir, '..');
-const expectedEngine = '1.4.3';
+const expectedEngine = '1.4.4';
 const workflows = ['ci.yml', 'ci-gate.yml', 'docker.yml', 'lighthouse.yml', 'pages.yml', 'release.yml', 'validation.yml', 'resilience.yml'];
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -23,14 +23,14 @@ async function main(): Promise<void> {
     engines?: { bun?: string };
     devDependencies?: Record<string, string>;
   };
-  assert(pkg.packageManager === `bun@${REQUIRED_BUN_VERSION}`, 'packageManager must pin Bun 1.4.3');
-  assert(pkg.engines?.bun === expectedEngine, 'engines.bun must pin Bun 1.4.3');
-  assert(pkg.devDependencies?.['bun-types'] === '1.4.3', 'bun-types must pin Bun 1.4.3');
+  assert(pkg.packageManager === `bun@${REQUIRED_BUN_VERSION}`, 'packageManager must pin Bun 1.4.4');
+  assert(pkg.engines?.bun === expectedEngine, 'engines.bun must pin Bun 1.4.4');
+  assert(pkg.devDependencies?.['bun-types'] === '1.4.4', 'bun-types must pin Bun 1.4.4');
 
   const dockerfile = await text('Dockerfile');
   assert(
     new RegExp(`^FROM (?:--platform=\\$BUILDPLATFORM )?oven/bun:${REQUIRED_BUN_VERSION.replaceAll('.', '\\.')}-alpine AS build$`, 'm').test(dockerfile),
-    'Docker build stage must pin Bun 1.4.3'
+    'Docker build stage must pin Bun 1.4.4'
   );
 
   for (const workflow of workflows) {

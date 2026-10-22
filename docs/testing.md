@@ -12,7 +12,7 @@ The public demo uses fixtures; it does not prove connectivity or persistence.
 
 ## Reproduce locally
 
-Use the pinned Bun **1.4.3**, installed dependencies, Docker, and Playwright browser binaries:
+Use the pinned Bun **1.4.4**, installed dependencies, Docker, and Playwright browser binaries:
 
 ```bash
 bun install --frozen-lockfile

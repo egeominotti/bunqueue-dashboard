@@ -136,7 +136,7 @@ contracts; it never patches Bunqueue internals.
 
 ## Quick start
 
-**Prerequisites:** [Bun](https://bun.sh) 1.4.3 and a reachable bunqueue server (or let the control
+**Prerequisites:** [Bun](https://bun.sh) 1.4.4 and a reachable bunqueue server (or let the control
 agent start one for you from the **Server** page).
 
 ### Run from npm (no clone)
