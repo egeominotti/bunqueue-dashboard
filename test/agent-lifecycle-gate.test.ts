@@ -71,6 +71,25 @@ describe('AgentLifecycleGate', () => {
     expect(closes).toBe(1);
   });
 
+  test('turns a synchronous throw into a rejection and releases the lease', async () => {
+    const gate = new AgentLifecycleGate();
+    let lease!: Promise<void>;
+    expect(() => {
+      lease = gate.lease(() => {
+        throw new Error('sync failure');
+      });
+    }).not.toThrow();
+    await expect(lease).rejects.toThrow('sync failure');
+    const events: string[] = [];
+    await gate.run(async () => {
+      events.push('writer');
+    });
+    await gate.close(async () => {
+      events.push('close');
+    });
+    expect(events).toEqual(['writer', 'close']);
+  });
+
   test('publishes a lease before its synchronous prefix queues run and close', async () => {
     const gate = new AgentLifecycleGate();
     const active = deferred();
