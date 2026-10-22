@@ -47,13 +47,15 @@ async function main(): Promise<void> {
     assert(!source.includes('BUN_VERSION:'), `${workflow} must not duplicate the Bun version`);
   }
 
+  // Bun installs, builds and packs; the npm CLI only publishes that tarball,
+  // because Bun's publisher has no OIDC trusted publishing or provenance.
   const release = await text('.github/workflows/release.yml');
-  assert(
-    !/actions\/setup-node|(?:run:\s*|if\s+)npm (?:view|publish)/.test(release),
-    'release publishing must run through Bun'
-  );
+  assert(!/NPM_TOKEN|NPM_CONFIG_TOKEN|NODE_AUTH_TOKEN/.test(release), 'npm publishing must use trusted publishing, not a token');
+  assert(!/bun publish/.test(release), 'npm publishing must go through the trusted-publishing npm CLI step');
+  assert(/bun pm pack --destination \/tmp\/npm-package/.test(release), 'the npm tarball must be packed with Bun');
+  assert(/npm publish --ignore-scripts --access public --provenance /.test(release), 'npm publishing must attach provenance');
 
-  console.log(`Bun ${REQUIRED_BUN_VERSION} is pinned across runtime, CI, Docker, types, and publish.`);
+  console.log(`Bun ${REQUIRED_BUN_VERSION} is pinned across runtime, CI, Docker, types, and packing.`);
 }
 
 await main();
