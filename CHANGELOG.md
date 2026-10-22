@@ -58,6 +58,14 @@ the GitHub Release body.
 - A rejected restore now names every field that changed (for example
   `walSize 4152 → 0`), so the cause is visible instead of a generic message.
 
+### Security
+
+- `bun audit --audit-level=high` passes again; it was failing the CI quality
+  gate on 10 high and critical advisories. The MCP SDK moves to 1.32.1 and Vite
+  to 8.1.6, and patched transitive versions of Vue (3.5.44, for
+  `@vue/server-renderer`), markdown-it, proxy-addr, source-map-js and tinypool
+  are pinned through `overrides`.
+
 ## [1.0.1] - 2026-10-01
 
 ### Removed
