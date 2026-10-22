@@ -15,8 +15,14 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-22
+
 ### Changed
 
+- The dashboard now requires Bun 1.4.4 (previously 1.4.2). The npm package
+  (`bunx bunqueue-dashboard`) refuses to start on any other Bun version; the
+  standalone binaries and the Docker image bundle their own runtime and need no
+  Bun at all. CI, the Docker build stage and `bun-types` use the same version.
 - CI/CD runs much faster. The validation workflow now fans out into parallel jobs:
   the `quality` checks are split into static, unit and four runtime groups (the
   new `quality:*` scripts, which `bun run quality` chains locally), the browser
@@ -1511,7 +1517,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.47...v1.0.0
 [0.0.47]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.46...v0.0.47

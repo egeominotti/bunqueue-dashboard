@@ -3,7 +3,7 @@ import { assertRequiredBunVersion, REQUIRED_BUN_VERSION } from '../scripts/bunVe
 
 describe('Bun runtime pin', () => {
   test('accepts the exact repository runtime', () => {
-    expect(REQUIRED_BUN_VERSION).toBe('1.4.2');
+    expect(REQUIRED_BUN_VERSION).toBe('1.4.4');
     expect(Bun.version).toBe(REQUIRED_BUN_VERSION);
     expect(() => assertRequiredBunVersion()).not.toThrow();
   });

@@ -16,6 +16,7 @@ import {
   queryWorkerLoad,
   setQueryWorkerFactory,
 } from '../agent/db';
+import { DbReadUnavailableError } from '../agent/db/types';
 
 const PATH = `/tmp/bq-agent-db-fixes-${process.pid}-${import.meta.file.split('/').at(-1)}.db`;
 
@@ -73,6 +74,10 @@ describe('agent db — audited fixes', () => {
       /** What Bun fires when the thread really exits — only then is the slot freed. */
       close(): void {
         this.emit('close', {});
+      }
+      /** What Bun fires when the worker throws an uncaught error. */
+      crash(message: string): void {
+        this.emit('error', { message, preventDefault: () => {} });
       }
       asWorker(): Worker {
         return this as unknown as Worker;
@@ -148,6 +153,50 @@ describe('agent db — audited fixes', () => {
       expect(queryWorkerLoad()).toBe(0);
       const r = await queryWithTimeout(PATH, 'SELECT 1 AS x');
       expect(r.rows).toEqual([[1]]);
+      expect(queryWorkerLoad()).toBe(0);
+    });
+
+    test('a worker that cannot be created frees its slot at once', async () => {
+      setQueryWorkerFactory(() => {
+        throw new Error('spawn failed');
+      });
+      const caught = await queryWithTimeout(PATH, 'SELECT 1').catch((e) => e);
+      expect(caught).toBeInstanceOf(DbReadUnavailableError);
+      expect((caught as Error).message).toBe('Query worker unavailable: spawn failed');
+      expect(queryWorkerLoad()).toBe(0);
+    });
+
+    test('a request the worker cannot accept fails without waiting for the time limit', async () => {
+      install(() => {
+        throw new Error('channel closed');
+      });
+      const caught = await queryWithTimeout(PATH, 'SELECT 1').catch((e) => e);
+      expect(caught).toBeInstanceOf(DbReadUnavailableError);
+      expect((caught as Error).message).toBe('Could not start database read: channel closed');
+      expect(FakeWorker.live[0]?.terminated).toBe(true);
+    });
+
+    test('a malformed worker reply fails closed and holds the slot until the worker exits', async () => {
+      install(() => ({ rows: [[1]] }));
+      const caught = await queryWithTimeout(PATH, 'SELECT 1').catch((e) => e);
+      expect(caught).toBeInstanceOf(DbReadUnavailableError);
+      expect((caught as Error).message).toBe('Query worker returned a malformed response');
+      expect(FakeWorker.live[0]?.terminated).toBe(true);
+      expect(queryWorkerLoad()).toBe(1);
+      FakeWorker.live[0]?.close();
+      expect(queryWorkerLoad()).toBe(0);
+    });
+
+    test('a crashed worker is reported as unavailable and holds the slot until it exits', async () => {
+      install(() => null);
+      const pending = queryWithTimeout(PATH, 'SELECT 1').catch((e) => e);
+      FakeWorker.live[0]?.crash('worker out of memory');
+      const caught = await pending;
+      expect(caught).toBeInstanceOf(DbReadUnavailableError);
+      expect((caught as Error).message).toBe('Query worker failed: worker out of memory');
+      expect(FakeWorker.live[0]?.terminated).toBe(true);
+      expect(queryWorkerLoad()).toBe(1);
+      FakeWorker.live[0]?.close();
       expect(queryWorkerLoad()).toBe(0);
     });
   });
