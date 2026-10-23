@@ -113,7 +113,7 @@
     "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@playwright/test": "1.62.1",
-    "@shikijs/vitepress-twoslash": "^4.5.0",
+    "@shikijs/vitepress-twoslash": "4.4.3",
     "@tailwindcss/vite": "^4.3.2",
     "@types/node": "^26.0.1",
     "@types/react": "^19.3.0",

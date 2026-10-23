@@ -22,11 +22,14 @@ the GitHub Release body.
   package is packed with Bun in a job that holds no credential; a separate job
   only downloads that tarball and publishes it with the npm CLI.
 - Dependency updates collected from the pending Dependabot pull requests:
-  React and React DOM 19.3, Zod 4.6, happy-dom 20.14, VitePress
-  2.0.0-alpha.20 and `@shikijs/vitepress-twoslash` 4.5 (the versions within
-  the existing ranges at the time of the update, newer than the ones the
-  Dependabot pull requests proposed). The Docker image now serves the
-  dashboard from Caddy 2.10 (previously 2.8).
+  React and React DOM 19.3, Zod 4.6 and happy-dom 20.14 (the newest releases
+  within the existing ranges, slightly newer than the ones the Dependabot pull
+  requests proposed), VitePress 2.0.0-alpha.20 and
+  `@shikijs/vitepress-twoslash` 4.4.3. The documentation's code tooltips pin
+  `@shikijs/vitepress-twoslash` to exactly 4.4.3: 4.5 requires floating-vue
+  5.4, whose menu component no longer has the popper that the plugin patches,
+  so every documentation page logged "Failed to patch FloatingVue". The Docker
+  image now serves the dashboard from Caddy 2.10 (previously 2.8).
 - The workflows use the Node 24 releases of their GitHub actions:
   `actions/checkout` v7, `actions/setup-node` v7 (the npm publishing job, still
   pinned by commit), `actions/attest-build-provenance` v4,
