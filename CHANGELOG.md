@@ -21,6 +21,32 @@ the GitHub Release body.
   signed provenance attestation, instead of a long-lived `NPM_TOKEN`. The
   package is packed with Bun in a job that holds no credential; a separate job
   only downloads that tarball and publishes it with the npm CLI.
+- Dependency updates collected from the pending Dependabot pull requests:
+  React and React DOM 19.3, Zod 4.6 and happy-dom 20.14 (the newest releases
+  within the existing ranges, slightly newer than the ones the Dependabot pull
+  requests proposed), VitePress 2.0.0-alpha.20 and
+  `@shikijs/vitepress-twoslash` 4.4.3. The documentation's code tooltips pin
+  `@shikijs/vitepress-twoslash` to exactly 4.4.3: 4.5 requires floating-vue
+  5.4, whose menu component no longer has the popper that the plugin patches,
+  so every documentation page logged "Failed to patch FloatingVue". The Docker
+  image now serves the dashboard from Caddy 2.10 (previously 2.8).
+- The workflows use the Node 24 releases of their GitHub actions:
+  `actions/checkout` v7, `actions/setup-node` v7 (the npm publishing job, still
+  pinned by commit), `actions/attest-build-provenance` v4,
+  `actions/configure-pages` v6 and `github/codeql-action` v4.
+- The release workflow's two checkouts no longer persist the GitHub token in
+  the repository's Git configuration, so dependency installation and packaging
+  cannot reuse it; neither job runs an authenticated Git command (the release
+  tag is created through the GitHub API).
+
+### Security
+
+- `bun audit --audit-level=high` passes again after advisories published since
+  1.0.2: the `overrides` move DOMPurify (used by Mermaid) to 3.4.17, which
+  fixes a critical `SAFE_FOR_TEMPLATES` bypass and a high-severity `IN_PLACE`
+  issue, and ip-address to 10.7.4; Hono, used by the MCP SDK in development,
+  moves to a patched release within its range. One low-severity KaTeX advisory
+  remains: its fix needs KaTeX 0.18, outside the range Mermaid 11 accepts.
 
 ## [1.0.2] - 2026-10-22
 

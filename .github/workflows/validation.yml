@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
@@ -50,7 +50,7 @@ jobs:
         # runtime-*: real Bunqueue Flow, Workflow, Queue, PostgreSQL, package and soak runs
         group: [static, unit, runtime-a, runtime-b, runtime-c, runtime-d]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
@@ -74,7 +74,7 @@ jobs:
           # Documentation URLs, hydration and navigation (builds the docs itself).
           - { suite: docs, app: false, run: 'bun run test:e2e:docs' }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
@@ -126,7 +126,7 @@ jobs:
       matrix:
         browser: [firefox, webkit]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The image has no unzip, which setup-bun needs, so install the pinned Bun from npm.
       - name: Install Bun pinned by .bun-version
         run: |
@@ -168,7 +168,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
