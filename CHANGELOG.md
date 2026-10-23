@@ -34,6 +34,10 @@ the GitHub Release body.
   `actions/checkout` v7, `actions/setup-node` v7 (the npm publishing job, still
   pinned by commit), `actions/attest-build-provenance` v4,
   `actions/configure-pages` v6 and `github/codeql-action` v4.
+- The release workflow's two checkouts no longer persist the GitHub token in
+  the repository's Git configuration, so dependency installation and packaging
+  cannot reuse it; neither job runs an authenticated Git command (the release
+  tag is created through the GitHub API).
 
 ### Security
 
