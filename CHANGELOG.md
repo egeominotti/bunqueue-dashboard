@@ -21,6 +21,16 @@ the GitHub Release body.
   signed provenance attestation, instead of a long-lived `NPM_TOKEN`. The
   package is packed with Bun in a job that holds no credential; a separate job
   only downloads that tarball and publishes it with the npm CLI.
+- Dependency updates collected from the pending Dependabot pull requests:
+  React and React DOM 19.3, Zod 4.6, happy-dom 20.14, VitePress
+  2.0.0-alpha.20 and `@shikijs/vitepress-twoslash` 4.5 (the versions within
+  the existing ranges at the time of the update, newer than the ones the
+  Dependabot pull requests proposed). The Docker image now serves the
+  dashboard from Caddy 2.10 (previously 2.8).
+- The workflows use the Node 24 releases of their GitHub actions:
+  `actions/checkout` v7, `actions/setup-node` v7 (the npm publishing job, still
+  pinned by commit), `actions/attest-build-provenance` v4,
+  `actions/configure-pages` v6 and `github/codeql-action` v4.
 
 ## [1.0.2] - 2026-10-22
 
