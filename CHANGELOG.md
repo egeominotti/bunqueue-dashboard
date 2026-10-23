@@ -32,6 +32,15 @@ the GitHub Release body.
   pinned by commit), `actions/attest-build-provenance` v4,
   `actions/configure-pages` v6 and `github/codeql-action` v4.
 
+### Security
+
+- `bun audit --audit-level=high` passes again after advisories published since
+  1.0.2: the `overrides` move DOMPurify (used by Mermaid) to 3.4.17, which
+  fixes a critical `SAFE_FOR_TEMPLATES` bypass and a high-severity `IN_PLACE`
+  issue, and ip-address to 10.7.4; Hono, used by the MCP SDK in development,
+  moves to a patched release within its range. One low-severity KaTeX advisory
+  remains: its fix needs KaTeX 0.18, outside the range Mermaid 11 accepts.
+
 ## [1.0.2] - 2026-10-22
 
 ### Changed
