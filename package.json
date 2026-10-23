@@ -154,7 +154,7 @@
     "vue": "^3.5.42"
   },
   "dependencies": {
-    "bunqueue": "2.9.4",
+    "bunqueue": "2.9.5",
     "msgpackr": "^1.11.8"
   },
   "patchedDependencies": {
