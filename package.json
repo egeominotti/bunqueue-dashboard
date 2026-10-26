@@ -152,7 +152,7 @@
   },
   "dependencies": {
     "bunqueue": "2.9.20",
-    "msgpackr": "^1.11.8"
+    "msgpackr": "^2.1.2"
   },
   "patchedDependencies": {
     "ai@7.0.14": "patches/ai@7.0.14.patch"
