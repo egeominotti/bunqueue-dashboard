@@ -1,397 +1,203 @@
-<div align="center">
+<p align="center">
+  <a href="https://bunqueue.dev/">
+    <img src="https://raw.githubusercontent.com/egeominotti/bunqueue/main/docs/src/assets/logo.svg" alt="bunqueue logo" width="88" height="88" />
+  </a>
+</p>
 
-<img src="docs/logo.svg" alt="bunqueue dashboard" width="340" />
+<h1 align="center">bunqueue dashboard</h1>
 
-# bunqueue dashboard
+<p align="center">
+  A web console for your Bunqueue jobs, workflows and servers.
+</p>
 
-**Monitor jobs and operate your Bunqueue server from one dashboard.**
+<p align="center">
+  <a href="https://egeominotti.github.io/bunqueue-dashboard/">Live demo</a> ·
+  <a href="https://egeominotti.github.io/bunqueue-dashboard/docs/">Documentation</a> ·
+  <a href="https://github.com/egeominotti/bunqueue-dashboard/releases">Downloads</a> ·
+  <a href="https://www.youtube.com/watch?v=1bQRFXGClcc">Video tour</a>
+</p>
 
-Manage queues, jobs, DLQ,
-cron, webhooks, workers, and a live activity stream for a [bunqueue](https://bunqueue.dev) server
-(a fast, Redis-free, Bun-native background-job queue), plus **start / stop / restart of the server
-process itself**, all from one place.
+<p align="center">
+  <a href="https://www.npmjs.com/package/bunqueue-dashboard"><img src="https://img.shields.io/npm/v/bunqueue-dashboard?color=db2777" alt="npm version" /></a>
+  <a href="https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml"><img src="https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://bun.com/"><img src="https://img.shields.io/badge/Bun-1.4.4-14151a?logo=bun&logoColor=white" alt="Bun 1.4.4" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license" /></a>
+</p>
 
-For Bun developers and AI-agent builders running bunqueue who want to _operate_ their queue, not just watch it.
+Monitor and operate [Bunqueue](https://bunqueue.dev/) from your browser: find jobs,
+inspect failures, manage schedules, follow durable workflows and control the server
+process. Connect to one broker or keep several broker/agent profiles in Settings.
 
-### [📚 Read the documentation](https://egeominotti.github.io/bunqueue-dashboard/docs/) · [▶ Try the live demo](https://egeominotti.github.io/bunqueue-dashboard/)
-
-[Quick start](https://egeominotti.github.io/bunqueue-dashboard/docs/quickstart) · [User guide](https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide) · [Deployment](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/) · [Verified test coverage](https://egeominotti.github.io/bunqueue-dashboard/docs/testing)
-
-The live demo uses sample data. The docs explain how to connect and operate a real Bunqueue server.
-
-[![npm](https://img.shields.io/npm/v/bunqueue-dashboard?logo=npm&color=cb3837)](https://www.npmjs.com/package/bunqueue-dashboard)
-[![CI](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/ci.yml)
-[![Deploy to GitHub Pages](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/pages.yml)
-[![Docker](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml/badge.svg)](https://github.com/egeominotti/bunqueue-dashboard/actions/workflows/docker.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-online-db2777)](https://egeominotti.github.io/bunqueue-dashboard/docs/)
-[![Live demo](https://img.shields.io/badge/live%20demo-online-22c55e)](https://egeominotti.github.io/bunqueue-dashboard/)
-![Status: Stable](https://img.shields.io/badge/status-stable-22c55e)
-
-![React 19](https://img.shields.io/badge/React-19-149ECA?logo=react&logoColor=white)
-![Vite 8](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
-![Bun](https://img.shields.io/badge/Bun-1.4-000?logo=bun&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Oxlint + Bun fmt](https://img.shields.io/badge/Tooling-Oxlint%20%2B%20Bun%20fmt-7C3AED)
-
-<br />
-
-<a href="https://www.youtube.com/watch?v=1bQRFXGClcc" title="Watch the full bunqueue dashboard tour on YouTube"><img src="docs/public/video-tour.png" alt="Watch the narrated 4K tour of bunqueue dashboard on YouTube" width="900" /></a>
-
-### [▶ Watch the full tour on YouTube](https://www.youtube.com/watch?v=1bQRFXGClcc)
-
-<sub>A narrated 4K walkthrough (7:45, English with subtitles) recorded against a real bunqueue server under live traffic. <a href="https://egeominotti.github.io/bunqueue-dashboard/">Or try the live demo →</a></sub>
-
-<br /><br />
-
-<img src="docs/screenshots/overview.png" alt="bunqueue dashboard, real-time overview: health, throughput, per-queue status, and a live activity feed" width="900" />
-
-<sub>The Overview page. <a href="https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide">See every screen in the illustrated guide →</a></sub>
-
-<details>
-<summary><b>More screenshots</b></summary>
-<br />
-<img src="docs/screenshots/server.png" alt="Server Control, start/stop/restart the bunqueue process with live logs" width="900" />
-<img src="docs/screenshots/jobs.png" alt="Jobs Explorer, filter, inspect, and bulk-action jobs" width="900" />
-<img src="docs/screenshots/database.png" alt="Read-only SQLite inspector, browse tables and run queries" width="900" />
-</details>
-
-</div>
-
----
-
-> ✅ **Stable (1.x).** The dashboard follows [Semantic Versioning](https://semver.org/):
-> breaking changes to its configuration, routes or agent API only ship in a new
-> major version.
-
-## 📚 Documentation
-
-**Full, illustrated docs live at
-[egeominotti.github.io/bunqueue-dashboard/docs](https://egeominotti.github.io/bunqueue-dashboard/docs/).**
-
-- **[Illustrated user guide](https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide)**, section guides with screenshots, operations and limitations.
-- **[Deployment](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/)**, Docker (Caddy), Kubernetes, PM2, and hosting platforms (Vercel, Netlify, Cloudflare, Fly.io, Render, Cloud Run).
-- **[Architecture](https://egeominotti.github.io/bunqueue-dashboard/docs/architecture)** and **[API mapping](https://egeominotti.github.io/bunqueue-dashboard/docs/api-mapping)**, how it fits together and every endpoint it drives.
-- **[Testing matrix](docs/testing.md)**, real-server coverage, reproduction steps and verification limits.
-- **[llms.txt](https://egeominotti.github.io/bunqueue-dashboard/docs/llms.txt)**, the documentation index for LLMs; **[llms-full.txt](https://egeominotti.github.io/bunqueue-dashboard/docs/llms-full.txt)** contains the full text.
-
-## Table of contents
-
-- [Documentation](#-documentation)
-- [Why](#why)
-- [Features](#features)
-- [Quick start](#quick-start)
-- [Architecture](#architecture)
-- [Configuration](#configuration)
-- [Scripts](#scripts)
-- [Docker](#docker)
-- [Deployment](#deployment)
-- [Testing & quality gate](#testing--quality-gate)
-- [Project structure](#project-structure)
-- [Security](#security)
-- [Contributing](#contributing)
-- [License](#license)
-
-## Why
-
-bunqueue exposes a rich HTTP API, but operating it by hand (curl, ad-hoc scripts) is slow and
-error-prone. This dashboard is a production-oriented operator console: it exposes the verified,
-safe subset of the API, fails closed where
-[Bunqueue 2.9.x](https://github.com/egeominotti/bunqueue/releases/tag/v2.9.3) lacks atomic
-flow-safety guarantees, and also manages the
-server *process* through a separate guarded agent.
-
-It uses Bunqueue's public HTTP API (`:6790`) for ordinary remote observability and a small local
-**control agent** for process, FlowProducer, Workflow Engine, database, and backup operations. The
-agent is pinned to the server it manages and uses the exact installable Bunqueue 2.9.4 npm client
-contracts; it never patches Bunqueue internals.
-
-## Features
-
-| Area | Where | What you can do |
-| --- | --- | --- |
-| **Home** | Overview | Live health banner, throughput, queue health, recent activity |
-| **Fleet** | Fleet | Probe and operate multiple Bunqueue APIs + paired agents; verify shared PostgreSQL target/namespace topology |
-| **Server** | Control ▸ Server | **Start / stop / restart** the server process, edit its config, tail process logs |
-| **Enqueue** | Control ▸ Add Job | Add jobs (single or bulk) with every option |
-| **Inspect** | Control ▸ Job Inspector | Look up any job; promote / re-prioritize / delay; view data & result |
-| **Queues** | Control ▸ Queue Control | Pause/resume/promote; desired-state writes plus live SDK limits, group jobs/priorities/pause/policies, deduplication, metrics and journal retention |
-| **Cron** | Control ▸ Cron Manager | Submit acknowledged cron/interval upserts and delete schedules |
-| **Workflow Engine** | Workflow ▸ Overview / Executions / Waiting / Compensation / Archive | Start, recover, signal, inspect, compensate, archive and clean durable executions |
-| **Job Flows** | Workflow ▸ Job Flows | Explore DAGs, run all FlowProducer create modes and operate safe Flow Job methods |
-| **DLQ** | Control ▸ DLQ | Inspect/export failures; removal, retry and purge stay unavailable without atomic generation/topology preconditions |
-| **Webhooks** | Control ▸ Webhooks | Create / enable / delete job-event webhooks |
-| **Ops** | Control ▸ Diagnostics | Health, ping, storage, memory, connections, totals |
-| **S3 backup** | Management ▸ S3 Backup | Configure, inspect, list, create and guarded-restore official snapshots |
-| **Browse** | Queues / Jobs / DLQ / Cron / Metrics / Workers / Logs | Read-only browsing with basic actions |
-
-> Job actions are gated by the v2.9.3 flow contract. Every DLQ retry and completed-job requeue is
-> unavailable: the DLQ GET + POST sequence has no atomic generation/state/topology precondition and
-> can target a job recreated under the same ID, while `retryCompleted` does not rebuild dependency
-> registration or flow order. Cancel, Discard, Drain, Clean, Obliterate and DLQ Purge also fail
-> closed. Bunqueue 2.9's `Queue.removeDlqJob()` also accepts only queue + job ID, so custom-ID reuse
-> prevents the dashboard from proving that a later deletion still targets the observed generation.
-> DLQ `maxAge`/`maxEntries` are read-only, and auto-retry can only be disabled. The in-app Copilot
-> is switched off in official builds (`VITE_ENABLE_COPILOT=1` opts a custom build back in).
+The dashboard targets **Bunqueue 2.9.20**. The live demo uses sample data; the
+published package connects to your own server.
 
 ## Quick start
 
-**Prerequisites:** [Bun](https://bun.sh) 1.4.4 and a reachable bunqueue server (or let the control
-agent start one for you from the **Server** page).
-
-### Run from npm (no clone)
+Install [Bun 1.4.4](https://bun.com/docs/installation), then run:
 
 ```bash
 bunx bunqueue-dashboard
 ```
 
-One command serves the prebuilt dashboard on
-http://127.0.0.1:8080, proxies `/api/*` to your bunqueue server (`BUNQUEUE_URL`, default
-`http://localhost:6790`), and runs the control agent on `127.0.0.1:6800`. Same env knobs as the
-standalone binaries: `PORT` · `BIND_ADDR` · `BUNQUEUE_URL` · `AGENT_PORT` ·
-`AGENT_ALLOWED_ORIGINS` · `AGENT_ALLOWED_HOSTS` · `AGENT_TOKEN` · `BUNQUEUE_TOKEN` ·
-`TRUST_PROXY` · `BASE_PATH` · `BUNQUEUE_MANAGED` · `BUNQUEUE_START_CMD`.
+Open **[http://127.0.0.1:8080](http://127.0.0.1:8080)**.
 
-Install it permanently instead of running via `bunx`:
+- To start a local Bunqueue server, open **Server** and select **Start**. The
+  default command runs the compatible Bunqueue 2.9.20 release.
+- To connect an existing server, configure its API URL and token in **Settings**.
+  For a broker managed by another supervisor, use the command below.
+
+The npm package serves the built UI, proxies API requests and includes the local
+control agent. Its default agent address is `http://127.0.0.1:6800`.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/egeominotti/bunqueue-dashboard/main/docs/screenshots/overview.png" alt="Dashboard overview with server health, job counts, throughput and queue activity" width="1000" />
+</p>
+
+## What you can do
+
+| Area | Capabilities |
+| --- | --- |
+| Jobs | Submit single or bulk jobs, inspect data and results, change eligible jobs, and export the complete filtered inventory to CSV. |
+| Queues and schedules | Browse queue state, pause and resume processing, configure limits and groups, and manage cron or interval schedules. |
+| Workflows and flows | Start and inspect durable executions, send signals, recover or compensate workflows, and explore dependency graphs. |
+| Monitoring | Follow live events, inspect metrics and diagnostics, search workers, and evaluate alert rules. |
+| Fleet | Save multiple broker/agent profiles and inspect shared PostgreSQL topology while keeping each node's lifecycle controls separate. |
+| Server control | Start, stop and restart a managed Bunqueue process, edit its launch settings, and read its logs. |
+| Data and backups | Browse SQLite tables, run read-only SQL, export rows, and create or restore official S3 snapshots. |
+| MCP | Browse Bunqueue's tool catalog and configure external MCP clients. |
+
+SQLite inspection and S3 snapshots apply to SQLite-backed servers. PostgreSQL
+profiles use the queue and fleet controls.
+
+Job actions follow Bunqueue's safety contracts. Operations without atomic job
+identity or flow-topology safeguards remain disabled, including DLQ retry,
+completed-job requeue, cancel, drain and purge. See the
+[verified limitations](https://egeominotti.github.io/bunqueue-dashboard/docs/known-issues).
+
+An optional [Copilot](https://egeominotti.github.io/bunqueue-dashboard/docs/guide/copilot)
+supports AI-assisted operations in custom builds with `VITE_ENABLE_COPILOT=1`.
+It is disabled in the default build.
+
+## Connect an existing server
+
+When Docker, Kubernetes or systemd owns your Bunqueue process, launch the dashboard
+in external-server mode:
 
 ```bash
-bun add -g bunqueue-dashboard
-bunqueue-dashboard
+BUNQUEUE_MANAGED=0 \
+BUNQUEUE_URL=http://127.0.0.1:6790 \
+bunx bunqueue-dashboard
 ```
 
-### Run from source
+This mode reports the server's health and keeps process management with its
+existing supervisor. Stopped-only backup restore is also unavailable in this mode.
+
+For an authenticated broker, set `BUNQUEUE_TOKEN` in the dashboard launch
+environment and enter the matching server token in Settings. The launch value
+also authenticates the agent's health probe. Pair an agent with the same broker
+for SDK, workflow, database and backup operations. See
+[connection and deployment options](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/).
+
+## Deployment options
+
+| Option | What it runs | Requirements |
+| --- | --- | --- |
+| `bunx bunqueue-dashboard` | UI, API proxy and control agent | Bun 1.4.4 |
+| [Standalone executable](https://github.com/egeominotti/bunqueue-dashboard/releases/latest) | UI, API proxy and control agent in one binary | Linux or macOS x64/arm64, or Windows x64 |
+| [Docker image](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/docker) | Static UI served by Caddy | An existing Bunqueue API and any paired agents |
+| [Static hosting](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/platforms) | Built `dist/` directory | A reachable API or a configured same-origin proxy |
+
+The standalone dashboard executable runs without an installed Bun runtime.
+Starting a managed Bunqueue process still requires its launch command to be
+available: install Bun for the default `bunx` command, or configure
+`BUNQUEUE_START_CMD` to use a Bunqueue executable.
+
+To run the published static image locally:
+
+```bash
+docker run --rm \
+  -p 127.0.0.1:8080:80 \
+  ghcr.io/egeominotti/bunqueue-dashboard:edge
+```
+
+Open `http://127.0.0.1:8080` and set the browser-reachable server URL in Settings.
+The `edge` image follows `main`. The
+[Docker guide](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/docker)
+explains API proxying, CORS and connecting a separately running agent.
+
+## Configuration
+
+These variables configure the npm package and standalone executable:
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `PORT` | Dashboard listener | `8080` |
+| `BIND_ADDR` | Dashboard bind address | `127.0.0.1` |
+| `BUNQUEUE_URL` | Bunqueue HTTP API to proxy | `http://localhost:6790` |
+| `BUNQUEUE_MANAGED` | Enable local process management; use `0` for an external server | `1` |
+| `AGENT_PORT` | Direct loopback control-agent port | `6800` |
+| `BASE_PATH` | URL prefix for the UI, assets and API/agent bridges | `/` |
+| `BUNQUEUE_DATA_PATH` | Managed server's SQLite database | `./data/bunq.db` |
+| `AGENT_CONFIG_PATH` | Persistent agent configuration | `./.bunqueue-dashboard/config.json` |
+
+For LAN or reverse-proxy access, configure `AGENT_TOKEN` and `BUNQUEUE_TOKEN`
+together with an explicit host/origin allowlist through `AGENT_ALLOWED_HOSTS`
+and `AGENT_ALLOWED_ORIGINS`. Enter the corresponding tokens in the dashboard's
+authentication prompt or Settings. See
+[the deployment security setup](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/pm2#configure-it)
+for the complete proxy and token configuration.
+
+Static builds use `VITE_BUNQUEUE_URL` and `VITE_BUNQUEUE_AGENT_URL` as initial
+connection defaults; Settings can override them. `VITE_*` values are public bundle
+content, so keep credentials out of them. More options, including PostgreSQL and
+TLS, are documented in [`.env.example`](.env.example) and the
+[agent reference](https://egeominotti.github.io/bunqueue-dashboard/docs/agent).
+
+## Development
+
+Use the Bun version in [`.bun-version`](.bun-version):
 
 ```bash
 git clone https://github.com/egeominotti/bunqueue-dashboard.git
 cd bunqueue-dashboard
-bun install
+bun install --frozen-lockfile
 bun start
 ```
 
-`bun start` boots **both** the control agent and the dashboard in one terminal and shuts both down
-on `Ctrl-C`:
+The development dashboard runs at `http://localhost:5273`; the control agent runs
+at `http://127.0.0.1:6800`. `Ctrl+C` stops both.
 
-| Service | URL | Role |
-| --- | --- | --- |
-| Dashboard | http://localhost:5273 | The UI (`/api/*` is proxied to `:6790` in dev) |
-| Control agent | http://127.0.0.1:6800 | Starts / stops / restarts the server process |
-| bunqueue server | http://localhost:6790 | Your queue server, started from the **Server** page or run separately |
-
-Prefer separate terminals? The individual commands still exist, see [Scripts](#scripts).
-
-## Architecture
-
-```mermaid
-flowchart LR
-    subgraph Browser
-        UI["Dashboard (React 19 SPA)"]
-    end
-    subgraph Local
-        Agent["Control agent (Bun)<br/>127.0.0.1:6800"]
-        Server["bunqueue server<br/>:6790 HTTP · :6789 TCP"]
-    end
-    UI -- "HTTP: queues, jobs, DLQ, cron…" --> Server
-    UI -- "SSE: live activity" --> Server
-    UI -- "/control/* start·stop·restart" --> Agent
-    Agent -- "spawn / kill process" --> Server
-```
-
-- **Reads** by polling (`usePolledData`) and a Server-Sent Events stream (`useActivityStream`).
-- **Writes** through the same HTTP API, with every mutation shape-verified against the live server.
-- **Managed operations** use the local control agent for process lifecycle, Queue SDK controls,
-  FlowProducer, Workflow Engine, SQLite inspection, and backups.
-
-For multiple brokers, create one named Dashboard profile and one paired control
-agent per broker. The Fleet page probes all profiles without retargeting the
-active UI, groups brokers that share an exact PostgreSQL target + namespace,
-and drives each node's Start/Stop/Restart controls. Queue state is shared by
-PostgreSQL; lifecycle, process logs/config, in-memory webhooks, and each agent's
-Workflow Engine store remain node-local. See the
-[Fleet guide](https://egeominotti.github.io/bunqueue-dashboard/docs/guide/fleet).
-
-Two HTTP clients coexist on purpose: `src/lib/api.ts` (first-generation view pages) and
-`src/lib/bq.ts` (the complete, shape-verified client used by every `Control ▸ *` page). See
-[`docs/`](docs/README.md) for the full, source-verified reference.
-
-## Configuration
-
-The `VITE_*` dashboard defaults are build-time values and can **also** seed the first named profile
-in **Settings**. Add up to 32 broker/agent profiles at runtime. The all-in-one server reads the non-`VITE_*` runtime variables below.
-Copy [`.env.example`](.env.example) to `.env` to set defaults.
-
-| Variable | Purpose | Default |
-| --- | --- | --- |
-| `VITE_BUNQUEUE_URL` | bunqueue server origin | `/api` (dev proxy → `:6790`) |
-| `VITE_BUNQUEUE_AGENT_URL` | Control-agent origin | `http://localhost:6800` |
-| `BIND_ADDR` | All-in-one dashboard bind address | `127.0.0.1` |
-| `BASE_PATH` | Runtime mount for the all-in-one server (for example `/internal/queue`) | `/` |
-| `BUNQUEUE_MANAGED` | `0` attaches to the externally supervised `BUNQUEUE_URL`; `1` enables local lifecycle controls | `1` |
-| `AGENT_PORT` | Control-agent port | `6800` |
-| `AGENT_ALLOWED_ORIGINS` | Extra browser origins allowed to drive the agent (comma-separated) | dev defaults |
-| `AGENT_ALLOWED_HOSTS` | Extra Host names/IPs accepted by the all-in-one server and agent | loopback names |
-| `AGENT_TOKEN` | Agent bearer token; mandatory on every bridged route for LAN/proxy access | _none_ (local-only) |
-| `BUNQUEUE_TOKEN` | Admin-API bearer; mandatory on every `/api/*` route for LAN/proxy access | _none_ (`/api` remote-disabled) |
-| `TRUST_PROXY` | Trust an overwritten `X-Forwarded-Host` from a Host-rewriting proxy (`1`) | _off_ |
-
-Server and agent bearer tokens are secrets: enter them in **Settings** or the
-authentication prompt for the current browser session. Do not put secrets in a
-`VITE_*` variable; Vite values are compiled as plaintext into the public bundle.
-
-For `BIND_ADDR=0.0.0.0`, list every LAN hostname/IP in
-`AGENT_ALLOWED_HOSTS` (or its full origin in `AGENT_ALLOWED_ORIGINS`) and set
-both `AGENT_TOKEN` and `BUNQUEUE_TOKEN`. Enter `BUNQUEUE_TOKEN` as the Server
-token in Settings; when Bunqueue itself uses `AUTH_TOKENS`, use the same token
-there so the forwarded Authorization header is valid upstream. Behind a reverse
-proxy, allowlist the public origin; if it rewrites `Host`, also allowlist the
-rewritten Host and use `TRUST_PROXY=1` only when the proxy overwrites
-`X-Forwarded-Host`.
-
-For a broker already owned by systemd, Docker or Kubernetes, run the all-in-one
-dashboard with `BUNQUEUE_MANAGED=0`. **Control ▸ Server** then reports health
-from `BUNQUEUE_URL` and cannot spawn, stop, restart or reconfigure a child.
-Stopped-only backup restore is also rejected because the dashboard cannot prove
-that an externally supervised broker is inactive.
-To mount the same process below a reverse-proxy prefix, set for example
-`BASE_PATH=/internal/queue` and preserve that prefix when proxying; the SPA,
-assets, `/api` proxy and `/agent` bridge all move below it, including the
-target-pinned Flow, Workflow, Queue and Backup agent operations.
-
-## Scripts
-
-| Command | Does |
+| Command | Purpose |
 | --- | --- |
-| `bun start` | **Agent + dashboard together** (one-command dev) |
-| `bun dev` | Dashboard only (Vite dev server) |
-| `bun run agent` | Control agent only |
-| `bun run build` | Native Bun typecheck + production build → `dist/` |
-| `bun run typecheck` | Native `bun check` for the frontend, agent/scripts, examples and browser tests |
-| `bun run preview` | Preview the production build |
-| `bun run lint` | Lint with Oxlint, including type-aware rules and the implicit-`any` parity guard |
-| `bun run format:check` | Check formatting with native `bun fmt --check` |
-| `bun run check` | Native typechecking, Oxlint and native formatting validation |
-| `bun run check:fix` | Apply safe Oxlint fixes, then format with native `bun fmt` |
-| `bun test` | Unit + agent-lifecycle tests |
-| `bun run test:e2e:tls` | Queue, Flow and Workflow over verified native TLS, including untrusted-certificate rejection |
-| `bun run test:e2e:upgrade` | Real npm Bunqueue 2.9.2 SQLite schema-35 → 2.9.20 schema-37 migration and retention semantics |
-| `bun run test:e2e` | Real TLS, SQLite upgrade, Flow, Workflow, Queue SDK, and three-broker PostgreSQL runtime tests |
-| `bun run test:e2e:browser` | Production UI tests on Chromium, Firefox and WebKit |
-| `bun run test:e2e:browser:postgres-fleet` | Real UI operations across three PostgreSQL brokers (requires Docker and Chromium) |
-| `bun run quality` | Complete static, build, docs, coverage, runtime, package and dependency gate |
-| `bun run test:e2e:postgres-fleet` | Three authenticated Bunqueue 2.9.20 brokers + three agents sharing disposable PostgreSQL 18.6 |
+| `bun run build` | Typecheck all projects and build the production UI |
+| `bun run check` | Native Bun typechecking, Oxlint and formatting checks |
+| `bun run check:fix` | Apply lint fixes and format with native `bun fmt` |
+| `bun run test:coverage` | Run unit tests and enforce coverage floors |
+| `bun run test:e2e:browser` | Test the production UI in Chromium, Firefox and WebKit |
+| `bun run docs:build` | Build the documentation and check its links |
+| `bun run quality` | Run the static, unit, real-server, package and resilience gates |
 
-## Docker
+Install browser binaries once with `bun run test:e2e:browser:install`. PostgreSQL
+and S3 integration tests require Docker. CI also runs the managed browser suite
+and executes native binaries on all five supported platforms.
 
-A multi-stage image builds the SPA with Bun and serves it with Caddy (gzip/zstd, SPA history fallback, immutable asset caching). Published to the GitHub Container Registry on every push.
+For setup details and contribution guidance, see
+[Development](https://egeominotti.github.io/bunqueue-dashboard/docs/development)
+and [Testing](https://egeominotti.github.io/bunqueue-dashboard/docs/testing).
 
-```bash
-# Pull & run the published image (`edge` tracks main; use `vX.Y.Z`/`latest` after a release)
-docker run --rm -p 8080:80 ghcr.io/egeominotti/bunqueue-dashboard:edge
-# → http://localhost:8080  (set the server URL from the Settings page)
+## Documentation
 
-# …or build locally, optionally baking in a default server origin
-docker build --build-arg VITE_BUNQUEUE_URL=https://queue.example.com -t bunqueue-dashboard .
-docker run --rm -p 8080:80 bunqueue-dashboard
-```
-
-Tags: `latest` and `vX.Y.Z` on releases, `edge` on `main`.
-
-## Deployment
-
-- **Standalone executables**, every [release](https://github.com/egeominotti/bunqueue-dashboard/releases)
-  ships self-contained binaries for **Linux (x64/arm64), macOS (x64/arm64) and Windows (x64)**:
-  download one file and run it, it serves the dashboard (assets embedded), proxies `/api` to your
-  bunqueue server (`BUNQUEUE_URL`, default `:6790`) and includes the control agent.
-  ```bash
-  ./bunqueue-dashboard-vX.Y.Z-darwin-arm64        # → http://localhost:8080
-  PORT=3000 BUNQUEUE_URL=https://queue.example.com ./bunqueue-dashboard-vX.Y.Z-linux-x64
-  ```
-- **GitHub Pages**, every push to `main` builds and publishes the static SPA
-  (`.github/workflows/pages.yml`). The workflow **attempts** to auto-provision Pages; if the first
-  run reports `Get Pages site failed`, enable it once under **Settings ▸ Pages ▸ Source → GitHub
-  Actions** (the default `GITHUB_TOKEN` can't create a Pages site on its own). The build sets the
-  correct sub-path base and a `404.html` SPA fallback automatically.
-- **Container**, self-host the published `ghcr.io` image behind any reverse proxy.
-- **Static host**, `bun run build` emits a plain `dist/` you can serve from any CDN or static host.
-
-Because the deployed build is a static shell, point it at a reachable bunqueue server via
-`VITE_BUNQUEUE_URL` (build time) or the **Settings** page (runtime).
-
-## Testing & quality gate
-
-Use both the canonical gate and browser tests to validate a change. Browser tests are a separate
-CI job; `quality` alone does not run Playwright:
-
-```bash
-bun run test:e2e:browser:install  # first run only
-bun run quality                  # includes runtime E2E; requires Docker
-bun run test:e2e:browser          # production UI on all three browser engines
-bun run test:e2e:browser:postgres-fleet # cross-node UI; separate from both commands above
-```
-
-The E2E stage starts disposable Bunqueue 2.9.4 processes and exercises the complete FlowProducer,
-Workflow Engine, and Queue SDK operator bridges. It also starts PostgreSQL 18.6 in Docker with
-three authenticated brokers and paired agents, proving cross-broker enqueue/inspect/leased
-pull+ack, pause/resume, cron, rate limits, group admission, group priority and group pause/resume
-on PostgreSQL schema 20. Run it alone with `bun run test:e2e` (Docker is required for the
-PostgreSQL stage).
-
-The blocking browser job builds the production bundle under `/e2e/dashboard`, starts an
-authenticated disposable Bunqueue server, and drives the UI with Playwright on Chromium, Firefox,
-and WebKit. It covers the token gate, every sidebar route, SSE recovery across a real server
-restart, confirmed Cron creation/deletion, job submission and bulk import, persisted job inspection,
-DLQ failures, live monitoring and alerts, SQLite queries, webhook registry mutations, a real
-producer/worker benchmark, and automated WCAG A/AA checks. Install the browser
-binaries once with `bun run test:e2e:browser:install`, then run `bun run test:e2e:browser`.
-
-See the [section-by-section validation matrix](docs/testing.md) for reproducible commands,
-prerequisites, and the distinction between live operations, navigation checks, and external
-integrations that need their own environment. The live demo uses sample data and is not test evidence.
-
-CI enforces the quality gate and browser matrix on every push and pull request. See [Contributing](#contributing).
-
-## Project structure
-
-```
-bunqueue-dashboard/
-├── .github/workflows/   # CI, Pages deploy, Docker publish, Release
-├── agent/               # guarded process, Flow, Workflow, Queue, database and backup adapters
-├── docker/              # Caddyfile for the container image
-├── docs/                # source-verified reference (architecture, pages, API mapping, known issues)
-├── scripts/dev.ts       # one-command dev launcher (`bun start`)
-├── src/
-│   ├── lib/             # api.ts, bq.ts, hooks, formatters, job-action gating
-│   ├── components/      # layout shell, UI kit, Zustand stores
-│   ├── features/        # feature slices with domain, application, infrastructure and UI layers
-│   └── pages/           # view pages + Control ▸ * operator pages
-└── test/                # unit, contract, UI race, agent lifecycle and integration tests
-```
-
-Full walkthrough in [`docs/README.md`](docs/README.md).
-
-## Security
-
-The control agent can spawn processes, so it is hardened by design (`agent/server.ts`):
-
-- Binds **`127.0.0.1` only**.
-- **CORS locked to an allowlist**, `Access-Control-Allow-Origin` is never `*`.
-- Requests carrying a **disallowed `Origin` are rejected (403)** before reaching the process manager, blocking drive-by CSRF from a malicious tab.
-- A **Host allowlist** blocks DNS-rebinding requests and fails closed for unknown names.
-- Truly local agent reads stay zero-configuration; any LAN/proxied `/agent` bridge requires **`AGENT_TOKEN` on every route**.
-- The all-in-one server requires **`BUNQUEUE_TOKEN` on every LAN/proxied `/api/*` route**; without it the API proxy returns `403` before contacting Bunqueue.
-- Embedded and Docker responses deny framing, MIME sniffing and referrer leakage.
-
-Keep the direct agent port on loopback. Static/Caddy deployments that expose Bunqueue directly must
-still use Bunqueue `AUTH_TOKENS` or front-proxy authentication; the all-in-one `BUNQUEUE_TOKEN`
-boundary applies only to `scripts/serve.ts`. Host/Origin checks are not user authentication. See
-[`docs/known-issues.md`](docs/known-issues.md) for the honest, verified limitations.
-
-## Contributing
-
-1. Keep it **additive**, prefer new files + minimal glue over rewriting existing ones
-   (see [`CLAUDE.md`](CLAUDE.md)).
-2. Make the [gate](#testing--quality-gate) green: `bun run quality`.
-3. Open a PR, the template walks you through the checklist. CI must pass.
+- [Quickstart](https://egeominotti.github.io/bunqueue-dashboard/docs/quickstart) — installation and first connection.
+- [User guide](https://egeominotti.github.io/bunqueue-dashboard/docs/user-guide) — every screen and its operations.
+- [Deployment](https://egeominotti.github.io/bunqueue-dashboard/docs/deploy/) — Docker, Kubernetes, PM2 and hosting platforms.
+- [Architecture](https://egeominotti.github.io/bunqueue-dashboard/docs/architecture) — HTTP, SSE, agents and storage boundaries.
+- [API mapping](https://egeominotti.github.io/bunqueue-dashboard/docs/api-mapping) — endpoints, payloads and action contracts.
+- [Known limitations](https://egeominotti.github.io/bunqueue-dashboard/docs/known-issues) — verified upstream constraints and current behavior.
+- [LLM documentation](https://egeominotti.github.io/bunqueue-dashboard/docs/llms.txt) — documentation index for AI tools, with a [full-text version](https://egeominotti.github.io/bunqueue-dashboard/docs/llms-full.txt).
 
 ## License
 
-[MIT](LICENSE) © Egeo Minotti
+[MIT](LICENSE) © Egeo Minotti.
+
+The Bunqueue logo is the original asset from
+[egeominotti/bunqueue](https://github.com/egeominotti/bunqueue/blob/main/docs/src/assets/logo.svg).

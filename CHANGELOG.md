@@ -15,6 +15,15 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-10-26
+
+### Changed
+
+- Rewrite the README around first-run setup, operational capabilities, deployment
+  choices and the current configuration, with direct links to the full guides.
+- Use the original Bunqueue logo in the README, documentation and application
+  favicons, replacing the separate dashboard illustrations.
+
 ## [1.0.4] - 2026-10-26
 
 ### Changed
@@ -1623,7 +1632,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.1...v1.0.2
