@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { act, createElement } from 'react';
+import { act, createElement, useLayoutEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
 import type { QueueSummaryFull } from '../src/lib/bqTypes';
 import { useJobsView } from '../src/pages/control/jobsPro/useJobsView';
@@ -149,4 +149,57 @@ describe('Jobs view generations', () => {
     expect(current.selected.size).toBe(0);
     expect(current.page).toBe(0);
   });
+});
+
+test('a queue selected when discovery appears wins over pending default canonicalization', async () => {
+  unmount?.();
+  const host = document.createElement('div');
+  const root = createRoot(host);
+  let chooseOnDiscovery = true;
+  function DiscoveryChoice({ discovered }: { discovered: boolean }) {
+    current = useJobsView(discovered ? summary : null);
+    useLayoutEffect(() => {
+      if (!discovered || !chooseOnDiscovery) return;
+      chooseOnDiscovery = false;
+      current.selectQueue('emails');
+    }, [discovered]);
+    return null;
+  }
+  unmount = () => act(() => root.unmount());
+  const renderDiscovery = (discovered: boolean) =>
+    root.render(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ['/jobs'] },
+        createElement(DiscoveryChoice, { discovered })
+      )
+    );
+  act(() => renderDiscovery(false));
+  act(() => renderDiscovery(true));
+  await settle(2);
+  expect(current.queue).toBe('emails');
+});
+
+test('discovered queue options become interactive only after their URL is canonical', () => {
+  unmount?.();
+  const originalUrl = window.location.href;
+  window.location.href = 'http://localhost/jobs';
+  const root = createRoot(document.createElement('div'));
+  const committedQueries: string[] = [];
+  function Discovery({ discovered }: { discovered: boolean }) {
+    current = useJobsView(discovered ? summary : null);
+    useLayoutEffect(() => {
+      if (discovered) committedQueries.push(window.location.search);
+    }, [discovered]);
+    return null;
+  }
+  unmount = () => {
+    act(() => root.unmount());
+    window.location.href = originalUrl;
+  };
+  const show = (discovered: boolean) =>
+    root.render(createElement(BrowserRouter, {}, createElement(Discovery, { discovered })));
+  act(() => show(false));
+  act(() => show(true));
+  expect(committedQueries).toEqual(['?queue=orders']);
 });

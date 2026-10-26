@@ -1,6 +1,6 @@
 {
   "name": "bunqueue-dashboard",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun 1.4.4).",
   "packageManager": "bun@1.4.4",
@@ -15,8 +15,7 @@
     "scripts/bunVersion.ts",
     "scripts/embedded.gen.ts",
     "agent",
-    "shared",
-    "patches"
+    "shared"
   ],
   "publishConfig": {
     "access": "public"
@@ -85,8 +84,8 @@
     "test:soak": "bun scripts/validate-resilience.ts",
     "test:package": "bun run scripts/validate-package-runtime.ts",
     "test:coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --coverage-dir=coverage && bun scripts/check-coverage.ts && bun scripts/check-critical-coverage.ts && bun scripts/check-test-inventory.ts",
-    "lint": "oxlint . && bun run scripts/check-implicit-any-let.ts",
-    "lint:fix": "oxlint --fix . && bun run scripts/check-implicit-any-let.ts",
+    "lint": "bunx --bun --no-install oxlint .",
+    "lint:fix": "bunx --bun --no-install oxlint --fix .",
     "format": "bun fmt",
     "format:check": "bun fmt --check",
     "check": "bun run typecheck && bun run lint && bun run format:check",
@@ -104,57 +103,51 @@
     "test:e2e:docs": "bun run docs:build && playwright test -c playwright.docs.config.ts"
   },
   "devDependencies": {
-    "@ai-sdk/anthropic": "^4.0.7",
-    "@ai-sdk/google": "^4.0.8",
-    "@ai-sdk/openai": "^4.0.7",
-    "@ai-sdk/openai-compatible": "^3.0.5",
-    "@axe-core/playwright": "4.13.0",
-    "@fontsource-variable/inter": "^5.2.8",
-    "@fontsource-variable/jetbrains-mono": "^5.2.8",
-    "@modelcontextprotocol/sdk": "1.32.1",
-    "@playwright/test": "1.62.1",
-    "@shikijs/vitepress-twoslash": "4.4.3",
-    "@tailwindcss/vite": "^4.3.2",
-    "@types/node": "^26.0.1",
+    "@ai-sdk/anthropic": "^4.0.89",
+    "@ai-sdk/google": "^4.0.106",
+    "@ai-sdk/openai": "^4.0.103",
+    "@ai-sdk/openai-compatible": "^3.0.79",
+    "@axe-core/playwright": "4.14.0",
+    "@fontsource-variable/inter": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@playwright/test": "1.64.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.0.3",
-    "ai": "7.0.14",
+    "@vitejs/plugin-react": "^6.1.2",
+    "ai": "7.0.154",
     "bun-types": "1.4.4",
     "bunqueue-v2-9-2": "npm:bunqueue@2.9.2",
     "happy-dom": "^21.0.4",
     "mermaid": "^12.2.0",
-    "oxlint": "^1.78.0",
-    "oxlint-tsgolint": "^7.0.2001",
+    "oxlint": "^1.89.0",
+    "oxlint-tsgolint": "^7.0.2005",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4",
-    "tailwindcss": "^4.3.2",
-    "typescript": "^6.0.3",
-    "vite": "^8.1.6",
-    "vitepress": "2.0.0-alpha.20",
-    "vitepress-plugin-llms": "^1.13.2",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.5",
+    "vitepress": "2.0.0-alpha.21",
+    "vitepress-plugin-llms": "^1.14.0",
     "zod": "^4.6.7",
-    "zustand": "^5.0.14"
+    "zustand": "^5.0.16"
   },
   "overrides": {
     "brace-expansion": "^5.0.12",
     "dompurify": "^3.4.17",
     "fast-uri": "^3.1.9",
-    "ip-address": "^10.7.4",
-    "js-yaml": "^3.15.2",
+    "ip-address": "^10.7.5",
     "markdown-it": "^14.3.3",
-    "nanoid": "^3.3.18",
-    "postcss": "^8.5.25",
+    "nanoid": "^3.3.20",
+    "postcss": "^8.5.32",
     "proxy-addr": "^2.0.8",
     "source-map-js": "^1.2.2",
-    "vue": "^3.5.42"
+    "vue": "^3.5.44"
   },
   "dependencies": {
     "bunqueue": "2.9.20",
-    "msgpackr": "^1.11.8"
-  },
-  "patchedDependencies": {
-    "ai@7.0.14": "patches/ai@7.0.14.patch"
+    "msgpackr": "^2.1.2"
   }
 }

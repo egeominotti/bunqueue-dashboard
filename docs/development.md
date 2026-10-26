@@ -90,15 +90,21 @@ Notes:
 - `.oxlintrc.json` configures Oxlint, and native `bun fmt` reads `.oxfmtrc.json`
   directly without installing oxfmt. Oxlint runs the JavaScript, TypeScript, Oxc, Unicorn, React, and
   JSX accessibility plugins with the project's curated severities; `oxlint-tsgolint`
-  provides the type-aware rules. The lint script also retains Biome's implicit-`any`
-  declaration check, which Oxlint does not yet implement. The native formatter keeps the established
+  provides the type-aware rules. The local `dashboard-policy/no-implicit-any-let`
+  rule preserves the extra declaration check without importing the TypeScript compiler.
+  React Compiler adoption diagnostics (`refs`, `set-state-in-effect`, `purity` and
+  `preserve-manual-memoization`) remain visible as warnings; this build does not
+  enable React Compiler. Rules of Hooks, global mutations and state immutability
+  remain blocking. Narrow exceptions cover render probes in the test harness and
+  three event-handler mutations of mutable refs.
+  The lint scripts run Oxlint with Bun. The native formatter keeps the established
   two-space, 100-column, single-quote style and deterministic imports.
   `src/index.css` (Tailwind v4 at-rules), `agent/`, and `scripts/` are excluded from
   formatting and linting. They are not skipped by typechecking: `tsconfig.json`
   covers `src/`, while `tsconfig.agent.json` covers both Bun runtime directories
   (except the generated `scripts/embedded.gen.ts`).
-- The `typescript` dependency is retained for the lint guard's compiler API and
-  VitePress Twoslash, rather than for the project's typecheck commands.
+- The unused Twoslash integration and the standalone TypeScript compiler dependency
+  have been removed. VitePress still supplies normal Shiki syntax highlighting.
 - `bunfig.toml` preloads `test/setup.ts` (a `localStorage` shim) so store imports
   work under `bun test`.
 
@@ -146,13 +152,14 @@ logic, stores and clients, component regressions, SSE parsing, and control-agent
 behaviour. Add focused regression coverage there for every bug fix or new
 testable behaviour.
 
-## Dependency patch
+## Dependency compatibility
 
-`ai` is pinned to **7.0.14** because `patches/ai@7.0.14.patch` handles a rejected
-browser telemetry completion promise on cancellation. Keep `patches/` alongside
-`package.json` and `bun.lock` before running a frozen install, including in Docker.
-When upgrading the SDK, verify the managed Copilot Stop regression against the
-production browser bundle before removing or refreshing the patch.
+`ai` **7.0.154** includes the browser completion-rejection fix upstream, so the
+former local patch is no longer required. Keep the managed Copilot Stop regression
+enabled when upgrading the SDK and providers.
+
+The `bunqueue-v2-9-2` alias deliberately remains at 2.9.2: it is the historical
+database producer used to validate upgrades, not the bundled or default broker.
 
 The documentation theme renders Mermaid 12 through its public lazy-loaded API.
 The local Markdown fence and Vue component replace `vitepress-plugin-mermaid`, whose

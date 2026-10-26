@@ -1,10 +1,12 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["eslint", "typescript", "unicorn", "oxc", "react", "jsx-a11y"],
+  "jsPlugins": ["./scripts/lint/dashboard-policy.mjs"],
   "categories": {
     "correctness": "error"
   },
   "rules": {
+    "dashboard-policy/no-implicit-any-let": "error",
     "default-param-last": "error",
     "eqeqeq": ["error", "always", { "null": "ignore" }],
     "no-debugger": "error",
@@ -26,8 +28,12 @@
     "react/no-array-index-key": "warn",
     "react/no-danger": "warn",
     "react/no-did-update-set-state": "off",
+    "react/preserve-manual-memoization": "warn",
+    "react/purity": "warn",
+    "react/refs": "warn",
     "react/rules-of-hooks": "error",
     "react/self-closing-comp": "error",
+    "react/set-state-in-effect": "warn",
     "typescript/consistent-type-imports": [
       "error",
       {
@@ -60,6 +66,19 @@
     "es2024": true,
     "node": true
   },
+  "overrides": [
+    {
+      "files": [
+        "test/job-inspector-custom-state.part-*.test.ts",
+        "test/jobs-view-generation.test.tsx"
+      ],
+      "rules": { "react/globals": "off" }
+    },
+    {
+      "files": ["test/domSetup.ts"],
+      "rules": { "react/immutability": "off" }
+    }
+  ],
   "ignorePatterns": [
     "dist",
     "node_modules",

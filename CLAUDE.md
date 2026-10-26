@@ -116,16 +116,16 @@ dispatching the aggregate `check` script instead of the type checker. `bun run c
 typechecking, linting and formatting. `.oxlintrc.json` configures Oxlint; `.oxfmtrc.json` is read
 directly by native `bun fmt`, preserving the established formatting without the oxfmt package.
 Oxlint enables its JavaScript, TypeScript, Oxc, Unicorn, React, and JSX accessibility plugins, plus
-`oxlint-tsgolint` for type-aware optional-chain and type-export checks. The lint command also runs
-`scripts/check-implicit-any-let.ts`, retaining the former Biome error that Oxlint does not yet
-implement. Intentional hook and positional-key exceptions use scoped `oxlint-disable` comments with
+`oxlint-tsgolint` for type-aware optional-chain and type-export checks. The local plugin
+`scripts/lint/dashboard-policy.mjs` retains the implicit-`any` declaration policy without a
+TypeScript compiler dependency. Intentional hook and positional-key exceptions use scoped `oxlint-disable` comments with
 a reason. The native formatter preserves the established two-space, 100-column, single-quote style and deterministic
 import ordering. Generated output, runtime-only `agent/` and `scripts/`, the Tailwind entrypoint, and
 documentation formats are excluded from formatting. Keep new `src/` code passing both tools; do not
 silence a rule to dodge a real fix.
 
-The `typescript` package remains necessary for the implicit-`any` guard's compiler API and
-VitePress Twoslash. It is not used to run the project's typecheck commands.
+The project has no `typescript` or formatter package dependency. Bun provides typechecking and
+formatting, while the local Oxlint plugin implements the extra declaration rule.
 
 ## CI/CD
 

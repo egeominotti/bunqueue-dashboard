@@ -8,7 +8,7 @@ test('exports the complete filtered inventory and restores the selected queue th
   browserErrors,
 }, testInfo) => {
   await control(request, '/upstream/start');
-  const queue = `inventory-${testInfo.project.name}-${testInfo.retry}`;
+  const queue = `inventory-${testInfo.project.name}-${testInfo.retry}-${testInfo.repeatEachIndex}`;
   const created = await request.post(`${E2E_APP_URL}/api/queues/${queue}/jobs/bulk`, {
     headers: { Authorization: `Bearer ${E2E_SERVER_TOKEN}` },
     data: {

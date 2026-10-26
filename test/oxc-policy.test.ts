@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
-import { isIgnoredDirectory } from '../scripts/check-implicit-any-let';
 
 const ROOT = resolve(import.meta.dir, '..');
 const OXLINT = [process.execPath, 'x', '--bun', '--no-install', 'oxlint'] as const;
@@ -79,31 +78,82 @@ describe('Oxc policy parity', () => {
     expect(result.output.toLowerCase()).toContain('unused oxlint-disable directive');
   });
 
-  test('retains noImplicitAnyLet coverage missing from Oxlint', async () => {
+  test('reports compiler adoption advice without blocking the lint gate', async () => {
+    const result = await run([
+      ...OXLINT,
+      `--config=${PROBE_CONFIG}`,
+      `--tsconfig=${TSCONFIG}`,
+      '--format=json',
+      `${FIXTURES}/compiler-advice.tsx`,
+    ]);
+    const report = JSON.parse(result.output) as {
+      diagnostics: { code: string; severity: string }[];
+    };
+    for (const rule of ['react(refs)', 'react(set-state-in-effect)']) {
+      expect(report.diagnostics.some((item) => item.code === rule)).toBe(true);
+      expect(
+        report.diagnostics
+          .filter((item) => item.code === rule)
+          .every((item) => item.severity === 'warning')
+      ).toBe(true);
+    }
+    expect(result.exitCode).toBe(0);
+  });
+
+  test('continues to reject conditional React hooks', async () => {
+    const result = await run([
+      ...OXLINT,
+      `--config=${PROBE_CONFIG}`,
+      `--tsconfig=${TSCONFIG}`,
+      `${FIXTURES}/invalid-hook.tsx`,
+    ]);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.output).toContain('rules-of-hooks');
+  });
+
+  test('retains noImplicitAnyLet coverage in the Oxlint policy', async () => {
     const invalid = await run([
-      process.execPath,
-      'run',
-      'scripts/check-implicit-any-let.ts',
+      ...OXLINT,
+      `--config=${PROBE_CONFIG}`,
+      `--tsconfig=${TSCONFIG}`,
       `${FIXTURES}/implicit-any.ts`,
     ]);
     const valid = await run([
-      process.execPath,
-      'run',
-      'scripts/check-implicit-any-let.ts',
+      ...OXLINT,
+      `--config=${PROBE_CONFIG}`,
+      `--tsconfig=${TSCONFIG}`,
       `${FIXTURES}/valid.ts`,
     ]);
 
     expect(invalid.exitCode).not.toBe(0);
-    expect(invalid.output).toContain('Implicit any variable declarations are forbidden');
+    expect(invalid.output).toContain('no-implicit-any-let');
+    expect(invalid.output).toContain('"implicit" needs a type annotation or initializer');
     expect(valid.exitCode).toBe(0);
   });
 
-  test('keeps ignored directory matching portable across path separators', () => {
-    expect(isIgnoredDirectory('test/fixtures/oxlint-policy')).toBe(true);
-    expect(isIgnoredDirectory('test\\fixtures\\oxlint-policy')).toBe(true);
-    expect(isIgnoredDirectory('docs/.vitepress/theme')).toBe(true);
-    expect(isIgnoredDirectory('docs\\.vitepress\\theme')).toBe(true);
-    expect(isIgnoredDirectory('test/fixtures/oxlint-policy-neighbor')).toBe(false);
+  test('rejects untyped var, nested, ambient, multiple and classic-for declarations', async () => {
+    const result = await run([
+      ...OXLINT,
+      `--config=${PROBE_CONFIG}`,
+      `--tsconfig=${TSCONFIG}`,
+      `${FIXTURES}/implicit-any-cases.ts`,
+    ]);
+
+    expect(result.exitCode).not.toBe(0);
+    for (const name of ['functionScoped', 'nested', 'ambient', 'first', 'index']) {
+      expect(result.output).toContain(`"${name}" needs a type annotation or initializer`);
+    }
+  });
+
+  test('keeps the custom declaration rule inside the project ignore boundaries', async () => {
+    const result = await run([
+      ...OXLINT,
+      '--no-error-on-unmatched-pattern',
+      `${FIXTURES}/implicit-any.ts`,
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).not.toContain('no-implicit-any-let');
   });
 });
 

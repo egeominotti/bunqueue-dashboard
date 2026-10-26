@@ -45,6 +45,7 @@ test('enqueues from Add Job, inspects persisted data and imports a real bulk', a
   expect(persisted.job.data).toEqual({ evidence: 'browser-persisted', amount: 42 });
 
   await visit(page, '/queues');
+  await page.getByLabel('Filter queues').fill(queue);
   await expect(page.getByRole('link', { name: queue, exact: true })).toBeVisible();
   await page.getByRole('link', { name: queue, exact: true }).click();
   await expect(page.getByRole('heading', { name: queue, exact: true })).toBeVisible();

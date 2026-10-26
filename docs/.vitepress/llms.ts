@@ -9,7 +9,7 @@ export function createLlmsPlugin() {
     details: [
       '## Mental model',
       '',
-      "It **reads** Bunqueue 2.9.4 through HTTP polling and Server-Sent Events. HTTP commands include enqueue, pause/resume, eligible job promotion and scheduling, and queue policy changes. The dashboard deliberately disables DLQ retry, completed-job requeue, cancel, drain, clean and purge where Bunqueue lacks atomic generation/topology preconditions. Endpoint acceptance alone does not make a mutation safe. See `src/lib/jobActions.ts` and `src/lib/flowMutationSafety.ts`.",
+      "It **reads** Bunqueue 2.9.20 through HTTP polling and Server-Sent Events. HTTP commands include enqueue, pause/resume, eligible job promotion and scheduling, and queue policy changes. The dashboard deliberately disables DLQ retry, completed-job requeue, cancel, drain, clean and purge where Bunqueue lacks atomic generation/topology preconditions. Endpoint acceptance alone does not make a mutation safe. See `src/lib/jobActions.ts` and `src/lib/flowMutationSafety.ts`.",
       '',
       'The local **control agent** (`agent/`) manages start/stop/restart, read-only SQLite inspection, and the pinned public Bunqueue Queue/Flow/Workflow clients and backup CLI. Direct listeners bind to loopback. LAN or proxied access requires `AGENT_TOKEN` on every agent route, an explicit Host/Origin policy, and `BUNQUEUE_TOKEN` for the admin API proxy. Configure both tokens before exposing the dashboard; zero-configuration access applies only to genuinely local requests.',
       '',
@@ -22,7 +22,7 @@ export function createLlmsPlugin() {
       '',
       '- `GET /webhooks`, `/workers`, `/storage`, `/ping` wrap the payload in `{ ok, data: {...} }`; `/queues/:q/dlq`, `/dlq/stats`, `/crons`, `/queues/:q/counts` are flat.',
       '- DLQ entries are nested `{ job, enteredAt, reason, error, attempts[] }`, with no top-level `id`/`name`.',
-      '- Bunqueue 2.9.4 jobs expose first-class `name`, terminal `returnvalue`, and `failedReason`; they use `startedAt`/`completedAt` (not `processedOn`/`finishedOn`).',
+      '- Bunqueue 2.9.20 jobs expose first-class `name`, terminal `returnvalue`, and `failedReason`; they use `startedAt`/`completedAt` (not `processedOn`/`finishedOn`).',
       '',
       'For the full per-section walkthrough see the User guide pages; for endpoint shapes see API mapping; for honest current limits see Known issues.',
     ].join('\n'),

@@ -78,6 +78,8 @@ export function JobLogsView(props: JobLogsViewProps) {
           autoComplete="off"
           value={message}
           onInput={(event) => {
+            // Mutable ref updated by an input event, not a state snapshot.
+            // oxlint-disable-next-line react/immutability
             draftRevision.current += 1;
             props.setMessage(event.currentTarget.value);
           }}
@@ -89,6 +91,8 @@ export function JobLogsView(props: JobLogsViewProps) {
           name="job-log-level"
           value={level}
           onChange={(event) => {
+            // Mutable ref updated by a change event, not a state snapshot.
+            // oxlint-disable-next-line react/immutability
             draftRevision.current += 1;
             props.setLevel(event.target.value as LogLevel);
           }}

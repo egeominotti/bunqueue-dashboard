@@ -88,12 +88,10 @@ cover every generated page at desktop and mobile widths plus search and history.
 AI SDK 7.0.14 creates a telemetry completion promise even in the browser, where
 its non-Node early return did not attach a rejection handler. Stop during a
 pending tool confirmation therefore emitted an unhandled AbortError despite
-correctly cancelling the mutation. `patches/ai@7.0.14.patch` adds the same local
-promise handling used by the SDK's Node path. The package version is pinned and
-frozen installs apply the patch; Docker copies it before dependency installation.
-The real-browser regression keeps browser-error assertions enabled and proves
-that Stop leaves the queue unchanged. Recheck this regression before removing
-the patch when upgrading the SDK.
+correctly cancelling the mutation. The initial local patch supplied the missing
+rejection handler; AI SDK 7.0.154 now includes that fix upstream and the patch
+has been removed. The real-browser regression keeps browser-error assertions
+enabled and proves that Stop leaves the queue unchanged.
 
 ## Adversarial audit pass (v0.0.32)
 

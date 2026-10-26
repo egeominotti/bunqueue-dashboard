@@ -196,7 +196,7 @@ describe('MCP reference page', () => {
     expect(view.host.textContent).toContain('BUNQUEUE_TOKEN');
     expect(view.host.querySelectorAll('button[aria-label="Copy to clipboard"]')).toHaveLength(4);
     expect(view.host.textContent).toContain(
-      'bun add --exact bunqueue@2.9.20 @modelcontextprotocol/sdk@1.32.1'
+      'bun add --exact bunqueue@2.9.20 @modelcontextprotocol/sdk@1.32.2'
     );
     expect(view.host.textContent).toContain('node_modules/.bin/bunqueue-mcp');
     const docs = view.host.querySelector<HTMLAnchorElement>('a[target="_blank"]');

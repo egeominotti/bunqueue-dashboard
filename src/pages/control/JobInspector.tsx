@@ -66,6 +66,8 @@ export function JobInspector() {
     if (!sameJobLookupTarget(state.jobTarget.current, target)) return;
     if (confirmMessage && !window.confirm(confirmMessage)) return;
 
+    // Mutable ref returned by the hook, updated inside an event handler.
+    // oxlint-disable-next-line react/immutability
     const generation = ++state.actionGen.current;
     const actionJobId = state.job.id;
     state.actionLockOwner.current = generation;

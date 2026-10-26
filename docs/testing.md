@@ -136,10 +136,9 @@ source of results; CI retains diagnostics when a scenario fails.
 
 Two browser issues found by these tests are fixed: the Copilot custom Base URL
 field now has an explicit accessible label, and the AI SDK's browser telemetry
-completion promise is handled when Stop aborts a turn. The latter is a minimal,
-version-pinned Bun patch in `patches/ai@7.0.14.patch`, applied during a frozen
-install and tested in the production browser bundle. It does not suppress global
-browser errors or alter tool confirmation.
+completion promise is handled when Stop aborts a turn. The latter fix is included
+upstream in the current SDK and is tested in the production browser bundle,
+without suppressing global browser errors or altering tool confirmation.
 
 Bunqueue's MCP TCP registration can return ID `"0"` despite storing another ID.
 That upstream limitation and the verified registry lookup workaround are recorded

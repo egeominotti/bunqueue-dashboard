@@ -9,7 +9,6 @@ WORKDIR /app
 
 # Install dependencies first (cached until the lockfile changes).
 COPY package.json bun.lock ./
-COPY patches ./patches
 RUN bun install --frozen-lockfile
 
 # Build the production bundle.

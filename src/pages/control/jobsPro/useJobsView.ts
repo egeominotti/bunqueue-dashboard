@@ -2,7 +2,7 @@ import {
   type Dispatch,
   type SetStateAction,
   useCallback,
-  useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -82,7 +82,10 @@ export function useJobsView(summary: QueueSummaryFull[] | null) {
   // Canonicalize a missing or stale URL queue after discovery, while preserving
   // other query parameters. If discovery fails, an explicit URL target remains
   // usable instead of being replaced with a guessed queue.
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Finish the default navigation before the browser can interact with new
+    // options. A passive effect can reset a native selection between its input
+    // and change events, before selectQueue receives the chosen value.
     if (!summary || requestedQueue === queue) return;
     const next = new URLSearchParams(params);
     if (queue) next.set('queue', queue);
