@@ -44,6 +44,8 @@ export const NAV: NavGroup[] = [
       // Add, from being announced as the current page at the same time.
       { to: '/queues', label: 'Queues', icon: IconQueues, end: true },
       { to: '/jobs', label: 'Jobs', icon: IconJobs, end: true },
+      { to: '/search', label: 'Global search', icon: IconEye, end: true },
+      { to: '/failures', label: 'Failures', icon: IconDlq, end: true },
       { to: '/dlq', label: 'Dead Letter Queue', icon: IconDlq },
       { to: '/cron', label: 'Cron Jobs', icon: IconCron },
     ],
@@ -62,7 +64,9 @@ export const NAV: NavGroup[] = [
   {
     section: 'Monitoring',
     items: [
-      { to: '/metrics', label: 'Metrics', icon: IconMetrics },
+      { to: '/metrics', label: 'Metrics', icon: IconMetrics, end: true },
+      { to: '/metrics/history', label: 'Metric history', icon: IconMetrics, end: true },
+      { to: '/monitoring', label: 'Monitoring setup', icon: IconLightning, end: true },
       { to: '/workers', label: 'Workers', icon: IconWorkers },
       { to: '/logs', label: 'Logs', icon: IconLogs },
       { to: '/alerts', label: 'Alerts', icon: IconAlerts },

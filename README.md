@@ -58,9 +58,10 @@ control agent. Its default agent address is `http://127.0.0.1:6800`.
 | Area | Capabilities |
 | --- | --- |
 | Jobs | Submit single or bulk jobs, inspect data and results, change eligible jobs, and export the complete filtered inventory to CSV. |
+| Discovery and failures | Search configured profiles by job metadata or correlation ID, save local views and compare observed error signatures. |
 | Queues and schedules | Browse queue state, pause and resume processing, configure limits and groups, and manage cron or interval schedules. |
 | Workflows and flows | Start and inspect durable executions, send signals, recover or compensate workflows, and explore dependency graphs. |
-| Monitoring | Follow live events, inspect metrics and diagnostics, search workers, and evaluate alert rules. |
+| Monitoring | Follow live events, read retained native queue history, inspect workers and diagnostics, and export Prometheus scrape configuration and alert rules. |
 | Fleet | Save multiple broker/agent profiles and inspect shared PostgreSQL topology while keeping each node's lifecycle controls separate. |
 | Server control | Start, stop and restart a managed Bunqueue process, edit its launch settings, and read its logs. |
 | Data and backups | Browse SQLite tables, run read-only SQL, export rows, and create or restore official S3 snapshots. |
@@ -68,6 +69,12 @@ control agent. Its default agent address is `http://127.0.0.1:6800`.
 
 SQLite inspection and S3 snapshots apply to SQLite-backed servers. PostgreSQL
 profiles use the queue and fleet controls.
+
+Discovery reports scan limits and partial coverage. Metric history requires a
+paired managed agent; retention belongs to Bunqueue. Native Webhooks delivers
+job events, external Prometheus/Alertmanager evaluates exported alert rules,
+and dashboard Alerts runs only while its browser tab is open. See
+[native operations](https://egeominotti.github.io/bunqueue-dashboard/docs/guide/native-operations).
 
 Job actions follow Bunqueue's safety contracts. Operations without atomic job
 identity or flow-topology safeguards remain disabled, including DLQ retry,

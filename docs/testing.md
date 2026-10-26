@@ -10,6 +10,14 @@ server accepts it and the resulting data or state is observed. The dashboard use
 of checks, plus component and contract tests for races, malformed responses and disabled actions.
 The public demo uses fixtures; it does not prove connectivity or persistence.
 
+Native operations add browser scenarios for correlation-ID search, saved views,
+URL history/reload, read-only queue state, grouped terminal failures and source
+inspection. The PostgreSQL browser scenario scans three real broker profiles
+with separate credentials. Managed browser tests exercise native completion and
+terminal-failure history for all three windows; unmanaged brokers report history
+unavailable. Unit tests cover pagination/cancellation/partial scans, retention,
+timestamp alignment, target changes and monitoring configuration validation.
+
 ## Reproduce locally
 
 Use the pinned Bun **1.4.4**, installed dependencies, Docker, and Playwright browser binaries:

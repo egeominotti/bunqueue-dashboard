@@ -82,6 +82,18 @@ const Workflows = retryableLazy(() =>
 );
 const Alerts = retryableLazy(() => import('./pages/Alerts').then((m) => ({ default: m.Alerts })));
 const Fleet = retryableLazy(() => import('./pages/Fleet').then((m) => ({ default: m.Fleet })));
+const GlobalSearch = retryableLazy(() =>
+  import('./features/discovery/GlobalSearch').then((m) => ({ default: m.GlobalSearch }))
+);
+const FailureDiagnostics = retryableLazy(() =>
+  import('./features/discovery/FailureDiagnostics').then((m) => ({ default: m.FailureDiagnostics }))
+);
+const MetricHistory = retryableLazy(() =>
+  import('./features/metric-history/MetricHistory').then((m) => ({ default: m.MetricHistory }))
+);
+const MonitoringSetup = retryableLazy(() =>
+  import('./features/monitoring/MonitoringSetup').then((m) => ({ default: m.MonitoringSetup }))
+);
 const Cron = retryableLazy(() => import('./pages/Cron').then((m) => ({ default: m.Cron })));
 const Dlq = retryableLazy(() => import('./pages/Dlq').then((m) => ({ default: m.Dlq })));
 const Jobs = retryableLazy(() => import('./pages/Jobs').then((m) => ({ default: m.Jobs })));
@@ -119,6 +131,8 @@ export function App() {
         <Route path="/queues/:name" element={<QueueDetailPro />} />
         <Route path="/queues-classic/:name" element={<QueueDetail />} />
         <Route path="/jobs" element={<JobsPro />} />
+        <Route path="/search" element={<GlobalSearch />} />
+        <Route path="/failures" element={<FailureDiagnostics />} />
         <Route path="/jobs-classic" element={<Jobs />} />
         <Route path="/dlq" element={<DlqPro />} />
         <Route path="/dlq-classic" element={<Dlq />} />
@@ -131,6 +145,8 @@ export function App() {
         <Route path="/workflows/compensation" element={<Workflows />} />
         <Route path="/workflows/archive" element={<Workflows />} />
         <Route path="/metrics" element={<MetricsPro />} />
+        <Route path="/metrics/history" element={<MetricHistory />} />
+        <Route path="/monitoring" element={<MonitoringSetup />} />
         <Route path="/metrics-classic" element={<Metrics />} />
         <Route path="/workers" element={<WorkersPro />} />
         <Route path="/workers-classic" element={<Workers />} />

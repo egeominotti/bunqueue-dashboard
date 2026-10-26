@@ -21,6 +21,7 @@ const typeOnlyModules = new Set([
   'agent/manager/types.ts',
   'agent/server/types.ts',
   'src/features/backups/application/BackupRepository.ts',
+  'src/features/discovery/model.ts',
   'src/features/flows/application/FlowOperationsRepository.ts',
   'src/features/queue-operations/application/QueueOperationsRepository.ts',
   'src/features/workflows/application/WorkflowControlRepository.ts',

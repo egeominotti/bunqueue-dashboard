@@ -36,6 +36,8 @@ remains routable at a `-classic` suffix.
 | `/queues-classic` | `Queues` | Classic | `api` |
 | `/queues-classic/:name` | `QueueDetail` | Classic | `api` |
 | `/jobs` | `control/JobsPro` | **Pro** | `bq` |
+| `/search` | `discovery/GlobalSearch` | Native operations | captured-profile `bq` HTTP reads |
+| `/failures` | `discovery/FailureDiagnostics` | Native operations | captured-profile `bq` jobs + DLQ reads |
 | `/jobs-classic` | `Jobs` | Classic | `api` |
 | `/dlq` | `control/DlqPro` | **Pro** | `bq` |
 | `/dlq-classic` | `Dlq` | Classic | `api` |
@@ -49,6 +51,8 @@ remains routable at a `-classic` suffix.
 | `/workflows/archive` | `control/Workflows` | Pro | archive audit + maintenance |
 | `/flows` | `control/Flows` | Pro | `bq` + agent FlowProducer adapter |
 | `/metrics` | `control/MetricsPro` | **Pro** | `bq` |
+| `/metrics/history` | `metric-history/MetricHistory` | Native operations | target-pinned agent public Queue client |
+| `/monitoring` | `monitoring/MonitoringSetup` | Native configuration | Prometheus exports and native Webhook links |
 | `/metrics-classic` | `Metrics` | Classic | `api` |
 | `/workers` | `control/WorkersPro` | **Pro** | `bq` |
 | `/workers-classic` | `Workers` | Classic | `api` |

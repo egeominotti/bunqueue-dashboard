@@ -111,7 +111,7 @@ object as the message) after strict JSON, prototype, depth, value-count, and
 
 The Bunqueue HTTP server can write rate and concurrency policies but does not
 expose the matching read contracts. Queue Control therefore uses a pinned local
-agent bridge over the official Bunqueue 2.9.3 `Queue` client:
+agent bridge over the pinned official Bunqueue 2.9.20 `Queue` client:
 
 | Agent endpoint | Official Queue contracts |
 | --- | --- |
@@ -135,6 +135,14 @@ Operations are serialized. Deduplication-key removal and journal trimming
 require explicit UI confirmation; trimming lifecycle events does not remove
 metric buckets.
 
+The `/metrics/history` page requests completed and terminal-failed metrics
+separately with explicit inclusive ranges: `0..59`, `0..1439` or `0..10079`.
+Metric indices are bounded to 100,000 and explicit spans to 10,080 buckets;
+legacy `end=-1` remains accepted. These metric-only limits do not change group
+pagination. Native buckets are newest-first and anchored independently at
+`floor(meta.prevTS / 60000) * 60000`. Window totals sum returned buckets, while
+`meta.count` is lifetime terminal activity. No historical percentiles are inferred.
+
 The remaining client methods are deliberately not operator commands:
 `removeDlqJob` is E2E-validated but deliberately not exposed: its queue + job ID
 input is not an atomic generation precondition when custom IDs can be reused.
@@ -145,6 +153,28 @@ runtime. Generic Drain/Clean/Obliterate and non-atomic retry paths remain
 flow-destructive and fail closed as documented below. Compatibility aliases are
 covered through their acknowledged remote counterparts rather than duplicated
 as fire-and-forget controls.
+
+## Native discovery and monitoring
+
+`/search` and `/failures` use immutable captured profile targets through the
+validated `bq` client. They do not switch the active profile while scanning.
+
+| Public HTTP read | Purpose |
+| --- | --- |
+| `GET /dashboard/queues?limit=&offset=` | Queue names with native pagination metadata |
+| `GET /queues/:queue/jobs/list?states=&limit=&offset=` | Read job pages without claiming them |
+| `GET /queues/:queue/dlq?limit=&offset=` | Nested failed-job evidence and attempts |
+| `GET /jobs/:id` | Existing inspector, after validating and activating the original source profile |
+| `GET /prometheus` | Native Prometheus exposition, configured by `/monitoring` exports |
+
+The similarly named `GET /queues/:queue/jobs` claims work and is never used by
+discovery. Scan budgets and source failures are visible; offset pages can move
+during processing. See [native operations](guide/native-operations.md) for limits,
+saved-view storage and monitoring execution scopes. Exported metric alert rules
+are evaluated externally by Prometheus/Alertmanager; native job event delivery
+uses the existing server Webhooks API. No new dashboard notification service,
+identity provider, roles or audit API is introduced.
+
 
 ## S3 backup agent
 

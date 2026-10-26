@@ -1,4 +1,5 @@
 import {
+  type ConnectionProfileTarget,
   getAgentAuthHeaders,
   getAgentBaseUrl,
   getAuthHeaders,
@@ -146,9 +147,14 @@ export interface AgentRequestTarget {
 const serverHeaders = new WeakMap<ServerRequestTarget, Readonly<Record<string, string>>>();
 const agentHeaders = new WeakMap<AgentRequestTarget, Readonly<Record<string, string>>>();
 
-export function captureServerRequestTarget(): ServerRequestTarget {
-  const target = Object.freeze({ baseUrl: getBaseUrl() });
-  serverHeaders.set(target, Object.freeze({ ...getAuthHeaders() }));
+export function captureServerRequestTarget(profile?: ConnectionProfileTarget): ServerRequestTarget {
+  const target = Object.freeze({ baseUrl: profile?.baseUrl ?? getBaseUrl() });
+  const headers = profile
+    ? profile.token
+      ? { Authorization: `Bearer ${profile.token}` }
+      : {}
+    : getAuthHeaders();
+  serverHeaders.set(target, Object.freeze({ ...headers }));
   return target;
 }
 

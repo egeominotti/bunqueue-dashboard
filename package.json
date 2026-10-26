@@ -1,6 +1,6 @@
 {
   "name": "bunqueue-dashboard",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "type": "module",
   "description": "Web dashboard for a bunqueue server (queues, jobs, DLQ, cron, metrics, workers, live activity). Run with `bunx bunqueue-dashboard` (requires Bun 1.4.4).",
   "packageManager": "bun@1.4.4",

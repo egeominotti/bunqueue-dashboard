@@ -9,6 +9,11 @@ A live, read-only dashboard that shows how well your server is keeping up right 
 
 **Where:** open `/metrics` from the sidebar.
 
+For broker-retained completed and terminal-failed minute buckets, use
+`/metrics/history`; [native operations](native-operations.md) explains its
+coverage, retention and paired-agent requirements. `/monitoring` exports
+configuration for external Prometheus/Alertmanager.
+
 ![Metrics](../screenshots/metrics.png)
 
 ## What you'll see
