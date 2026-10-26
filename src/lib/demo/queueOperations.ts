@@ -89,7 +89,7 @@ const EMPTY_QUEUE: QueueSeed = {
   deduplications: [],
 };
 
-const MAX_PAGE_INDEX = 10_000;
+const MAX_METRIC_INDEX = 100_000;
 const MAX_EVENT_RETENTION = 1_000_000;
 
 export type DemoQueueOperations = (request: Request, path: string) => Promise<Response>;
@@ -191,9 +191,12 @@ async function routeRequest(
   if (request.method === 'GET' && operation === 'metrics') {
     const query = exactQuery(request, ['target', 'type', 'start', 'end']);
     const type = metricType(query.get('type'));
-    const start = optionalInteger(query.get('start'), 'start', 0, MAX_PAGE_INDEX) ?? 0;
-    const end = optionalInteger(query.get('end'), 'end', -1, MAX_PAGE_INDEX) ?? -1;
+    const start = optionalInteger(query.get('start'), 'start', 0, MAX_METRIC_INDEX) ?? 0;
+    const end = optionalInteger(query.get('end'), 'end', -1, MAX_METRIC_INDEX) ?? -1;
     if (end !== -1 && end < start) throw new Error('Metrics end must be -1 or at least start');
+    if (end !== -1 && end - start >= 10_080) {
+      throw new Error('Metrics page must contain at most 10080 buckets');
+    }
     return { ok: true, metrics: metricSnapshot(state[type], start, end) };
   }
   if (request.method === 'POST' && operation === 'deduplication/remove') {

@@ -7,6 +7,17 @@
  * All functions are no-ops outside a browser (guarded for tests / SSR).
  */
 
+const downloadMimeTypes = new Set([
+  'application/octet-stream',
+  'application/json',
+  'application/yaml',
+  'application/yaml;charset=utf-8',
+  'text/csv',
+  'text/csv;charset=utf-8',
+  'text/plain',
+  'text/plain;charset=utf-8',
+]);
+
 /** Trigger a browser download of `content` as a file named `filename`. */
 export function downloadFile(
   filename: string,
@@ -14,7 +25,10 @@ export function downloadFile(
   mime = 'application/octet-stream'
 ) {
   if (typeof document === 'undefined') return;
-  const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
+  const requestedType = mime.trim().toLowerCase();
+  const type = downloadMimeTypes.has(requestedType) ? requestedType : 'application/octet-stream';
+  // Rewrap even Blob inputs: preserve bytes without inheriting an active content type.
+  const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

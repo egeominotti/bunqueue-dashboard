@@ -1,4 +1,5 @@
 import { chromium, type Locator, type Page } from 'playwright';
+import { verifyFleetDiscovery } from './postgresFleetDiscoveryScenario';
 
 export type DashboardFleetNode = {
   name: string;
@@ -125,6 +126,7 @@ async function runScenario(page: Page, options: DashboardFleetScenarioOptions): 
     'atomic group max-size rejection'
   );
   console.log(`PASS jobs: group priority and atomic max-size through ${options.nodes[0].name}`);
+  await verifyFleetDiscovery(page, queueName, customJobId, options.nodes);
 
   await activate(page, options.nodes[1].name);
   await nav(page, 'Jobs', 'Jobs Explorer');

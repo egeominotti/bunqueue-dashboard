@@ -16,7 +16,7 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   // README.md is the GitHub-facing index; index.md is the site home.
-  srcExclude: ['README.md'],
+  srcExclude: ['README.md', 'superpowers/**'],
   sitemap: { hostname: `${SITE}/` },
   head: siteHead(base),
   transformPageData,

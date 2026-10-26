@@ -15,6 +15,32 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-27
+
+### Added
+
+- Discover jobs across configured Bunqueue profiles with metadata/correlation-ID
+  search, browser-local saved views, URL filters and explicit scan coverage.
+- Group observed failures and DLQ entries by error signature, with original-job
+  inspection that validates the source connection before switching profiles.
+- Read native completed and terminal-failed queue history for 1 hour, 24 hours
+  or 7 days, showing retained coverage, unknown gaps and window totals separately
+  from lifetime counters.
+- Export native Prometheus scrape configuration and example alert rules, with
+  clear links to server Webhooks and browser-local Alerts.
+
+### Changed
+
+- Extend only the metric bridge's bounded pagination to support 7-day history;
+  preserve group pagination and existing operation safety gates.
+- Document native operation limits, retention, agent requirements and external
+  monitoring setup. Keep implementation plans out of the published docs.
+
+### Fixed
+
+- Constrain file downloads to inert MIME types, preventing supplied Blob metadata
+  from overriding the requested JSON, CSV or YAML format while preserving bytes.
+
 ## [1.0.5] - 2026-10-26
 
 ### Changed
@@ -1632,7 +1658,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.5...v1.1.0
 [1.0.5]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.2...v1.0.3

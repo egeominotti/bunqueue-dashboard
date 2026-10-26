@@ -44,6 +44,7 @@ export function createThemeConfig(base: string): DefaultTheme.Config {
         items: [
           { text: 'Queues', link: '/guide/queues' },
           { text: 'Jobs Explorer', link: '/guide/jobs' },
+          { text: 'Native operations', link: '/guide/native-operations' },
           { text: 'Dead Letter Queue', link: '/guide/dlq' },
           { text: 'Cron Jobs', link: '/guide/cron' },
           { text: 'Flows', link: '/guide/flows' },

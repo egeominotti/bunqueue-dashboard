@@ -1,7 +1,7 @@
 import { readLimitedJsonBody } from '../server/jsonBody';
 
 const MAX_BODY_BYTES = 8 * 1024;
-const MAX_PAGE_INDEX = 10_000;
+const MAX_METRIC_INDEX = 100_000;
 const MAX_EVENT_RETENTION = 1_000_000;
 
 export function exactQuery(url: string, allowed: readonly string[]): URLSearchParams {
@@ -65,10 +65,13 @@ export function positiveSafeInteger(value: unknown, label: string): number {
 }
 
 export function metricsRange(query: URLSearchParams): { start: number; end: number } {
-  const start = optionalInteger(query.get('start'), 'start', 0, MAX_PAGE_INDEX, 0);
+  const start = optionalInteger(query.get('start'), 'start', 0, MAX_METRIC_INDEX, 0);
   const rawEnd = query.get('end');
-  const end = rawEnd === null ? -1 : boundedInteger(rawEnd, 'end', -1, MAX_PAGE_INDEX);
+  const end = rawEnd === null ? -1 : boundedInteger(rawEnd, 'end', -1, MAX_METRIC_INDEX);
   if (end !== -1 && end < start) throw new Error('Metrics end must be -1 or at least start');
+  if (end !== -1 && end - start >= 10_080) {
+    throw new Error('Metrics page must contain at most 10080 buckets');
+  }
   return { start, end };
 }
 

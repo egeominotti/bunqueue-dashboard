@@ -122,7 +122,7 @@ function parseRemoved(value: unknown): number {
   return removed as number;
 }
 
-function parseMetrics(value: unknown): QueueMetricsSnapshot {
+export function parseMetrics(value: unknown): QueueMetricsSnapshot {
   const metrics = record(okRecord(value, 'Queue metrics').metrics, 'Queue metrics');
   const meta = record(metrics.meta, 'Queue metrics');
   if (
@@ -131,7 +131,7 @@ function parseMetrics(value: unknown): QueueMetricsSnapshot {
     !integerAtLeast(meta.prevCount, 0) ||
     !integerAtLeast(metrics.count, 0) ||
     !Array.isArray(metrics.data) ||
-    metrics.data.length > 10_001 ||
+    metrics.data.length > 10_080 ||
     !metrics.data.every((entry) => integerAtLeast(entry, 0))
   ) {
     throw malformed('Queue metrics');

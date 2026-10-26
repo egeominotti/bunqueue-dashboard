@@ -3,6 +3,7 @@ import llmstxt from 'vitepress-plugin-llms';
 // Emits /llms.txt and /llms-full.txt with an accurate up-front project model.
 export function createLlmsPlugin() {
   return llmstxt({
+    ignoreFiles: ['superpowers/**'],
     title: 'bunqueue dashboard',
     description:
       'A web dashboard that fully drives a bunqueue server over its public HTTP API (:6790) plus a small local control agent that manages the server process. Built with React 19, React Router 7, Zustand 5, Vite and Bun.',

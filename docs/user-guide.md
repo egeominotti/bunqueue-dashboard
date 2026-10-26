@@ -34,6 +34,8 @@ component → API-client table, see [Pages & routes](/pages).
   and inline pause/resume.
 - [**Jobs Explorer**](/guide/jobs), server-paginated jobs for a queue, with
   filters, multi-select and Promote as the only job-lifecycle mutation.
+- [**Global search and Failures**](/guide/native-operations), bounded job
+  discovery across profiles, saved local filters and grouped failure signatures.
 - [**Dead Letter Queue**](/guide/dlq), cross-queue DLQ dashboard: reasons,
   attempt history and CSV export; every retry and purge path fails closed.
 - [**Cron Jobs**](/guide/cron), list and create scheduled jobs (cron expression
@@ -49,6 +51,8 @@ component → API-client table, see [Pages & routes](/pages).
 ## Monitoring
 
 - [**Metrics**](/guide/metrics), rolling throughput chart, queue-depth trend, latency percentiles, per-queue counts.
+- [**Metric history and Monitoring setup**](/guide/native-operations), retained
+  native minute buckets and exportable Prometheus configuration and alert rules.
 - [**Workers**](/guide/workers), registered workers, active/stale status, and
   guarded stale-worker registry cleanup (it does not stop worker processes).
 - [**Logs**](/guide/logs), the live SSE event feed with filters and search.

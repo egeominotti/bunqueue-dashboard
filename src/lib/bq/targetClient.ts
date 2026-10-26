@@ -1,6 +1,6 @@
 import type { CronFull, DlqEntryFull, DlqStatsFull, JobFull, QueueSummaryFull } from '../bqTypes';
 import { parseQueueSummaryPayload, parseWorkersPayload } from '../dashboardPayloads';
-import type { OverviewResponse, StatsResponse } from '../types';
+import type { OverviewResponse, QueuesResponse, StatsResponse } from '../types';
 import { opaqueHttpPathSegment, queueHttpPathSegment } from '../upstreamPaths';
 import { assertBulkJobCount, encodedBulkJobRequest } from './jobPayload';
 import {
@@ -16,6 +16,7 @@ import type { BulkJobBody } from './types';
 
 export interface ServerTargetClient {
   queuesSummary: () => Promise<QueueSummaryFull[]>;
+  queuesPage: (limit?: number, offset?: number) => Promise<QueuesResponse>;
   overview: () => Promise<OverviewResponse>;
   counts: (queue: string) => Promise<{ ok: boolean; counts: Record<string, number> }>;
   jobsList: (
@@ -97,6 +98,36 @@ export function createServerTargetClient(
   };
 
   return Object.freeze({
+    queuesPage: async (limit = 100, offset = 0) => {
+      if (!validCount(limit) || limit < 1 || limit > 500 || !validCount(offset))
+        throw new TypeError('Invalid queue pagination.');
+      const result = okRecord(
+        await at<unknown>(`/dashboard/queues?limit=${limit}&offset=${offset}`),
+        'queue page'
+      );
+      if (
+        !validCount(result.total) ||
+        result.offset !== offset ||
+        result.limit !== limit ||
+        typeof result.timestamp !== 'number' ||
+        !Number.isFinite(result.timestamp) ||
+        !Array.isArray(result.queues) ||
+        result.queues.length !== Math.min(limit, Math.max(0, result.total - offset)) ||
+        !result.queues.every((candidate) => {
+          const queue = record(candidate, 'queue page');
+          return (
+            typeof queue.name === 'string' &&
+            !!queue.name &&
+            typeof queue.paused === 'boolean' &&
+            ['waiting', 'delayed', 'active', 'dlq'].every((key) => validCount(queue[key]))
+          );
+        }) ||
+        new Set(result.queues.map((candidate) => (candidate as { name: string }).name)).size !==
+          result.queues.length
+      )
+        throw new BqError('Malformed queue page response.', 200);
+      return result as unknown as QueuesResponse;
+    },
     queuesSummary: async () => parseQueueSummaryPayload(await at<unknown>('/queues/summary')),
     overview: () => at<OverviewResponse>('/dashboard'),
     counts: async (queue: string) => {

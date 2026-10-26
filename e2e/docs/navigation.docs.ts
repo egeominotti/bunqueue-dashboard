@@ -7,6 +7,18 @@ const pages = (await readdir('docs/.vitepress/dist', { recursive: true }))
     `/${path.replace(/(?:^|\/)index\.html$/, '/').replace(/\.html$/, '')}`.replace(/\/+/g, '/')
   );
 
+test('publishes the native operations guide while excluding internal plan routes', async ({
+  request,
+}) => {
+  expect((await request.get('/guide/native-operations')).ok()).toBe(true);
+  expect(pages.some((path) => path.startsWith('/superpowers/'))).toBe(false);
+  for (const path of ['/sitemap.xml', '/llms.txt']) {
+    const response = await request.get(path);
+    expect(response.ok()).toBe(true);
+    expect(await response.text()).not.toContain('/superpowers/');
+  }
+});
+
 for (const viewport of [
   { width: 1440, height: 1000 },
   { width: 390, height: 844 },

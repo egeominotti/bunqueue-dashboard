@@ -10,6 +10,10 @@ while DLQ retry and completed-job requeue fail closed.
 
 **Where:** open `/jobs` from the sidebar.
 
+Use `/search` for bounded discovery across configured profiles and local saved
+views, or `/failures` to compare observed error signatures. See
+[native operations](native-operations.md) for scan coverage and limits.
+
 ![Jobs Explorer](../screenshots/jobs.png)
 
 ## What you'll see

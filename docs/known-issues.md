@@ -5,6 +5,21 @@ description: "A verified, non-glossed list of the bunqueue dashboard's current b
 
 # Known issues
 
+## Native operations limits
+
+[Global search and Failures](guide/native-operations.md) use bounded, live offset
+reads: up to 100 queues, 5,000 job observations, 100 requests and 20 seconds per
+scan, with 500 displayed matches. Coverage and failed/skipped profiles are
+explicit; concurrent broker changes can move records between pages. Saved views
+hold filter preferences in this browser, without tokens or job payloads.
+
+Native metric history requires a paired running managed agent and uses retained
+`Queue.getMetrics` buckets. Bunqueue owns retention and persistence; missing
+minutes and idle tails are unknown. Prometheus alert exports require an external
+Prometheus/Alertmanager installation. Native Webhooks delivers broker job events;
+the existing dashboard Alerts engine requires an open browser tab. Bunqueue has
+no native user-role or user-attributed audit management API.
+
 Bunqueue 2.9.20 is now the installed/default target; it retains the 2.9.3 API
 contracts described below; PostgreSQL now uses schema 21. Flow safety gates now also apply to the SDK
 console and direct agent calls: payload replacement, retry, remove and
