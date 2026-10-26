@@ -36,6 +36,11 @@ the GitHub Release body.
 - Document native operation limits, retention, agent requirements and external
   monitoring setup. Keep implementation plans out of the published docs.
 
+### Fixed
+
+- Constrain file downloads to inert MIME types, preventing supplied Blob metadata
+  from overriding the requested JSON, CSV or YAML format while preserving bytes.
+
 ## [1.0.5] - 2026-10-26
 
 ### Changed

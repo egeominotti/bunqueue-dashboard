@@ -108,7 +108,7 @@ test('matches only supported fields and respects numeric and time filters', () =
 test('continues after profile errors and reports skipped sources at shared request cap', async () => {
   const sources = targets();
   globalThis.fetch = (async (input) =>
-    String(input).startsWith('http://a.test')
+    new URL(String(input)).origin === 'http://a.test'
       ? new Response('', { status: 503 })
       : json(queues([]))) as typeof fetch;
   const report = await scanJobs(sources, {}, new AbortController().signal);
