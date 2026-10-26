@@ -27,6 +27,9 @@ the GitHub Release body.
 
 ### Changed
 
+- Project typechecks use Bun's native `bun check`, and formatting uses native
+  `bun fmt` with the existing style and ignore policy. The redundant oxfmt
+  dependency is removed; TypeScript remains for Twoslash and the lint guard API.
 - The public Bunqueue client and default managed-server command now use
   Bunqueue 2.9.20. Setup instructions and demo data follow the same package pin;
   saved commands and explicit environment overrides retain precedence.

@@ -32,7 +32,7 @@ The live demo uses sample data. The docs explain how to connect and operate a re
 ![Vite 8](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)
 ![Bun](https://img.shields.io/badge/Bun-1.4-000?logo=bun&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)
-![Oxlint + Oxfmt](https://img.shields.io/badge/Oxc-Oxlint%20%2B%20Oxfmt-7C3AED)
+![Oxlint + Bun fmt](https://img.shields.io/badge/Tooling-Oxlint%20%2B%20Bun%20fmt-7C3AED)
 
 <br />
 
@@ -263,20 +263,21 @@ target-pinned Flow, Workflow, Queue and Backup agent operations.
 | `bun start` | **Agent + dashboard together** (one-command dev) |
 | `bun dev` | Dashboard only (Vite dev server) |
 | `bun run agent` | Control agent only |
-| `bun run build` | Typecheck (`tsc --noEmit`) + production build → `dist/` |
+| `bun run build` | Native Bun typecheck + production build → `dist/` |
+| `bun run typecheck` | Native `bun check` for the frontend, agent/scripts, examples and browser tests |
 | `bun run preview` | Preview the production build |
 | `bun run lint` | Lint with Oxlint, including type-aware rules and the implicit-`any` parity guard |
-| `bun run format:check` | Check formatting with Oxfmt |
-| `bun run check` | Oxlint + Oxfmt validation (the CI gate) |
-| `bun run check:fix` | Apply safe Oxlint fixes, then format with Oxfmt |
+| `bun run format:check` | Check formatting with native `bun fmt --check` |
+| `bun run check` | Native typechecking, Oxlint and native formatting validation |
+| `bun run check:fix` | Apply safe Oxlint fixes, then format with native `bun fmt` |
 | `bun test` | Unit + agent-lifecycle tests |
 | `bun run test:e2e:tls` | Queue, Flow and Workflow over verified native TLS, including untrusted-certificate rejection |
-| `bun run test:e2e:upgrade` | Real npm Bunqueue 2.9.2 SQLite schema-35 → 2.9.4 schema-37 migration and retention semantics |
+| `bun run test:e2e:upgrade` | Real npm Bunqueue 2.9.2 SQLite schema-35 → 2.9.20 schema-37 migration and retention semantics |
 | `bun run test:e2e` | Real TLS, SQLite upgrade, Flow, Workflow, Queue SDK, and three-broker PostgreSQL runtime tests |
 | `bun run test:e2e:browser` | Production UI tests on Chromium, Firefox and WebKit |
 | `bun run test:e2e:browser:postgres-fleet` | Real UI operations across three PostgreSQL brokers (requires Docker and Chromium) |
 | `bun run quality` | Complete static, build, docs, coverage, runtime, package and dependency gate |
-| `bun run test:e2e:postgres-fleet` | Three authenticated Bunqueue 2.9.4 brokers + three agents sharing disposable PostgreSQL 18.6 |
+| `bun run test:e2e:postgres-fleet` | Three authenticated Bunqueue 2.9.20 brokers + three agents sharing disposable PostgreSQL 18.6 |
 
 ## Docker
 

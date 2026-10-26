@@ -47,7 +47,7 @@ before publishing. It executes, in order:
 
 - `bun run version:check`: enforce the Bun version pin.
 - `bun run architecture`: enforce the TypeScript source file size budget.
-- `bun run check`: Oxlint plus an Oxfmt formatting check (`bun run check:fix`
+- `bun run check`: native typechecking, Oxlint and a Bun formatting check (`bun run check:fix`
   applies safe lint fixes, then formats files).
 - `bun run build`: strict typechecks for `src/`, `agent/`, `scripts/`, examples and browser fixtures, then the
   production Vite build.
@@ -84,16 +84,21 @@ The audit has no ID-specific exceptions: any HIGH or CRITICAL advisory fails the
 gate. Transitive fixes are pinned through `overrides` in `package.json`.
 
 Notes:
-- `.oxlintrc.json` and `.oxfmtrc.json` are the committed root configurations for
-  Oxlint and Oxfmt. Oxlint runs the JavaScript, TypeScript, Oxc, Unicorn, React, and
+- `bun run typecheck` uses Bun's native type checker for the frontend, agent/scripts,
+  examples and browser tests. Each command passes `--no-script` to bypass the
+  aggregate `check` script; `bun run check` runs typechecking, linting and formatting.
+- `.oxlintrc.json` configures Oxlint, and native `bun fmt` reads `.oxfmtrc.json`
+  directly without installing oxfmt. Oxlint runs the JavaScript, TypeScript, Oxc, Unicorn, React, and
   JSX accessibility plugins with the project's curated severities; `oxlint-tsgolint`
   provides the type-aware rules. The lint script also retains Biome's implicit-`any`
-  declaration check, which Oxlint does not yet implement. Oxfmt keeps the established
+  declaration check, which Oxlint does not yet implement. The native formatter keeps the established
   two-space, 100-column, single-quote style and deterministic imports.
   `src/index.css` (Tailwind v4 at-rules), `agent/`, and `scripts/` are excluded from
   formatting and linting. They are not skipped by typechecking: `tsconfig.json`
   covers `src/`, while `tsconfig.agent.json` covers both Bun runtime directories
   (except the generated `scripts/embedded.gen.ts`).
+- The `typescript` dependency is retained for the lint guard's compiler API and
+  VitePress Twoslash, rather than for the project's typecheck commands.
 - `bunfig.toml` preloads `test/setup.ts` (a `localStorage` shim) so store imports
   work under `bun test`.
 
