@@ -40,6 +40,7 @@ Each row in the table is one worker:
 
 ## What you can do
 
+- **Search and page through workers**, filter the complete registry by name, ID, queue, host or status, then use the pager to inspect 100 workers at a time.
 - **Remove a stale registry record**, click the trash icon on a stale row that reports zero active jobs. You'll be asked to confirm; on success a green message appears above the table, and the list refreshes.
 - **Retry**, if the server is unreachable, an offline banner appears with a **Retry** button to fetch again.
 
@@ -53,8 +54,8 @@ Registry cleanup **does not stop the worker process**. In Bunqueue v2.9.3, a run
 
 - **Quarantined records are not actionable.** Invalid identity, counters or status values produce a separate diagnostic list; they cannot be removed through the worker table.
 - **Stale doesn't mean stopped.** A worker that stops heartbeating turns amber and counts toward **Stale**, but its process may still exist. Verify it outside the dashboard before removing the record.
-- **The summary cards always reflect the full fleet.** Even when the table is capped, Total, Active, Stale, and Active Jobs are counted across every worker.
-- **The table shows at most 100 workers**, with no pagination. Past that, a note reads "Showing first 100 of N workers." See [Known issues](/known-issues).
+- **The summary cards always reflect the full fleet.** Total, Active, Stale, and Active Jobs are counted across the complete registry even when search or pagination narrows the table.
+- **The table shows 100 workers per page.** Search covers the full loaded registry, and sorting applies before pagination.
 - **First load shows a brief "Loading workers…"**; after that, updates happen quietly in place with no flicker. If no workers are connected, you'll see an empty state instead.
 - **Don't confuse this with the classic Workers page** (`/workers-classic`), which is read-only, shows fewer rows, and has no status pill or registry-cleanup button.
 

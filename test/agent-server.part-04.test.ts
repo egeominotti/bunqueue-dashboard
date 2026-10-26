@@ -22,7 +22,7 @@ function put(
 }
 
 describe('agent token gate', () => {
-  test('loopback policy keeps reads open while a configured token gates mutations', async () => {
+  test('loopback token gates mutations and complete configuration reads', async () => {
     const m = new ProcessManager();
     const handle = createFetchHandler(m, { allowedOrigins: ALLOWED, token: 's3cr3t' });
 
@@ -50,13 +50,13 @@ describe('agent token gate', () => {
     );
     expect(okHeader.status).toBe(200);
 
-    // reads unaffected by the token gate
+    // Complete configuration snapshots include secrets and require the token.
     const read = await handle(
       new Request('http://127.0.0.1:6800/control/config', {
         headers: { Origin: 'http://localhost:5273' },
       })
     );
-    expect(read.status).toBe(200);
+    expect(read.status).toBe(401);
   });
 
   test('network policy requires the token for every route, including sensitive reads', async () => {

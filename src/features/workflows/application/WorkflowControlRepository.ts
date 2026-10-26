@@ -6,12 +6,14 @@ export interface WorkflowRuntimeStatus {
   queueName?: string;
   concurrency?: number;
   error?: string;
+  needsInitialization?: boolean;
 }
 
 export type WorkflowTerminalState = 'completed' | 'failed';
 
 export interface WorkflowControlRepository {
   status(): Promise<WorkflowRuntimeStatus>;
+  initialize(): Promise<WorkflowRuntimeStatus>;
   reload(): Promise<WorkflowRuntimeStatus>;
   start(workflowName: string, input?: unknown): Promise<{ id: string; workflowName: string }>;
   signal(executionId: string, event: string, payload?: unknown): Promise<void>;

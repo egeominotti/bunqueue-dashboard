@@ -50,7 +50,7 @@ test('authenticates, keeps every route under BASE_PATH, and navigates the full s
 
   for (const href of [...new Set(hrefs)]) {
     await page.locator(`#app-nav nav a[href="${href}"]`).click();
-    await expect(page).toHaveURL(`${E2E_ORIGIN}${href}`);
+    await expect(page).toHaveURL((url) => url.origin === E2E_ORIGIN && url.pathname === href);
     await expect(page.locator('#main h1').first()).toBeVisible();
     await expect(page.getByText('This page does not exist.')).toHaveCount(0);
   }

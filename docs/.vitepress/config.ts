@@ -1,5 +1,5 @@
 import { transformerTwoslash } from '@shikijs/vitepress-twoslash';
-import { withMermaid } from 'vitepress-plugin-mermaid';
+import { defineConfig } from 'vitepress';
 import { createLlmsPlugin } from './llms';
 import { SITE, SITE_DESCRIPTION, siteHead, transformPageData } from './seo';
 import { createThemeConfig } from './themeConfig';
@@ -8,8 +8,8 @@ import { createThemeConfig } from './themeConfig';
 // (pages.yml sets DOCS_BASE=/bunqueue-dashboard/docs/). Must have a trailing slash.
 const base = process.env.DOCS_BASE || '/';
 
-// withMermaid() registers the render component used by ```mermaid fences.
-export default withMermaid({
+// The local renderer keeps Mermaid on its supported public API without plugin peer conflicts.
+export default defineConfig({
   base,
   lang: 'en-US',
   title: 'bunqueue dashboard',
@@ -22,6 +22,15 @@ export default withMermaid({
   head: siteHead(base),
   transformPageData,
   markdown: {
+    config(md) {
+      const fence = md.renderer.rules.fence!;
+      md.renderer.rules.fence = (tokens, index, options, env, self) => {
+        if (tokens[index].info.trim() === 'mermaid') {
+          return `<Mermaid encoded="${encodeURIComponent(tokens[index].content)}" />`;
+        }
+        return fence(tokens, index, options, env, self);
+      };
+    },
     // Shiki Twoslash gives ```ts twoslash blocks real type-checking and hover types.
     codeTransformers: [transformerTwoslash()],
     languages: ['ts', 'js', 'bash', 'json', 'jsonc', 'html', 'css', 'yaml', 'docker'],

@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useCallback, useMemo, useState } from 'react';
 import { toast } from '@/components/dashboard/stores/toastStore';
 import { Button } from '@/components/ui/Button';
 import { ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
@@ -7,28 +6,22 @@ import { IconDownload } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { bq } from '@/lib/bq';
 import type { JobFull } from '@/lib/bqTypes';
-import { downloadCsv } from '@/lib/exportFile';
 import { errorRate, formatNumber, formatPercent } from '@/lib/format';
 import { actionGates } from '@/lib/jobActions';
 import { usePolledData } from '@/lib/usePolledData';
+import { downloadJobsCsv } from './jobsPro/exportJobs';
 import { JobsStats } from './jobsPro/JobsStats';
 import { JobsTable } from './jobsPro/JobsTable';
 import { JobsToolbar } from './jobsPro/JobsToolbar';
-import { JOB_STATUSES, JOBS_PAGE_SIZE, type JobStatusFilter } from './jobsPro/model';
+import { JOBS_PAGE_SIZE } from './jobsPro/model';
 import { useJobMutations } from './jobsPro/useJobMutations';
+import { useJobsExport } from './jobsPro/useJobsExport';
+import { useJobsView } from './jobsPro/useJobsView';
 
 export { selectionLabel, withoutActed } from './jobsPro/model';
 
 export function JobsPro() {
-  const [params, setParams] = useSearchParams();
-  const [queue, setQueue] = useState(params.get('queue') ?? '');
-  const [status, setStatus] = useState<JobStatusFilter>(() => {
-    const s = params.get('status') as JobStatusFilter | null;
-    return s && JOB_STATUSES.includes(s) ? s : 'all';
-  });
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Queue dropdown: one /queues/summary call (all queues), polled slowly — the
   // queue set changes rarely, so it doesn't ride the fast job cadence.
@@ -38,6 +31,9 @@ export function JobsPro() {
     loading: discoveryLoading,
     refetch: refetchSummary,
   } = usePolledData(() => bq.queuesSummary(), [], { intervalMs: 30000 });
+  const { queue, status, page, view, selected, setSelected, setPage, selectQueue, selectStatus } =
+    useJobsView(summary);
+  const { busy: exportBusy, exportAll } = useJobsExport(queue, status, search);
   // `/dashboard` omits prioritized and waiting-children in v2.9.3. `/stats`
   // carries every state needed by the inventory cards.
   const {
@@ -46,26 +42,21 @@ export function JobsPro() {
     refetch: refetchOverview,
   } = usePolledData(() => bq.stats(), [], { intervalMs: 10000 });
 
-  // Default to the first queue once the list arrives (no cross-queue job list:
-  // one server-paginated queue at a time). Also replace a stale ?queue= with no
-  // <option>; without a summary the URL queue stays the only usable target.
-  useEffect(() => {
-    if (!summary || summary.some((q) => q.name === queue)) return;
-    setQueue(summary[0]?.name ?? '');
-    setPage(0);
-  }, [summary, queue]);
-
   // Tagged with the view it was fetched for (queue|status|page), so switching
   // any of them can't leave the previous view's rows rendered — with live
   // action buttons — under the new selection for one round-trip.
-  const view = `${queue}|${status}|${page}`;
   const fetcher = useCallback(async () => {
     if (!queue) return { view, jobs: [] as JobFull[] };
     const states = status === 'all' ? undefined : [status];
     const r = await bq.jobsList(queue, states, JOBS_PAGE_SIZE, page * JOBS_PAGE_SIZE);
     return { view, jobs: (r.jobs ?? []).map((j) => ({ ...j, queue: j.queue ?? queue })) };
   }, [queue, status, page, view]);
-  const { data: raw, error, loading, refetch } = usePolledData(fetcher, [queue, status, page]);
+  const {
+    data: raw,
+    error,
+    loading,
+    refetch,
+  } = usePolledData(fetcher, [queue, status, page, view]);
   const jobs = raw?.view === view ? raw.jobs : null;
 
   // No `total` from jobs/list — a full page means there may be a next one.
@@ -91,25 +82,6 @@ export function JobsPro() {
   // zeros — a "0" that looks like data. Show placeholders until it arrives.
   const stat = (n: number | undefined) => (stats ? formatNumber(n) : '—');
 
-  const resetPage = () => setPage(0);
-
-  // Keep queue+status in the URL (replace, not push) so a filtered view is
-  // shareable and survives back-navigation. Page is deliberately left out —
-  // offsets go stale as jobs drain.
-  const syncUrl = (q: string, s: JobStatusFilter) => {
-    const next: Record<string, string> = {};
-    if (q) next.queue = q;
-    if (s !== 'all') next.status = s;
-    setParams(next, { replace: true });
-  };
-
-  // A different page/queue/status shows different jobs — a selection made on
-  // the old view must not silently carry over to rows it never referred to.
-  // Clear selection whenever the rendered view changes.
-  useEffect(() => {
-    setSelected(new Set());
-  }, [queue, status, page]);
-
   const toggle = (id: string) =>
     setSelected((s) => {
       const n = new Set(s);
@@ -124,6 +96,7 @@ export function JobsPro() {
 
   const { actionMsg, bulkBusy, busyIds, runBulk, runOne } = useJobMutations({
     queue,
+    view,
     rows,
     selected,
     setSelected,
@@ -145,28 +118,7 @@ export function JobsPro() {
       toast.info('No jobs to export on this page');
       return;
     }
-    const out = rows.map((j) => ({
-      id: j.id,
-      name: j.name ?? 'default',
-      queue: j.queue ?? queue,
-      state: j.state ?? '',
-      priority: j.priority ?? 0,
-      attempts: j.attempts ?? 0,
-      maxAttempts: j.maxAttempts ?? '',
-      createdAt: j.createdAt ? new Date(j.createdAt).toISOString() : '',
-      durationMs: j.startedAt && j.completedAt ? j.completedAt - j.startedAt : '',
-    }));
-    downloadCsv(`jobs-${queue}-${status}`, out, [
-      'id',
-      'name',
-      'queue',
-      'state',
-      'priority',
-      'attempts',
-      'maxAttempts',
-      'createdAt',
-      'durationMs',
-    ]);
+    downloadJobsCsv(queue, status, rows);
   };
 
   // Targets are pre-filtered to eligible rows by runBulk, so each fn is a direct
@@ -176,12 +128,23 @@ export function JobsPro() {
     <div>
       <PageHeader
         title="Jobs Explorer"
-        description="Browse, inspect, and manage individual jobs."
+        description="Browse, inspect, and manage individual jobs. Full CSV exports read up to 10,000 live jobs and can reflect concurrent changes."
         live={!!queue && jobs != null && !error && !discoveryError && !overviewError}
         actions={
-          <Button size="sm" disabled={!jobs || rows.length === 0} onClick={exportRows}>
-            <IconDownload className="size-3.5" /> Export CSV
-          </Button>
+          <>
+            <Button size="sm" disabled={!jobs || rows.length === 0} onClick={exportRows}>
+              <IconDownload className="size-3.5" /> Export page CSV
+            </Button>
+            <Button
+              size="sm"
+              disabled={!queue || !jobs || exportBusy}
+              onClick={() => void exportAll()}
+              title="Export matching jobs across all pages for this queue and state"
+            >
+              <IconDownload className="size-3.5" />
+              {exportBusy ? 'Exporting…' : 'Export all matching CSV'}
+            </Button>
+          </>
         }
       />
 
@@ -239,16 +202,8 @@ export function JobsPro() {
         selectedVisible={selectedRows.length}
         canPromote={canBulk.promote}
         bulkBusy={bulkBusy}
-        onQueue={(next) => {
-          setQueue(next);
-          resetPage();
-          syncUrl(next, status);
-        }}
-        onStatus={(next) => {
-          setStatus(next);
-          resetPage();
-          syncUrl(queue, next);
-        }}
+        onQueue={selectQueue}
+        onStatus={selectStatus}
         onSearch={setSearch}
         onPromote={bulkPromote}
       />

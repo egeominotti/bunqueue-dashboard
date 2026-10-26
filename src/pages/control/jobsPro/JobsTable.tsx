@@ -51,7 +51,14 @@ export function JobsTable({
           </span>
         </div>
       )}
-      <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+      <div
+        role="region"
+        aria-label="Jobs table"
+        // Scrollable content needs keyboard focus so arrow keys can reveal every column.
+        // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+        tabIndex={0}
+        className="overflow-x-auto rounded-xl border border-line bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      >
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
@@ -74,7 +81,9 @@ export function JobsTable({
               <th className="px-5 py-3 font-medium">Priority</th>
               <th className="px-5 py-3 text-right font-medium">Created</th>
               <th className="px-5 py-3 text-right font-medium">Duration</th>
-              <th className="w-28 px-5 py-3 text-right font-medium">Actions</th>
+              <th className="sticky right-0 z-10 w-28 bg-surface px-2 py-3 text-right font-medium md:static md:px-5">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -133,17 +142,18 @@ export function JobsTable({
                           : undefined
                       )}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="sticky right-0 z-10 bg-surface px-2 py-3 md:static md:px-5">
                       <div className="flex justify-end gap-1">
                         <Link
                           to={`/job?id=${encodeURIComponent(job.id)}`}
                           aria-label={`Inspect job ${job.id}`}
-                          className="inline-flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                          className="inline-flex size-[44px] shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 md:size-8"
                         >
                           <IconEye className="size-3.5" />
                         </Link>
                         {gates.promote && (
                           <IconButton
+                            className="size-[44px] shrink-0 md:size-8"
                             aria-label="Promote job"
                             disabled={rowBusy}
                             onClick={() => onRun(job, 'Promote', () => bq.promoteJob(job.id))}

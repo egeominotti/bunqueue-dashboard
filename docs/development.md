@@ -54,7 +54,7 @@ before publishing. It executes, in order:
 - `bun run size`: initial-load and total JavaScript bundle budgets.
 - `bun run docs:build`: the VitePress production build, including dead-link checks.
 - `bun run test:coverage`: the complete Bun test suite plus aggregate coverage floors.
-- `bun run test:e2e`: disposable Bunqueue 2.9.4 TLS, SQLite migration, Flow/Workflow/Queue contracts
+- `bun run test:e2e`: disposable Bunqueue 2.9.20 TLS, SQLite migration, Flow/Workflow/Queue contracts
   plus three authenticated brokers and agents sharing PostgreSQL 18.6 (Docker required).
 - `bun run test:package`: packs, installs, starts, and probes the published binary
   from a clean temporary consumer.
@@ -62,7 +62,7 @@ before publishing. It executes, in order:
 
 CI also runs `bun run test:e2e:browser` as a separate blocking matrix on Chromium, Firefox, and
 WebKit. The suite uses the production bundle, a non-root `BASE_PATH`, an authenticated disposable
-Bunqueue 2.9.4 process, and a temporary database. It verifies the token gate, full sidebar
+Bunqueue 2.9.20 process, and a temporary database. It verifies the token gate, full sidebar
 navigation, SSE reconnection after an actual upstream restart, confirmed Cron mutations, and
 automated WCAG A/AA rules. Operational browser tests also submit and inspect jobs, import bulk
 jobs, reconcile a 40-job benchmark, execute SQLite queries, operate webhook entries, inspect
@@ -148,3 +148,10 @@ browser telemetry completion promise on cancellation. Keep `patches/` alongside
 `package.json` and `bun.lock` before running a frozen install, including in Docker.
 When upgrading the SDK, verify the managed Copilot Stop regression against the
 production browser bundle before removing or refreshing the patch.
+
+The documentation theme renders Mermaid 12 through its public lazy-loaded API.
+The local Markdown fence and Vue component replace `vitepress-plugin-mermaid`, whose
+latest peer range only accepts Mermaid 10/11. This allows the supported KaTeX 0.18
+security fixes without an incompatible override. Mermaid runs only after browser
+mount with `securityLevel: strict`; SSR emits the diagram container. The docs browser
+suite verifies both diagrams, hydration and repeat navigation without duplicate SVGs.

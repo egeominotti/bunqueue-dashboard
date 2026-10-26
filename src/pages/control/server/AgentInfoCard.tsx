@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/Card';
+import manifest from '../../../../package.json';
 
 function Code({ children }: { children: string }) {
   return <code className="rounded bg-surface-2 px-1.5 py-0.5 text-xs text-fg">{children}</code>;
@@ -33,8 +34,9 @@ export function AgentInfoCard({ agentBase }: { agentBase: string }) {
               <Code>HTTP_PORT</Code> and <Code>TCP_PORT</Code>, plus <Code>BUNQUEUE_DATA_PATH</Code>{' '}
               only for SQLite. Memory and PostgreSQL modes remove every SQLite path alias before
               launch. Any <span className="text-fg">Environment variables</span> you add are
-              included too. The default <Code>bunx bunqueue@2.9.4 start</Code> resolves the verified
-              release; pointing the command at a local entry (e.g.{' '}
+              included too. The default{' '}
+              <Code>{`bunx bunqueue@${manifest.dependencies.bunqueue} start`}</Code> resolves the
+              verified release; pointing the command at a local entry (e.g.{' '}
               <Code>bun run /path/to/bunqueue/src/main.ts</Code>) works without one.
             </p>
           </div>

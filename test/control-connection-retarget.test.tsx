@@ -170,6 +170,7 @@ function workflowRepository(
   };
   return {
     status: async () => status,
+    initialize: async () => status,
     reload: async () => status,
     start: async (workflowName) => ({ id: 'run', workflowName }),
     signal: async () => undefined,

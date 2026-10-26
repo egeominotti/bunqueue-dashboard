@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { assert, freePort } from './flowRuntimeSupport';
 import {
-  assertPostgresSchema20,
+  assertCurrentPostgresSchema,
+  POSTGRES_SCHEMA_VERSION,
   validatePostgresFleetGroups,
 } from './postgresFleetGroupScenario';
 import {
@@ -60,7 +61,7 @@ try {
   const versions = await Promise.all(nodes.map((node) =>
     assertBunqueueRuntimeVersion(node.httpPort, node.serverToken)
   ));
-  await assertPostgresSchema20(container, database);
+  await assertCurrentPostgresSchema(container, database);
   await assertLegacySeedReadable(nodes[2], legacy);
   await validateAgentTopology();
   const queue = `dashboard-fleet-${Date.now()}`;
@@ -127,7 +128,7 @@ try {
         bun: Bun.version,
         bunqueue: versions[0],
         postgres: '18.6',
-        postgresSchema: 20,
+        postgresSchema: POSTGRES_SCHEMA_VERSION,
         target: `127.0.0.1:${postgresPort}/${database}`,
         namespace,
         brokers: nodes.map(({ name, httpPort, tcpPort, agentPort }) => ({
@@ -137,7 +138,7 @@ try {
           agentPort,
         })),
         verified: [
-          'published 2.9.2 schema 19 → 2.9.4 schema 20; legacy job readable on C',
+          `published 2.9.2 schema 19 → ${versions[0]} schema ${POSTGRES_SCHEMA_VERSION}; legacy job readable on C`,
           'three paired control agents',
           'shared PostgreSQL topology discovery',
           'enqueue A → inspect/pull B → acknowledge C → inspect A',

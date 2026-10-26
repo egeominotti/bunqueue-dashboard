@@ -65,7 +65,7 @@ macOS pages already returned to the kernel; RSS is also logged as a diagnostic. 
 without that measurement fall back to RSS. Measurements do not force garbage collection.
 All databases, configuration snapshots and test containers are disposable.
 
-The browser fixture starts an authenticated Bunqueue **2.9.4** server and the production
+The browser fixture starts an authenticated Bunqueue **2.9.20** server and the production
 all-in-one dashboard under `/e2e/dashboard`. It uses a temporary SQLite database, loopback
 ports **49380–49384**, and test-only tokens. Keep those ports free and run only one regular
 or managed browser suite at a time. The fixture shuts down its children and removes its database on exit.
@@ -104,14 +104,14 @@ behavioral evidence; it does not claim every possible button and configuration i
 | Overview | Authenticated dashboard data; SSE recovery after an actual broker restart | `dashboard.e2e.ts` |
 | Fleet | Three healthy APIs, shared PostgreSQL target/namespace, cross-node state | PostgreSQL browser scenario |
 | Queues and queue detail | Submitted queue appears; detail opens; pause/resume observed across brokers | Operations + Fleet browser tests |
-| Jobs and Job Inspector | UI-created payload readback; priority/delay changes, promotion, log add/clear and unavailable destructive actions | Operations, managed and Fleet browser tests |
+| Jobs and Job Inspector | UI-created payload readback; complete and filtered CSV across multiple pages; browser history; priority/delay changes, promotion, log add/clear and unavailable destructive actions | Jobs inventory, operations, managed and Fleet browser tests |
 | Add Job and Bulk Add | Single submission, two-job JSON import, exact waiting count; group admission rejection | Operations + Fleet browser tests |
 | Dead Letter Queue and DLQ Control | Deliberate unrecoverable job failure appears in both views; purge remains disabled | Monitoring browser tests; no production failure data |
 | Cron Jobs | Cancelled confirmation does not mutate; confirmed create/delete; schedule visible across nodes | Dashboard + Fleet browser tests |
 | Workflow Overview, Executions, Waiting & Signals, Compensation, Archive | UI start, durable signal, resume/abandon compensation, archive/history, reload, orphan recovery and terminal cleanup | Managed browser suite with real registered handler module; `test:e2e:workflow` covers runtime contracts |
 | Job Flows | All five FlowProducer create modes, fourteen inspection methods and a safe log mutation through the UI | Managed browser suite plus all safe runtime operations in `test:e2e:flow` |
 | Metrics | Seed queue appears in per-queue metrics and telemetry connects | Monitoring browser tests |
-| Workers | MCP registration/heartbeat/unregister; active record displayed; naturally stale idle record removed through UI | Managed browser suite; registry-only fixtures do not run consumer processes |
+| Workers | Pagination and search over 301 registered records; MCP registration/heartbeat/unregister; naturally stale idle record removed through UI | Workers inventory and managed browser suites; registry-only fixtures do not run consumer processes |
 | Logs | Newly enqueued job arrives via SSE; search hides and restores the row | Monitoring browser tests |
 | Alerts | Browser rule evaluates a real waiting job, triggers, and is deleted | Browser must stay open; no email/Slack delivery |
 | Server | Managed start/stop/restart, generation and process logs | Managed and Fleet browser suites plus lifecycle tests |
@@ -120,7 +120,7 @@ behavioral evidence; it does not claim every possible button and configuration i
 | Diagnostics | Server version and Ping; real GC, heap statistics and independent readiness probes | Operations and managed browser tests |
 | Benchmark | 40 jobs produced and processed by two simulated workers; server confirms 40 completed, zero waiting/active/failed | Operations browser test on each browser engine |
 | Database | Real SQLite schema, row filter, CSV export, SQL result and rejected write with unchanged data | Managed browser suite; PostgreSQL is not a SQLite target |
-| MCP | Actual stdio client discovers 73 tools, 5 resources and 3 prompts; stats resource and health prompt read | Pinned public executable with explicit optional SDK; not all 73 tools executed |
+| MCP | Actual stdio client discovers 79 tools, 5 resources and 3 prompts; stats resource and health prompt read | Pinned public executable with explicit optional SDK; not all 79 tools executed |
 | Usage | Runtime counters and healthy storage response render | Monitoring browser tests |
 | S3 Backup | UI config, real upload/list to local MinIO, stopped-server restore and readback proving a later job disappeared | Managed browser suite; cloud-specific authentication and networking not exercised |
 | Settings | Theme/poll interval survive reload; three profiles saved and each connection tested | Managed and Fleet browser suites; credentials remain session-only |
@@ -129,8 +129,8 @@ behavioral evidence; it does not claim every possible button and configuration i
 
 ## Current regression additions (0.0.45)
 
-The managed suite adds **13 Chromium scenarios** against Bunqueue **2.9.4**.
-It supplements the existing **42 tests** across Chromium, Firefox and WebKit and
+The managed suite adds **13 Chromium scenarios** against Bunqueue **2.9.20**.
+It supplements the **51 tests** across Chromium, Firefox and WebKit and
 the three-broker PostgreSQL scenario. The commands above are the reproducible
 source of results; CI retains diagnostics when a scenario fails.
 

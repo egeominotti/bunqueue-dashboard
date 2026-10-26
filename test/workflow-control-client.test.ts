@@ -8,6 +8,21 @@ afterEach(() => {
 });
 
 describe('Workflow control client contract', () => {
+  test('initializes through POST while status remains a standalone GET', async () => {
+    const calls: Array<{ path: string; method: string }> = [];
+    globalThis.fetch = (async (input, init) => {
+      calls.push({ path: new URL(String(input)).pathname, method: init?.method ?? 'GET' });
+      return envelope(readyStatus);
+    }) as typeof fetch;
+    await repository.status();
+    expect(calls).toEqual([{ path: '/workflows/runtime', method: 'GET' }]);
+    await repository.initialize();
+    expect(calls).toEqual([
+      { path: '/workflows/runtime', method: 'GET' },
+      { path: '/workflows/runtime/initialize', method: 'POST' },
+    ]);
+  });
+
   test('maps every command to the agent and preserves target, IDs and payloads', async () => {
     const calls: Array<{ url: URL; init?: RequestInit }> = [];
     globalThis.fetch = (async (input, init) => {

@@ -201,6 +201,7 @@ function isWorkflowRuntimeRoute(pathname: string, method: string): boolean {
   if (method !== 'POST') return false;
   return (
     [
+      '/workflows/runtime/initialize',
       '/workflows/runtime/reload',
       '/workflows/start',
       '/workflows/recover',

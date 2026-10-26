@@ -1,6 +1,6 @@
 ---
 title: MCP Server
-description: Connect bunqueue to AI agents (Claude Desktop, Claude Code) over the Model Context Protocol, with 73 tools, 5 resources, and 3 prompts, in embedded or TCP mode.
+description: Connect bunqueue to AI agents (Claude Desktop, Claude Code) over the Model Context Protocol, with 79 tools, 5 resources, and 3 prompts, in embedded or TCP mode.
 ---
 
 # MCP Server
@@ -32,7 +32,7 @@ Install Bunqueue and its optional SDK in a dedicated directory:
 ```bash
 mkdir bunqueue-mcp-runtime
 cd bunqueue-mcp-runtime
-bun add --exact bunqueue@2.9.4 @modelcontextprotocol/sdk@1.30.0
+bun add --exact bunqueue@2.9.20 @modelcontextprotocol/sdk@1.32.1
 ```
 
 Replace `/absolute/path/bunqueue-mcp-runtime` below with that directory's absolute
@@ -93,24 +93,24 @@ claude mcp add bunqueue -- bun /absolute/path/bunqueue-mcp-runtime/node_modules/
 
 ## What it exposes
 
-### Tools (73, in 12 categories)
+### Tools (79, in 12 categories)
 
 Every tool name is prefixed `bunqueue_`; the examples below drop the prefix.
 
 | Category | Count | Examples |
 | --- | --- | --- |
-| Jobs | 11 | `add_job`, `get_job`, `get_jobs`, `get_job_result`, `wait_for_job` |
-| Job management | 6 | `cancel_job`, `change_job_priority`, `promote_job`, `update_job_data` |
+| Jobs | 13 | `add_job`, `get_job`, `get_jobs`, `get_job_result`, `wait_for_job`, `observe_job` |
+| Job management | 7 | `cancel_job`, `change_job_priority`, `promote_job`, `update_job_data` |
 | Consumption | 8 | `pull_job`, `pull_job_batch`, `ack_job`, `fail_job`, `job_heartbeat` |
-| Queues | 11 | `list_queues`, `pause_queue`, `resume_queue`, `drain_queue`, `obliterate_queue` |
-| Dead letter queue | 4 | `get_dlq`, `retry_dlq`, `purge_dlq` |
+| Queues | 12 | `list_queues`, `pause_queue`, `resume_queue`, `drain_queue`, `obliterate_queue`, `list_jobs_page` |
+| Dead letter queue | 5 | `get_dlq`, `retry_dlq`, `purge_dlq`, `get_dlq_stats` |
 | Cron | 4 | `add_cron`, `list_crons`, `get_cron`, `delete_cron` |
-| Flows | 4 | `add_flow`, `add_flow_chain`, `get_flow`, `get_children_values` |
-| Rate limits | 4 | `set_rate_limit`, `set_concurrency`, `clear_rate_limit` |
+| Flows | 5 | `add_flow`, `add_flow_chain`, `get_flow`, `get_children_values` |
+| Rate limits | 5 | `set_rate_limit`, `set_concurrency`, `clear_rate_limit`, `get_queue_limits` |
 | Webhooks | 4 | `add_webhook`, `list_webhooks`, `remove_webhook`, `set_webhook_enabled` |
-| Workers | 3 | `register_worker`, `unregister_worker`, `worker_heartbeat` |
+| Workers | 4 | `register_worker`, `unregister_worker`, `worker_heartbeat` |
 | Handlers | 3 | `register_handler`, `list_handlers`, `unregister_handler` |
-| Monitoring | 11 | `get_stats`, `get_queue_stats`, `get_memory_stats`, `get_prometheus_metrics` |
+| Monitoring | 9 | `get_stats`, `get_queue_stats`, `get_memory_stats`, `get_prometheus_metrics`, `diagnose_queue`, `get_capabilities` |
 
 ### Resources (5)
 
@@ -123,7 +123,7 @@ Every tool name is prefixed `bunqueue_`; the examples below drop the prefix.
 
 ## Verified TCP worker limitation
 
-With Bunqueue **2.9.4**, `register_worker` can return `success: true` with worker
+Historically, with Bunqueue **2.9.4**, `register_worker` could return `success: true` with worker
 ID `"0"`, while the broker registry contains a different real ID. A heartbeat
 using `"0"` returns `success: false`. Read `list_workers`, match a unique worker
 name and its queues, and use that actual ID for heartbeat and unregister.

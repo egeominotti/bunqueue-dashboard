@@ -59,7 +59,8 @@ try {
   assert(asRecord(await inspectFlowJob(config, target, 'getState')).state === 'delayed',
     'Flow TLS inspection failed');
 
-  assert((await workflows.status(config)).ready, 'Workflow TLS runtime is not ready');
+  assert((await workflows.status(config)).needsInitialization, 'Workflow TLS runtime should await initialization');
+  assert((await workflows.initialize(config)).ready, 'Workflow TLS runtime is not ready');
   const started = asRecord(await workflows.start(config, 'dashboard-approval-e2e', { value: 2 }));
   const id = String(started.id);
   await waitForState(id, 'waiting');

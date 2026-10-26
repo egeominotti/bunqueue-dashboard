@@ -23,6 +23,7 @@ async function result<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const bqWorkflowControlRepository: WorkflowControlRepository = {
   status: () => result<WorkflowRuntimeStatus>('/workflows/runtime'),
+  initialize: () => result<WorkflowRuntimeStatus>('/workflows/runtime/initialize', post()),
   reload: () => result<WorkflowRuntimeStatus>('/workflows/runtime/reload', post()),
   start: async (workflowName, input) =>
     (

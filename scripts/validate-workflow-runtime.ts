@@ -41,7 +41,7 @@ const runtime = new WorkflowRuntime();
 try {
   await waitForServer(httpPort, child);
   const bunqueue = await assertBunqueueRuntimeVersion(httpPort);
-  const status = await runtime.status(config);
+  const status = await runtime.initialize(config);
   assert(status.ready, `runtime not ready: ${status.error ?? 'unknown error'}`);
   assert(status.workflowNames.length === 3, 'callback registrations were not discovered');
   assert(status.queueName === '__dashboard:e2e', 'workflow queue name was not applied');
@@ -81,8 +81,9 @@ try {
 
   const recovered = (await runtime.recover(config)) as { total: number };
   assert(recovered.total === 0, 'recovery unexpectedly found orphaned executions');
+  await runtime.close();
   assert(!(await runtime.status(config, false)).ready, 'stopped runtime status remained active');
-  assert((await runtime.status(config)).ready, 'runtime did not reopen after a managed restart');
+  assert((await runtime.initialize(config)).ready, 'runtime did not reopen after a managed restart');
   const stats = workflowStats(dataPath);
   assert(stats.archiveTotal === 1, 'archive count mismatch');
   console.log(

@@ -49,6 +49,9 @@ export async function routeWorkflowRuntimeRequest(
     );
   }
   if (!serverRunning) throw new Error('Start the managed Bunqueue server before workflow control.');
+  if (pathname === '/workflows/runtime/initialize') {
+    return success(await admitted(true, ({ config: current }) => runtime.initialize(current)));
+  }
   if (pathname === '/workflows/runtime/reload') {
     return success(await admitted(true, ({ config: current }) => runtime.reload(current)));
   }
@@ -98,7 +101,7 @@ function isRuntimePath(pathname: string, method: string): boolean {
   if (method === 'GET') return pathname === '/workflows/runtime';
   if (method !== 'POST') return false;
   return (
-    ['/workflows/runtime/reload', '/workflows/start', '/workflows/recover', '/workflows/archive', '/workflows/cleanup'].includes(pathname) ||
+    ['/workflows/runtime/initialize', '/workflows/runtime/reload', '/workflows/start', '/workflows/recover', '/workflows/archive', '/workflows/cleanup'].includes(pathname) ||
     /^\/workflows\/[^/]+\/(signal|resume-compensation|abandon-compensation)$/.test(pathname)
   );
 }

@@ -1,24 +1,17 @@
 import { useEffect, useState } from 'react';
-import { IconButton } from '@/components/ui/Button';
 import { EmptyState, ErrorState, LoadingState, OfflineBanner } from '@/components/ui/feedback';
-import { IconTrash, IconWorkers } from '@/components/ui/icons';
+import { IconWorkers } from '@/components/ui/icons';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { Pagination } from '@/components/ui/Pagination';
 import { StatCard } from '@/components/ui/StatCard';
 import { bq } from '@/lib/bq';
 import { cn } from '@/lib/cn';
-import { formatNumber, formatRelativeTime } from '@/lib/format';
+import { formatNumber } from '@/lib/format';
 import { usePolledData } from '@/lib/usePolledData';
 import { assertSuccessfulMutationResponse, useServerActionGuard } from '@/lib/useServerActionGuard';
+import { STALE_EXPLAINER, type Sort, type SortKey, WorkersTable } from './workers/WorkersTable';
 
-const MAX_ROWS = 100;
-
-const STALE_EXPLAINER = 'No heartbeat recently — derived from lastSeen';
-
-type SortKey = 'failed' | 'lastSeen';
-interface Sort {
-  key: SortKey;
-  dir: 'asc' | 'desc';
-}
+const PAGE_SIZE = 100;
 
 export function WorkersPro() {
   const { data, error, loading, refetch } = usePolledData(async () => {
@@ -28,12 +21,16 @@ export function WorkersPro() {
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [sort, setSort] = useState<Sort | null>(null);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
   const actionGuard = useServerActionGuard('workers-pro');
 
   // scopeKey is the connection lifecycle boundary.
   useEffect(() => {
     setBusyIds(new Set());
     setMsg(null);
+    setPage(0);
+    setSearch('');
   }, [actionGuard.scopeKey]);
 
   if (loading && !data && !error) return <LoadingState label="Loading workers…" />;
@@ -55,11 +52,22 @@ export function WorkersPro() {
         return sort.dir === 'asc' ? va - vb : vb - va;
       })
     : workers;
-  const rows = sorted.slice(0, MAX_ROWS);
-  const toggleSort = (key: SortKey) =>
+  const term = search.trim().toLowerCase();
+  const filtered = term
+    ? sorted.filter((worker) =>
+        [worker.name, worker.id, worker.hostname, worker.status, ...worker.queues].some((value) =>
+          value.toLowerCase().includes(term)
+        )
+      )
+    : sorted;
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / PAGE_SIZE) - 1));
+  const rows = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const toggleSort = (key: SortKey) => {
+    setPage(0);
     setSort((s) =>
       s?.key === key ? { key, dir: s.dir === 'desc' ? 'asc' : 'desc' } : { key, dir: 'desc' }
     );
+  };
   const activeWorkers = workers.filter((w) => w.status === 'active').length;
   const staleWorkers = workers.length - activeWorkers;
   const activeJobs = workers.reduce((sum, w) => sum + (w.activeJobs ?? 0), 0);
@@ -159,6 +167,22 @@ export function WorkersPro() {
         </div>
       )}
 
+      {workers.length > 0 && (
+        <div className="mb-4">
+          <input
+            aria-label="Search workers"
+            name="workers-search"
+            value={search}
+            onInput={(event) => {
+              setSearch(event.currentTarget.value);
+              setPage(0);
+            }}
+            placeholder="Search workers, queues or hosts…"
+            className="h-9 w-full max-w-sm rounded-lg border border-line bg-surface px-3 text-sm text-fg placeholder:text-faint focus:border-accent/60 focus:outline-none focus:ring-2 focus:ring-accent/30"
+          />
+        </div>
+      )}
+
       {workers.length === 0 ? (
         <EmptyState
           icon={<IconWorkers />}
@@ -169,131 +193,30 @@ export function WorkersPro() {
               : 'Workers appear here once they connect and register with the server.'
           }
         />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={<IconWorkers />}
+          title="No workers match your search"
+          hint="Try a different name, ID, queue, host, or status."
+        />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line text-left text-[11px] uppercase tracking-wider text-faint">
-                <th className="px-5 py-3 font-medium">Worker</th>
-                <th className="px-5 py-3 font-medium">Queues</th>
-                <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 text-right font-medium">Active</th>
-                <th className="px-5 py-3 text-right font-medium">Processed</th>
-                <th className="px-5 py-3 text-right font-medium">
-                  <SortButton
-                    label="Failed"
-                    active={sort?.key === 'failed' ? sort.dir : null}
-                    onClick={() => toggleSort('failed')}
-                  />
-                </th>
-                <th className="px-5 py-3 text-right font-medium">
-                  <SortButton
-                    label="Last Seen"
-                    active={sort?.key === 'lastSeen' ? sort.dir : null}
-                    onClick={() => toggleSort('lastSeen')}
-                  />
-                </th>
-                <th className="w-16 px-5 py-3 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((w) => (
-                <tr key={w.id} className="border-b border-line last:border-0 hover:bg-surface-2/40">
-                  <td className="px-5 py-3">
-                    <div className="font-medium text-fg">{w.name || 'worker'}</div>
-                    <div className="font-mono text-[11px] text-faint">{w.id}</div>
-                  </td>
-                  <td className="px-5 py-3 font-mono text-xs text-muted">
-                    {w.queues.join(', ') || '—'}
-                  </td>
-                  <td className="px-5 py-3">
-                    <span
-                      title={w.status === 'active' ? undefined : STALE_EXPLAINER}
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-[11px] font-medium',
-                        w.status === 'active'
-                          ? 'bg-emerald-500/10 text-success'
-                          : 'bg-amber-500/10 text-warning'
-                      )}
-                    >
-                      {w.status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-right tnum text-blue-400">
-                    {formatNumber(w.activeJobs)}
-                  </td>
-                  <td className="px-5 py-3 text-right tnum text-muted">
-                    {formatNumber(w.processedJobs)}
-                  </td>
-                  <td className="px-5 py-3 text-right tnum text-muted">
-                    {formatNumber(w.failedJobs)}
-                  </td>
-                  <td className="px-5 py-3 text-right text-faint">
-                    {formatRelativeTime(w.lastSeen)}
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex justify-end">
-                      {w.status === 'stale' && w.activeJobs === 0 ? (
-                        <IconButton
-                          aria-label={`Remove stale registry record for worker ${w.id}`}
-                          title="Registry cleanup only — does not stop the worker process"
-                          disabled={busyIds.has(w.id)}
-                          onClick={() => removeStaleRegistration(w.id)}
-                        >
-                          <IconTrash className="size-3.5" />
-                        </IconButton>
-                      ) : (
-                        <span
-                          className="text-xs text-faint"
-                          title={
-                            w.status === 'stale'
-                              ? 'Registry cleanup is blocked while active jobs are reported'
-                              : 'Only stale, idle registry records can be removed'
-                          }
-                        >
-                          —
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {workers.length > MAX_ROWS && (
-        <p className="mt-3 text-xs text-warning">
-          Showing first {formatNumber(MAX_ROWS)} of {formatNumber(workers.length)} workers.
-        </p>
+        <>
+          <WorkersTable
+            rows={rows}
+            sort={sort}
+            busyIds={busyIds}
+            onSort={toggleSort}
+            onRemove={(id) => void removeStaleRegistration(id)}
+          />
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={filtered.length}
+            onPageChange={setPage}
+            label="workers"
+          />
+        </>
       )}
     </div>
-  );
-}
-
-/** Sortable column header: click toggles desc → asc; inherits the th typography. */
-function SortButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: 'asc' | 'desc' | null;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={`Sort by ${label}`}
-      className={cn(
-        'inline-flex items-center gap-1 uppercase tracking-wider transition-colors hover:text-fg',
-        active ? 'text-fg' : 'text-faint'
-      )}
-    >
-      {label}
-      <span aria-hidden="true">{active === 'desc' ? '↓' : active === 'asc' ? '↑' : ''}</span>
-    </button>
   );
 }

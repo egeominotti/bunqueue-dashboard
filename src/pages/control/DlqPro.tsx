@@ -86,7 +86,7 @@ export function DlqPro() {
   }, [data, page]);
 
   const exportEntries = () => {
-    const rows = (data?.entries ?? []).map((e) => ({
+    const rows = entries.map((e) => ({
       jobId: e.job.id,
       reason: e.reason,
       error: e.error ?? '',
@@ -97,7 +97,13 @@ export function DlqPro() {
       toast.info('Nothing to export on this page');
       return;
     }
-    downloadCsv(`dlq-${queue}`, rows, ['jobId', 'reason', 'error', 'enteredAt', 'attempts']);
+    downloadCsv(`dlq-${queue}-page-${page + 1}`, rows, [
+      'jobId',
+      'reason',
+      'error',
+      'enteredAt',
+      'attempts',
+    ]);
   };
 
   const selectQueue = (name: string) => {

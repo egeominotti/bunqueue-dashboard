@@ -54,7 +54,7 @@ describe('workflow runtime lifecycle', () => {
       },
     };
 
-    expect((await runtime.status(configured)).ready).toBeTrue();
+    expect((await runtime.initialize(configured)).ready).toBeTrue();
     await expect(runtime.close()).rejects.toThrow('quarantined');
     expect(await runtime.status(configured)).toMatchObject({
       ready: false,
@@ -261,6 +261,7 @@ function fakeRuntime(close: () => Promise<void>): WorkflowRuntimePort {
   const status: WorkflowRuntimeStatus = { configured: false, ready: false, workflowNames: [] };
   return {
     status: async () => status,
+    initialize: async () => status,
     reload: async () => status,
     start: async () => ({}),
     signal: async () => undefined,

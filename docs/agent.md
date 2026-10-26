@@ -11,7 +11,7 @@ A browser cannot start or stop an OS process, and bunqueue's HTTP API has no
 process-lifecycle endpoint (and we don't modify bunqueue). So the dashboard ships
 a tiny **local agent**, a Bun process that supervises a bunqueue server child.
 It also hosts target-pinned Flow, Workflow, and Queue operations through
-Bunqueue's public 2.9.4 client, runs the pinned backup implementation, and
+Bunqueue's public 2.9.20 client, runs the pinned backup implementation, and
 exposes read-only SQLite observability that the browser cannot perform directly.
 
 ## Files
@@ -82,8 +82,9 @@ request to `http://127.0.0.1:6800` (CSRF → RCE). Defenses:
    non-browser caller) is rejected once the allowlist is enabled. Host and
    Origin are validated before an `OPTIONS` preflight receives `204`.
 4. **Scoped bearer token**, on loopback `AGENT_TOKEN` protects state-changing
-   requests (`Authorization: Bearer <t>` or `x-agent-token: <t>`) while local
-   reads remain zero-configuration. A LAN or reverse-proxied all-in-one bridge
+   requests (`Authorization: Bearer <t>` or `x-agent-token: <t>`) and reads of
+   `/control/config` and `/control/status`, whose complete configuration snapshots
+   include environment secrets. Other local reads remain zero-configuration. A LAN or reverse-proxied all-in-one bridge
    requires the token and applies it to **every** agent route, including status,
    logs, config, and database reads. Enter the token under **Settings → Agent
    token** or in the authentication prompt; it remains in browser memory for
@@ -143,7 +144,7 @@ Operational endpoint families:
 | Prefix | Capability |
 | --- | --- |
 | `/flows/*` | Five FlowProducer creates, `getFlow`, parent results, safe Flow Job reads/mutations and bounded completion wait |
-| `/workflows/*` | Runtime status/reload, start, signal, recover, compensation decisions, archive/cleanup, execution reads |
+| `/workflows/*` | Read-only runtime status, authenticated initialization/reload, start, signal, recover, compensation decisions, archive/cleanup, execution reads |
 | `/queue-operations/*` | Live limits/TTL/saturation, deduplication, metrics, and lifecycle-journal retention |
 | `/backup/*` | Configure, status, list, create and stopped-server guarded restore |
 | `/db/*` | Read-only tables, rows, cells, schema, CSV and bounded SELECT-style query execution |
@@ -154,13 +155,20 @@ constraint.
 `db` = `{ path, exists, size, walSize, shmSize, totalSize, mtimeMs }`, bytes on
 disk for the SQLite main file plus its WAL/SHM sidecars.
 
+Runtime status GET requests never import workflow modules, initialize workers, or close
+an existing Engine. Opening Workflow initializes configured handlers through an
+idempotent `POST /workflows/runtime/initialize?target=...`; concurrent initializations
+reuse the active Engine. `POST /workflows/runtime/reload` explicitly replaces it.
+When an agent token is configured, initialization uses the normal agent authentication
+prompt and retries after credentials change. Failed initialization does not loop on polls.
+
 ## Configuration
 
 `ServerConfig` = `{ command, httpPort, tcpPort, dataPath, extraEnv }`. Updates
 are validated atomically: unknown keys, an empty/non-string command, invalid
 ports, a non-string data path, or a non-string environment map return HTTP 400
 without partially changing the previous configuration. The agent
-launches `command` (default `bunx bunqueue@2.9.4 start`, e.g. `bun run ../src/main.ts` when
+launches `command` (default `bunx bunqueue@2.9.20 start`, e.g. `bun run ../src/main.ts` when
 developing) with `HTTP_PORT`, `TCP_PORT`, the selected storage environment and
 `extraEnv` injected. The command runs without a shell: arguments are split on
 whitespace, and a balanced pair of double or single quotes keeps a path with spaces
@@ -199,7 +207,7 @@ stop-then-start race** no longer orphans the newly-started process.
 (the CSRF-to-RCE vector), same-origin + non-browser requests succeeding, OPTIONS
 preflight ACAO, loopback mutation auth, and all-route auth for network exposure.
 
-`bun run test:e2e` additionally starts disposable Bunqueue 2.9.4 servers and
+`bun run test:e2e` additionally starts disposable Bunqueue 2.9.20 servers and
 executes every FlowProducer creation mode, every exposed safe Flow Job group,
 Workflow handler discovery/control/compensation/archive, all eight exposed Queue
 SDK operations, and the unexposed `removeDlqJob` compatibility contract. Its

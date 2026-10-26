@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import manifest from '../package.json';
 import { API_ROOTS, demoApiResponse } from '../src/lib/demo/api';
 
 function record(value: unknown): Record<string, unknown> {
@@ -44,7 +45,7 @@ describe('demo API dispatcher complete route surface', () => {
     expect(logs.lines).toHaveLength(5);
     expect(logs.lines[0]).toMatchObject({ seq: 1 });
     expect(demoApiResponse('/control/config', 'GET', '')).toMatchObject({
-      command: 'bunx bunqueue@2.9.4 start',
+      command: `bunx bunqueue@${manifest.dependencies.bunqueue} start`,
       configRevision: 1,
     });
     expect(demoApiResponse('/control/status', 'GET', '')).toMatchObject({

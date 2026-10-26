@@ -6,12 +6,14 @@ import { withoutActed } from './model';
 
 export function useJobMutations({
   queue,
+  view,
   rows,
   selected,
   setSelected,
   refetch,
 }: {
   queue: string;
+  view: string;
   rows: JobFull[];
   selected: Set<string>;
   setSelected: Dispatch<SetStateAction<Set<string>>>;
@@ -20,7 +22,7 @@ export function useJobMutations({
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const actionGuard = useServerActionGuard(`jobs:${queue}`);
+  const actionGuard = useServerActionGuard(`jobs:${queue}:${view}`);
 
   // scopeKey is the connection and queue lifecycle boundary.
   useEffect(() => {
