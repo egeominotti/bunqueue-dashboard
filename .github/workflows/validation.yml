@@ -179,7 +179,7 @@ jobs:
         run: |
           bun run version:check
           bun -e 'if (process.arch !== process.env.EXPECTED_ARCH) throw new Error("Native architecture mismatch"); console.log(process.platform, process.arch, Bun.version)'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist-${{ github.sha }}
           path: dist
