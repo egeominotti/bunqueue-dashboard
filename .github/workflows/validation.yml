@@ -45,7 +45,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # static: version, file size, lint/format, typecheck + build, bundle budget, docs, audit
+        # static: version, file size, native Bun typecheck/format, Oxlint, build, docs, audit
         # unit: unit tests with the aggregate and critical coverage floors
         # runtime-*: real Bunqueue Flow, Workflow, Queue, PostgreSQL, package and soak runs
         group: [static, unit, runtime-a, runtime-b, runtime-c, runtime-d]

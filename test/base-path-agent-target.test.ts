@@ -139,6 +139,7 @@ function fakeWorkflow(calls: string[]): WorkflowRuntimePort {
       calls.push('workflow:status');
       return { configured: false, ready: false, workflowNames: [] };
     },
+    initialize: async () => ({ configured: false, ready: false, workflowNames: [] }),
     reload: async () => ({ configured: false, ready: false, workflowNames: [] }),
     start: async () => ({}),
     signal: async () => undefined,

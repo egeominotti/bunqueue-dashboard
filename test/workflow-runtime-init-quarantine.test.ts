@@ -38,6 +38,7 @@ describe('Workflow runtime initialization quarantine', () => {
       return engine;
     });
 
+    await rejectionOf(runtime.initialize(config));
     const first = await runtime.status(config);
     expect(first).toMatchObject({ ready: false, configured: true });
     expect(first.error).toContain('synthetic workflow registration failure');
@@ -77,6 +78,7 @@ describe('Workflow runtime initialization quarantine', () => {
       return engine;
     });
 
+    await rejectionOf(runtime.initialize(config));
     const first = await runtime.status(config);
     const second = await runtime.status(config);
 

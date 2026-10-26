@@ -4,6 +4,7 @@ import { usePolledData } from '@/lib/usePolledData';
 import type { WorkflowControlRepository } from '../application/WorkflowControlRepository';
 import { bqWorkflowControlRepository } from '../infrastructure/bqWorkflowControlRepository';
 import { useWorkflowCommand } from './useWorkflowCommand';
+import { useWorkflowInitialization } from './useWorkflowInitialization';
 import { JsonBlock } from './WorkflowValue';
 
 export function WorkflowRuntimePanel({
@@ -28,6 +29,7 @@ export function WorkflowRuntimePanel({
       await onApplied?.();
     },
   });
+  const initialization = useWorkflowInitialization(repository, status);
   const ready = status.data?.ready === true;
 
   const start = () => {
@@ -145,7 +147,9 @@ export function WorkflowRuntimePanel({
           </button>
           <button
             type="button"
-            disabled={!status.data?.configured || Boolean(command.busy)}
+            disabled={
+              !status.data?.configured || Boolean(command.busy) || Boolean(initialization.busy)
+            }
             onClick={() => void command.run('reload', () => repository.reload())}
             className="rounded-md border border-line px-3 py-2 text-xs text-muted disabled:opacity-40"
           >
@@ -162,6 +166,11 @@ export function WorkflowRuntimePanel({
       {status.data?.error && (
         <p role="alert" className="border-t border-line px-4 py-3 text-xs text-danger">
           {status.data.error}
+        </p>
+      )}
+      {initialization.error && !ready && (
+        <p role="alert" className="border-t border-line px-4 py-3 text-xs text-danger">
+          {initialization.error}
         </p>
       )}
       {command.error && (

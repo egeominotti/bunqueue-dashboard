@@ -1,3 +1,7 @@
+import manifest from '../../../../package.json';
+
+export const MCP_INSTALL = `mkdir bunqueue-mcp-runtime\ncd bunqueue-mcp-runtime\nbun add --exact bunqueue@${manifest.dependencies.bunqueue} @modelcontextprotocol/sdk@${manifest.devDependencies['@modelcontextprotocol/sdk']}`;
+
 export const EMBEDDED_CONFIG = `{
   "mcpServers": {
     "bunqueue": {

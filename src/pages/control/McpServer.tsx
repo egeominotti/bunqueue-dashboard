@@ -3,7 +3,8 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { CopyButton } from '@/components/ui/CopyButton';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCard } from '@/components/ui/StatCard';
-import { CLI_ADD, EMBEDDED_CONFIG, TCP_CONFIG } from './mcp/setup';
+import { MCP_CATEGORIES } from './mcp/catalog';
+import { CLI_ADD, EMBEDDED_CONFIG, MCP_INSTALL, TCP_CONFIG } from './mcp/setup';
 
 /**
  * MCP Server — a setup and reference page for bunqueue's Model Context Protocol
@@ -15,63 +16,11 @@ import { CLI_ADD, EMBEDDED_CONFIG, TCP_CONFIG } from './mcp/setup';
  * arrays in this module so edits cannot leave the summary cards stale.
  */
 
-type Category = { name: string; count: number; examples: string[] };
-
-// Every tool is prefixed `bunqueue_`; examples below drop the prefix for readability.
-const CATEGORIES: Category[] = [
-  {
-    name: 'Jobs',
-    count: 11,
-    examples: ['add_job', 'get_job', 'get_jobs', 'get_job_result', 'wait_for_job'],
-  },
-  {
-    name: 'Job management',
-    count: 6,
-    examples: ['cancel_job', 'change_job_priority', 'promote_job', 'update_job_data'],
-  },
-  {
-    name: 'Consumption',
-    count: 8,
-    examples: ['pull_job', 'pull_job_batch', 'ack_job', 'fail_job', 'job_heartbeat'],
-  },
-  {
-    name: 'Queues',
-    count: 11,
-    examples: ['list_queues', 'pause_queue', 'resume_queue', 'drain_queue', 'obliterate_queue'],
-  },
-  { name: 'Dead letter queue', count: 4, examples: ['get_dlq', 'retry_dlq', 'purge_dlq'] },
-  { name: 'Cron', count: 4, examples: ['add_cron', 'list_crons', 'get_cron', 'delete_cron'] },
-  {
-    name: 'Flows',
-    count: 4,
-    examples: ['add_flow', 'add_flow_chain', 'get_flow', 'get_children_values'],
-  },
-  {
-    name: 'Rate limits',
-    count: 4,
-    examples: ['set_rate_limit', 'set_concurrency', 'clear_rate_limit'],
-  },
-  {
-    name: 'Webhooks',
-    count: 4,
-    examples: ['add_webhook', 'list_webhooks', 'remove_webhook', 'set_webhook_enabled'],
-  },
-  {
-    name: 'Workers',
-    count: 3,
-    examples: ['register_worker', 'unregister_worker', 'worker_heartbeat'],
-  },
-  {
-    name: 'Handlers',
-    count: 3,
-    examples: ['register_handler', 'list_handlers', 'unregister_handler'],
-  },
-  {
-    name: 'Monitoring',
-    count: 11,
-    examples: ['get_stats', 'get_queue_stats', 'get_memory_stats', 'get_prometheus_metrics'],
-  },
-];
+const CATEGORIES = MCP_CATEGORIES.map((category) => ({
+  name: category.name,
+  count: category.tools.length,
+  examples: category.tools,
+}));
 
 const RESOURCES = [
   'bunqueue://queues',
@@ -147,14 +96,10 @@ export function McpServer() {
           Create a dedicated directory, install both packages, then replace the absolute path in the
           client configuration below. TCP mode connects to the existing broker.
         </p>
-        <CodeBlock
-          code={
-            'mkdir bunqueue-mcp-runtime\ncd bunqueue-mcp-runtime\nbun add --exact bunqueue@2.9.4 @modelcontextprotocol/sdk@1.30.0'
-          }
-        />
+        <CodeBlock code={MCP_INSTALL} />
         <p className="mt-3 text-sm text-warning">
-          In Bunqueue 2.9.4 TCP mode, register_worker can return ID "0". Read list_workers and match
-          the unique worker name and queues before sending a heartbeat or unregistering.
+          In TCP mode, verify the register_worker response against list_workers and match the unique
+          worker name and queues before sending a heartbeat or unregistering.
         </p>
       </Card>
 

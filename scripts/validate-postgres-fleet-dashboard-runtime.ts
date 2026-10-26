@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import { freePort } from './flowRuntimeSupport';
-import { assertPostgresSchema20 } from './postgresFleetGroupScenario';
+import { assertCurrentPostgresSchema, POSTGRES_SCHEMA_VERSION } from './postgresFleetGroupScenario';
 import { type NodeRuntime, spawnPostgresFleetNode } from './postgresFleetNode';
 import { runPostgresFleetDashboardBrowserScenario } from './postgresFleetDashboardBrowserScenario';
 
@@ -64,7 +64,7 @@ try {
   const versions = await Promise.all(nodes.map((node) =>
     assertBunqueueRuntimeVersion(node.httpPort, node.serverToken)
   ));
-  await assertPostgresSchema20(container, database);
+  await assertCurrentPostgresSchema(container, database);
 
   dashboard = await serveDashboard();
   await waitForDashboard();
@@ -89,7 +89,7 @@ try {
         bun: Bun.version,
         bunqueue: versions[0],
         postgres: '18.6',
-        postgresSchema: 20,
+        postgresSchema: POSTGRES_SCHEMA_VERSION,
         brokers: nodes.length,
         verified: 'real Dashboard UI over a shared PostgreSQL fleet',
         status: 'ok',

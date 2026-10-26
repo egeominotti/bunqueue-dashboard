@@ -49,7 +49,7 @@ Job ID as the stable failure identifier. Click it to see the name, full timeline
 - **Search by Job ID**, type part of an ID to find a specific failure fast.
 - **Open a job**, click any Job ID to inspect its full history.
 - **Page through**, the pager moves 25 entries at a time.
-- **Export this page**, download the currently loaded entries as CSV.
+- **Export page CSV**, download the visible filtered and sorted entries on the current page.
 **Retry one job** is visible but disabled. A preliminary exact-ID GET cannot
 authorize the separate retry POST: the endpoint has no atomic precondition for
 job generation, state or topology, so the original job can disappear and a

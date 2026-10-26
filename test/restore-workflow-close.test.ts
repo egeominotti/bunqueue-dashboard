@@ -31,6 +31,7 @@ function runtimeHolding(connection: Database): WorkflowRuntimePort & { closed: (
   const unused = () => Promise.reject(new Error('not used by restore'));
   return {
     status: unused,
+    initialize: unused,
     reload: unused,
     start: unused,
     signal: unused,

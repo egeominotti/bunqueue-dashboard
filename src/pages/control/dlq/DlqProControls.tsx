@@ -1,4 +1,4 @@
-import { Button, IconButton } from '@/components/ui/Button';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Select } from '@/components/ui/form';
 import { IconDownload, IconRefresh } from '@/components/ui/icons';
@@ -241,14 +241,14 @@ export function DlqFilters({
       <Button variant="danger" size="sm" disabled title={FLOW_DELETION_UNAVAILABLE}>
         Purge All
       </Button>
-      <IconButton
-        aria-label="Export this page to CSV"
-        title="Export this page to CSV"
+      <Button
+        size="sm"
+        title="Exports the visible rows in their displayed order; other pages are not included."
         disabled={!queue}
         onClick={onExport}
       >
-        <IconDownload className="size-3.5" />
-      </IconButton>
+        <IconDownload className="size-3.5" /> Export page CSV
+      </Button>
     </div>
   );
 }

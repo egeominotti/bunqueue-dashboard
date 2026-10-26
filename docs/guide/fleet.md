@@ -71,7 +71,7 @@ new browser session.
 ## Real compatibility gate
 
 The repository's canonical E2E gate starts a disposable PostgreSQL 18.6
-container, three Bunqueue 2.9.4 brokers, and three authenticated agents. It
+container, three Bunqueue 2.9.20 brokers, and three authenticated agents. It
 proves cross-broker enqueue, inspect, leased pull/ack, pause/resume, cron, and
 rate-limit operations, then removes every process, container, and temporary
 file:
@@ -85,10 +85,10 @@ them to heartbeat, acknowledge, and compensation calls, so a PostgreSQL claim
 remains valid when completion is handled through another broker.
 
 ::: warning Upgrade one namespace as a unit
-Bunqueue 2.9.3 upgrades the published 2.9.2 package's PostgreSQL schema 19 to
-schema 20. Stop or coordinate
+Bunqueue 2.9.20 upgrades the published 2.9.2 package's PostgreSQL schema 19 to
+schema 21. Stop or coordinate
 every broker that shares a namespace before the upgrade; every member must run
-2.9.3 before normal traffic resumes, because a 2.9.2 broker cannot join schema
-20. The disposable three-broker runtime and Dashboard browser scenarios assert
-schema 20 before testing cross-broker jobs, policies, groups and lifecycle.
+2.9.20 before normal traffic resumes, because a 2.9.2 broker cannot join schema
+21. The disposable three-broker runtime and Dashboard browser scenarios assert
+schema 21 before testing cross-broker jobs, policies, groups and lifecycle.
 :::

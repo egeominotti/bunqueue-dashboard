@@ -246,6 +246,7 @@ const controlRepository = control({});
 function control(overrides: Partial<WorkflowControlRepository>): WorkflowControlRepository {
   return {
     status: async () => ({ configured: false, ready: false, workflowNames: [] }),
+    initialize: async () => ({ configured: false, ready: false, workflowNames: [] }),
     reload: async () => ({ configured: false, ready: false, workflowNames: [] }),
     start: async (workflowName) => ({ id: 'run', workflowName }),
     signal: async () => undefined,

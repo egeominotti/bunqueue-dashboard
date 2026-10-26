@@ -2,8 +2,10 @@ import { assert } from './flowRuntimeSupport';
 import { assertPostgresSchemaVersion } from './postgresFleetMigration';
 import type { NodeRuntime } from './postgresFleetNode';
 
-export async function assertPostgresSchema20(container: string, database: string): Promise<void> {
-  await assertPostgresSchemaVersion(container, database, 20);
+export const POSTGRES_SCHEMA_VERSION = 21;
+
+export async function assertCurrentPostgresSchema(container: string, database: string): Promise<void> {
+  await assertPostgresSchemaVersion(container, database, POSTGRES_SCHEMA_VERSION);
 }
 
 export async function validatePostgresFleetGroups(

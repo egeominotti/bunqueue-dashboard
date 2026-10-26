@@ -6,7 +6,7 @@ description: Visualize a bunqueue job flow as an interactive DAG in the dashboar
 # Flows
 
 The **Job Flows** page is both an interactive DAG explorer and an operator
-console for Bunqueue 2.9.4's official `FlowProducer` and Flow Job contracts.
+console for Bunqueue 2.9.20's official `FlowProducer` and Flow Job contracts.
 
 The URL preserves the loaded root, selected DAG node, and active Explore/Create/
 Job methods tool. Back/Forward restores that context, while an invalid root or

@@ -5,10 +5,10 @@ description: "Every bunqueue HTTP endpoint the dashboard drives, with verified r
 
 # API mapping & shape gotchas
 
-The bundled client and default server now target **2.9.4**. This release has
-no public API, wire-format or schema changes from 2.9.3; the historical contract
-notes below still describe those unchanged upstream behaviors. Runtime tests
-probe the server version and assert it matches the installed, pinned package.
+The bundled client and default server target **2.9.20**. Its PostgreSQL schema is
+**21** (SQLite remains **37**), and default MCP discovery exposes **79 tools**.
+The historical endpoint notes below remain the baseline; current runtime tests
+probe the real server version and exercise the installed, pinned package.
 
 Flow payload replacement, retry, remove and removeUnprocessedChildren are now
 rejected at the UI transport, agent route and service boundaries. Older endpoint
@@ -25,9 +25,9 @@ against the exact [bunqueue v2.9.3 server release](https://github.com/egeominott
 The Dashboard exposes the 2.9.3 operational additions: group admission
 (`maxSize`), group priority, group pause/resume, bounded group-job listing and
 per-priority counts; completed-history retention is configurable from Server
-Control. SQLite is migrated to schema 37 and PostgreSQL to schema 20 by the
+Control. SQLite is migrated to schema 37 and PostgreSQL to schema 21 by the
 upstream server. PostgreSQL members sharing a namespace must be upgraded as one
-unit, and a SQLite backup must be taken before the first 2.9.3 start because a
+unit, and a SQLite backup must be taken before the first upgraded start because a
 partially started migration cannot be downgraded safely.
 
 Native Worker batches, processor `AbortSignal`, Observable processor results,
@@ -63,6 +63,7 @@ adapter over the official SQLite store with a persistent official `Engine`:
 | `GET /workflows?kind=&workflowName=&state=&limit=&offset=` | Deterministic execution summaries, capped at 100 rows |
 | `GET /workflows/:id?kind=active\|archive` | Decoded input, step records, resolved paths, signals, decisions, definition/rollback metadata |
 | `GET /workflows/runtime?target=` | Module/handler readiness and registered workflow names |
+| `POST /workflows/runtime/initialize?target=` | Initialize configured handlers idempotently; requires the agent token when configured |
 | `POST /workflows/runtime/reload?target=` | Close and recreate the Engine from `BUNQUEUE_WORKFLOW_MODULE` |
 | `POST /workflows/start?target=` | `{ workflowName, input }` → official `Engine.start` |
 | `POST /workflows/:id/signal?target=` | `{ event, payload }` → official durable `Engine.signal` |
@@ -74,8 +75,8 @@ adapter over the official SQLite store with a persistent official `Engine`:
 
 The adapter uses the same structured-clone MessagePack codec as Bunqueue
 2.9.3 and opens the configured `dataPath` read-only. The published 2.9.2 npm
-package migrates from SQLite schema 35 and PostgreSQL schema 19; 2.9.3 targets
-schema 37 and 20 respectively. Mutations never edit
+package migrates from SQLite schema 35 and PostgreSQL schema 19; the current
+2.9.20 target uses schema 37 and 21 respectively. Mutations never edit
 SQLite: they execute on the live Engine loaded from an absolute application
 module. Target pinning, stopped-server checks, bounded payloads, terminal-only
 maintenance, serialization, and the agent auth/origin/host gates protect that

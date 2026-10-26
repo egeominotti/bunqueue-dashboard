@@ -166,6 +166,7 @@ function fakeRuntime(overrides: Partial<WorkflowRuntimePort> = {}): WorkflowRunt
   const status: WorkflowRuntimeStatus = { configured: true, ready: true, workflowNames: [] };
   return {
     status: async () => status,
+    initialize: async () => status,
     reload: async () => status,
     start: async () => ({}),
     signal: async () => undefined,

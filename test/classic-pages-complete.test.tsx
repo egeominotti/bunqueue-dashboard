@@ -178,15 +178,25 @@ describe('classic dashboard pages', () => {
 describe('MCP reference page', () => {
   test('renders the complete static contract and safe external documentation link', () => {
     const view = render(createElement(McpServer));
-    expect(view.host.textContent).toContain('73 total');
+    expect(view.host.textContent).toContain('79 total');
     expect(view.host.textContent).toContain('12');
+    for (const tool of [
+      'observe_job',
+      'list_jobs_page',
+      'get_dlq_stats',
+      'get_queue_limits',
+      'diagnose_queue',
+      'get_capabilities',
+    ]) {
+      expect(view.host.textContent).toContain(tool);
+    }
     expect(view.host.textContent).toContain('bunqueue://queues');
     expect(view.host.textContent).toContain('bunqueue_incident_response');
     expect(view.host.textContent).toContain('bunqueue-mcp');
     expect(view.host.textContent).toContain('BUNQUEUE_TOKEN');
     expect(view.host.querySelectorAll('button[aria-label="Copy to clipboard"]')).toHaveLength(4);
     expect(view.host.textContent).toContain(
-      'bun add --exact bunqueue@2.9.4 @modelcontextprotocol/sdk@1.30.0'
+      'bun add --exact bunqueue@2.9.20 @modelcontextprotocol/sdk@1.32.1'
     );
     expect(view.host.textContent).toContain('node_modules/.bin/bunqueue-mcp');
     const docs = view.host.querySelector<HTMLAnchorElement>('a[target="_blank"]');

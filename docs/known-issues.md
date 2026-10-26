@@ -5,8 +5,8 @@ description: "A verified, non-glossed list of the bunqueue dashboard's current b
 
 # Known issues
 
-Bunqueue 2.9.4 is now the installed/default target; it retains the 2.9.3 API
-and schemas described below. Flow safety gates now also apply to the SDK
+Bunqueue 2.9.20 is now the installed/default target; it retains the 2.9.3 API
+contracts described below; PostgreSQL now uses schema 21. Flow safety gates now also apply to the SDK
 console and direct agent calls: payload replacement, retry, remove and
 unprocessed-child removal are blocked. Queue/Flow/Workflow bridges now support
 verified native TCP TLS and private CA configuration; see [agent.md](agent.md).
@@ -66,9 +66,9 @@ Resolving the remaining mutation items completely requires generation/state/
 topology-conditional APIs, flow-aware retry reconstruction, and create-only
 cron semantics in Bunqueue itself.
 
-## MCP TCP worker ID (Bunqueue 2.9.4)
+## Historical MCP TCP worker ID (Bunqueue 2.9.4)
 
-The public MCP `register_worker` tool can return `success: true` and worker ID
+In Bunqueue 2.9.4, the public MCP `register_worker` tool could return `success: true` and worker ID
 `"0"` while the real broker stores a different ID. A heartbeat with the returned
 ID then reports `success: false`. Read the worker registry and match a unique
 name and queues before heartbeat/unregister; inspect the JSON success field,
@@ -350,8 +350,8 @@ ship with reproducing tests (`test/agent-server.test.ts`, `test/manager.test.ts`
   labels its page-scoped sort honestly on multi-page queues.
 - **`QueueDetail` Recent Jobs** now shows real Name (`data.name`) and Duration
   (`startedAt`/`completedAt`) instead of "unknown" or a placeholder dash.
-- **`Workers`** surfaces a "showing first 100 of N" hint when the list is
-  truncated. **`ServerControl`** validates ports (1 to 65535, HTTP≠TCP) before
+- **`Workers`** makes the full loaded registry searchable and paginates the
+  table. **`ServerControl`** validates ports (1 to 65535, HTTP≠TCP) before
   restart. **`Topbar`** guards `decodeURIComponent` (malformed URL no longer
   crashes the shell). **`useThroughputSeries`** has an in-flight guard (no
   overlapping polls). **`Webhooks`** enable/disable toggle has an accessible name.

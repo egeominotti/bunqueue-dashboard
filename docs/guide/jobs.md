@@ -44,9 +44,9 @@ The stat cards describe the entire server, so they **won't** match the counts of
 
 **Pick a queue.** Use the queue dropdown to choose whose jobs to list. If you arrived from a link with a queue already set, it's pre-selected; otherwise the first queue is chosen for you.
 
-**Filter by status.** Switch between `all`, `waiting`, `active`, `completed`, and `failed`.
+**Filter by status.** Choose all states or one of `waiting`, `prioritized`, `active`, `delayed`, `waiting-children`, `paused`, `completed`, and `failed`.
 
-**Search this page by ID.** Type in the ID filter to narrow the rows down to a matching ID. This searches only the rows currently on screen (see Good to know).
+**Search this page by ID or name.** The filter narrows the rows currently on screen. A full export applies the same filter across all pages (see Good to know).
 
 **Inspect a job.** Click the eye button on any row to open it in the Job Inspector.
 
@@ -59,7 +59,7 @@ select the whole page) to reveal a bulk toolbar. **Promote selected** appears
 only when at least one visible selected job is delayed; no Retry or Requeue
 bulk action is exposed.
 
-**Export CSV**, download the rows on the current page.
+**Export page CSV** downloads the filtered rows currently shown. **Export all matching CSV** scans the selected queue and status across pages, applying the ID or name filter to every page.
 
 ::: warning Unsafe lifecycle transitions fail closed
 The dashboard never exposes `DELETE /jobs/:id`. Bunqueue v2.9.3 cannot reveal
@@ -74,12 +74,13 @@ After any action, the row (or selection) reports success or failure in a short s
 
 ## Good to know
 
-- **The ID filter only searches the current page.** It matches the 25 rows on screen, not the whole queue. To find one specific job in a large queue, use the Job Inspector's direct lookup instead.
+- **The table filter only searches the current page.** It matches the 25 rows on screen, not the whole queue. To find one specific job in a large queue, use the Job Inspector's direct lookup instead.
+- **A full CSV export scans at most 10,000 jobs.** The queue is live and the server does not provide a snapshot; changes during the export can affect its contents. An oversized scan or a detected duplicate fails instead of downloading a partial CSV.
 - **There's no "page X of Y."** You page through 25 jobs at a time. **Next** stays available as long as a full page arrives; a shorter page means you've reached the end.
 - **Which actions appear depends on the job's state.** A delayed job can be
   promoted. Active, completed and failed jobs have no state-changing row action;
   if none of the selected jobs is delayed, the toolbar says so.
-- **Changing queue, status, or page clears your selection.** This is on purpose, so a bulk action can never hit rows you picked under a different view.
+- **Changing queue, status, page, or server clears your selection.** This is on purpose, so a bulk action cannot reuse rows picked under a different view.
 - **If the server is unreachable,** a banner with a **Retry** button appears and your already-loaded rows stay visible.
 - This `/jobs` page is the corrected, server-paginated explorer. A separate legacy jobs page exists but isn't what this screen uses, see [Known issues](/known-issues).
 

@@ -15,7 +15,7 @@ description: Inspect Bunqueue Workflow Engine executions, durable decisions, sig
   `compensation-stuck` runs and exposes every per-step rollback outcome.
 - **Archive** (`/workflows/archive`) audits retained terminal executions.
 
-The Workflow Engine page reads Bunqueue 2.9.4's persisted execution contract
+The Workflow Engine page reads Bunqueue 2.9.20's persisted execution contract
 from the configured SQLite `dataPath`. It shows active and archived executions,
 exact workflow/state filters, durable step progress, attempts, results,
 idempotency keys, loop occurrences, signals, branch decisions, definition
@@ -71,3 +71,9 @@ Every command is pinned to the Bunqueue target managed by the local agent. A
 remote/mismatched target, stopped server, missing module, malformed body, or
 non-terminal maintenance request fails closed. When `AGENT_TOKEN` is set, the
 normal agent bearer-token policy applies to every mutation.
+
+Runtime status reads are observational: polling does not import handlers or start workers.
+Opening the Workflow page initializes configured handlers through an authenticated,
+idempotent POST. If the agent requests a token, enter it in the normal authentication
+prompt; initialization resumes after credentials change. Reload definitions remains an
+explicit command that replaces the Engine.

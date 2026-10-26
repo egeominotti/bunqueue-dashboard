@@ -65,7 +65,8 @@ export function createFetchHandler(
       return new Response(null, { status: 204, headers: corsHeaders(origin, allowedOrigins) });
     }
     const mutating = method === 'POST' || method === 'PUT';
-    const authRequired = requireTokenForAll || (mutating && Boolean(token));
+    const configurationRead = pathname === '/control/config' || pathname === '/control/status';
+    const authRequired = requireTokenForAll || ((mutating || configurationRead) && Boolean(token));
     if (authRequired && !tokenOk(request, token)) {
       return json({ ok: false, error: 'Unauthorized' }, 401, origin);
     }

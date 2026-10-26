@@ -29,10 +29,12 @@ export interface WorkflowRuntimeStatus {
   queueName?: string;
   concurrency?: number;
   error?: string;
+  needsInitialization?: boolean;
 }
 
 export interface WorkflowRuntimePort {
-  status(config: ServerConfig, activate?: boolean): Promise<WorkflowRuntimeStatus>;
+  status(config: ServerConfig, serverRunning?: boolean): Promise<WorkflowRuntimeStatus>;
+  initialize(config: ServerConfig): Promise<WorkflowRuntimeStatus>;
   reload(config: ServerConfig): Promise<WorkflowRuntimeStatus>;
   start(config: ServerConfig, workflowName: string, input?: unknown): Promise<unknown>;
   signal(config: ServerConfig, id: string, event: string, payload?: unknown): Promise<void>;
@@ -72,20 +74,32 @@ export class WorkflowRuntime implements WorkflowRuntimePort {
     private readonly createEngine: WorkflowEngineFactory = (options) => new Engine(options)
   ) {}
 
-  status(config: ServerConfig, activate = true): Promise<WorkflowRuntimeStatus> {
+  status(config: ServerConfig, serverRunning = true): Promise<WorkflowRuntimeStatus> {
     return this.serial(async () => {
       const modulePath = configuredWorkflowModule(config);
       try {
         if (!modulePath) {
-          await this.closeActive();
           return { configured: false, ready: false, workflowNames: [] };
         }
-        if (!activate) {
-          await this.closeActive();
+        if (!serverRunning) {
           return stoppedRuntimeStatus(config, modulePath);
         }
-        const active = await this.ensure(config);
-        return readyRuntimeStatus(active);
+        const active = this.active;
+        if (active?.closeFailure !== undefined) throw quarantinedRuntimeError(active);
+        const path = await realpath(modulePath);
+        const modified = (await stat(path)).mtimeMs;
+        const options = workflowRuntimeOptions(config);
+        if (active?.signature === workflowRuntimeSignature(config, path, modified, options)) {
+          return readyRuntimeStatus(active);
+        }
+        return {
+          configured: true,
+          ready: false,
+          needsInitialization: true,
+          moduleName: basename(modulePath),
+          workflowNames: [],
+          ...options,
+        };
       } catch (error) {
         const active = this.active;
         return {
@@ -99,6 +113,10 @@ export class WorkflowRuntime implements WorkflowRuntimePort {
         };
       }
     });
+  }
+
+  initialize(config: ServerConfig): Promise<WorkflowRuntimeStatus> {
+    return this.serial(async () => readyRuntimeStatus(await this.ensure(config)));
   }
 
   reload(config: ServerConfig): Promise<WorkflowRuntimeStatus> {

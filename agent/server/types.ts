@@ -5,7 +5,7 @@ export interface AgentOptions {
   allowedOrigins: string[];
   /** DNS-rebinding defense; compared by hostname only. */
   allowedHosts?: string[];
-  /** On loopback, when set, changing requests must present this token. */
+  /** On loopback, when set, mutations and complete configuration reads require this token. */
   token?: string;
   /** Network exposure: require token on every non-OPTIONS request. */
   requireTokenForAll?: boolean;

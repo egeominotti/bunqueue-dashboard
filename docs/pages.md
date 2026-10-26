@@ -127,12 +127,12 @@ single-queue triage surface.
 | --- | --- | --- |
 | `/queues` | `QueuesOverview` | Queue list over `bq.queuesSummary()` (search, totals, client-side pagination); click a row to drill into `QueueDetailPro`. |
 | `/queues/:name` | `QueueDetailPro` | Verified single-queue drill-in on the same building blocks as `QueueControl`, with Obliterate visibly disabled, a live backlog-depth sparkline, recent jobs, and links to Jobs/DLQ. |
-| `/jobs` | `JobsPro` | Single-queue, server-paginated job explorer: queue + status filters, stat cards and checkbox multi-select. Promote is the only enabled row/bulk job-lifecycle mutation; DLQ retry and completed-job requeue fail closed via the shared `actionGates`. |
+| `/jobs` | `JobsPro` | Single-queue, server-paginated job explorer with queue and status filters, page and bounded full CSV exports, stat cards and checkbox multi-select. Promote is the only enabled row/bulk job-lifecycle mutation; DLQ retry and completed-job requeue fail closed via the shared `actionGates`. |
 | `/metrics` | `MetricsPro` | Live throughput area chart (rolling 60s via `useThroughputSeries`), error/success-rate gauge, server-overview Kv list, per-queue counts table. Latency strip reads the real per-operation percentiles (`push`/`pull`/`ack` × p50/p95/p99). |
 | `/logs` | `LogsPro` | Paginated, filterable (queue/status/search) view over the same live SSE stream `useActivityStream` drives on `OverviewPro`, a fuller UI over the identical 250-event ring buffer, not a separate data source. |
-| `/workers` | `WorkersPro` | Registered-workers table over `bq.workers()`, with active/stale status and confirmed registry cleanup only for stale workers reporting zero active jobs. The cleanup does not stop the process. Caps at 100 rows with a truncation hint. |
+| `/workers` | `WorkersPro` | Searchable, paginated registered-workers table over `bq.workers()`, with active/stale status and confirmed registry cleanup only for stale workers reporting zero active jobs. The cleanup does not stop the process. |
 | `/usage` | `UsagePro` | Cumulative totals, error rate, runtime, and an honest Storage health card from `bq.storage()` (red "Disk full, writes suspended" when `diskFull`). Renders uptime correctly (`stats.uptime` is ms). |
-| `/s3` | `S3BackupPro` | S3-compatible environment builder plus live Bunqueue 2.9.4 CLI status/list/backup operations. The agent applies only whitelisted `S3_*` keys and permits restore only while stopped with typed confirmation and an unchanged database snapshot. |
+| `/s3` | `S3BackupPro` | S3-compatible environment builder plus live Bunqueue 2.9.20 CLI status/list/backup operations. The agent applies only whitelisted `S3_*` keys and permits restore only while stopped with typed confirmation and an unchanged database snapshot. |
 
 ## Alerts (client-side)
 

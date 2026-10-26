@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import manifest from '../package.json';
 import { demoBackupResponse } from '../src/lib/demo/backups';
 import { DEMO_CONFIG, demoControlLogs, demoStatus, demoWorkers } from '../src/lib/demo/control';
 import { demoWorkflowResponse } from '../src/lib/demo/workflows';
@@ -46,7 +47,7 @@ describe('demo control contract', () => {
     expect(status).toMatchObject({
       status: 'running',
       healthy: true,
-      version: '2.9.4',
+      version: manifest.dependencies.bunqueue,
       config: DEMO_CONFIG,
       runningConfig: DEMO_CONFIG,
       db: { exists: true, totalSize: 2_703_360 },
@@ -78,7 +79,7 @@ describe('demo control contract', () => {
       'stdout',
       'stdout',
     ]);
-    expect(logs.lines[0].line).toContain('bunqueue@2.9.4');
+    expect(logs.lines[0].line).toContain(`bunqueue@${manifest.dependencies.bunqueue}`);
   });
 });
 

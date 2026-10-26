@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { act, createElement, type ReactElement } from 'react';
 import { createRoot } from 'react-dom/client';
+import { useConnectionStore } from '../src/components/dashboard/stores/connectionStore';
 import type { WorkflowControlRepository } from '../src/features/workflows/application/WorkflowControlRepository';
 import { WorkflowCompensationControls } from '../src/features/workflows/ui/WorkflowCompensationControls';
 import { WorkflowMaintenancePanel } from '../src/features/workflows/ui/WorkflowMaintenancePanel';
@@ -17,6 +18,91 @@ afterEach(() => {
 });
 
 describe('Workflow Engine controls', () => {
+  test('initializes configured handlers once through a command before enabling execution', async () => {
+    let initialized = false;
+    let initializations = 0;
+    let release: (() => void) | undefined;
+    const repository = fakeRepository({
+      status: async () =>
+        initialized
+          ? readyStatus
+          : {
+              configured: true,
+              ready: false,
+              needsInitialization: true,
+              moduleName: 'workflow.ts',
+              workflowNames: [],
+            },
+      initialize: async () => {
+        initializations++;
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        initialized = true;
+        return readyStatus;
+      },
+    });
+    const host = render(createElement(WorkflowRuntimePanel, { repository }));
+    try {
+      await settle(3);
+      expect(initializations).toBe(1);
+      expect(button(host, 'Start execution').disabled).toBe(true);
+      expect(button(host, 'Reload definitions').disabled).toBe(true);
+      change(host.querySelector('[aria-label="Registered workflow"]'), 'checkout');
+      await settle(3);
+      expect(initializations).toBe(1);
+      release?.();
+      await settle(5);
+      expect(host.textContent).toContain('Handlers loaded');
+      expect(button(host, 'Start execution').disabled).toBe(false);
+      expect(initializations).toBe(1);
+    } finally {
+      release?.();
+      await settle(2);
+    }
+  });
+
+  test('retries initialization after credentials change without looping on unauthorized polls', async () => {
+    const previousToken = useConnectionStore.getState().agentToken;
+    let initialized = false;
+    let attempts = 0;
+    const repository = fakeRepository({
+      status: async () =>
+        initialized
+          ? readyStatus
+          : {
+              configured: true,
+              ready: false,
+              needsInitialization: true,
+              moduleName: 'workflow.ts',
+              workflowNames: [],
+            },
+      initialize: async () => {
+        attempts++;
+        if (attempts === 1) throw new Error('Agent token required');
+        initialized = true;
+        return readyStatus;
+      },
+    });
+    try {
+      const host = render(createElement(WorkflowRuntimePanel, { repository }));
+      await settle(5);
+      expect(attempts).toBe(1);
+      expect(host.textContent).toContain('Agent token required');
+      change(host.querySelector('[aria-label="Registered workflow"]'), 'checkout');
+      await settle(3);
+      expect(attempts).toBe(1);
+      act(() => useConnectionStore.setState({ agentToken: 'fresh-agent-token' }));
+      await settle(6);
+      expect(attempts).toBe(2);
+      expect(host.textContent).toContain('Handlers loaded');
+    } finally {
+      for (const unmount of mounted) unmount();
+      mounted.clear();
+      act(() => useConnectionStore.setState({ agentToken: previousToken }));
+    }
+  });
+
   test('starts a registered workflow once and wires recover and reload', async () => {
     const calls: string[] = [];
     let release: (() => void) | undefined;
@@ -143,6 +229,7 @@ const readyStatus = {
 function fakeRepository(overrides: Partial<WorkflowControlRepository>): WorkflowControlRepository {
   return {
     status: async () => readyStatus,
+    initialize: async () => readyStatus,
     reload: async () => readyStatus,
     start: async (name) => ({ id: 'run', workflowName: name }),
     signal: async () => undefined,

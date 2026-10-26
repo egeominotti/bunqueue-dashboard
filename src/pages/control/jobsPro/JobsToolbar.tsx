@@ -42,6 +42,9 @@ export function JobsToolbar({
             autoComplete="off"
             onChange={(event) => onQueue(event.target.value)}
           >
+            {queue && !summary.some((item) => item.name === queue) && (
+              <option value={queue}>{queue}</option>
+            )}
             {summary.map((item) => (
               <option key={item.name} value={item.name}>
                 {item.name}
