@@ -1,8 +1,7 @@
-import { transformerTwoslash } from '@shikijs/vitepress-twoslash';
 import { defineConfig } from 'vitepress';
-import { createLlmsPlugin } from './llms';
-import { SITE, SITE_DESCRIPTION, siteHead, transformPageData } from './seo';
-import { createThemeConfig } from './themeConfig';
+import { createLlmsPlugin } from './llms.ts';
+import { SITE, SITE_DESCRIPTION, siteHead, transformPageData } from './seo.ts';
+import { createThemeConfig } from './themeConfig.ts';
 
 // Served at the repo root in dev/preview, and under the Pages sub-path in CI
 // (pages.yml sets DOCS_BASE=/bunqueue-dashboard/docs/). Must have a trailing slash.
@@ -31,8 +30,6 @@ export default defineConfig({
         return fence(tokens, index, options, env, self);
       };
     },
-    // Shiki Twoslash gives ```ts twoslash blocks real type-checking and hover types.
-    codeTransformers: [transformerTwoslash()],
     languages: ['ts', 'js', 'bash', 'json', 'jsonc', 'html', 'css', 'yaml', 'docker'],
   },
   vite: {

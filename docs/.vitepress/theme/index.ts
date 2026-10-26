@@ -1,20 +1,16 @@
 import type { EnhanceAppContext } from 'vitepress';
 import DefaultTheme from 'vitepress/theme';
-import TwoslashFloatingVue from '@shikijs/vitepress-twoslash/client';
 import Mermaid from './Mermaid.vue';
 // Self-host the same variable fonts the app uses (Inter for text, JetBrains Mono
 // for code) so the docs match the product, render identically offline, and never
 // depend on a font CDN. custom.css wires them into VitePress's font tokens.
 import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
-import '@shikijs/vitepress-twoslash/style.css';
 import './custom.css';
 
 export default {
   extends: DefaultTheme,
   enhanceApp({ app, router }: EnhanceAppContext) {
-    // Twoslash hover popovers for ```ts twoslash code blocks.
-    app.use(TwoslashFloatingVue);
     app.component('Mermaid', Mermaid);
 
     // View Transitions API: wrap every in-app navigation so page swaps

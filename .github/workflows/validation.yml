@@ -31,7 +31,7 @@ jobs:
       - name: Build the production bundle
         run: bunx vite build
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-${{ github.sha }}
           path: dist
@@ -62,6 +62,8 @@ jobs:
     name: Browser E2E (${{ matrix.suite }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      VITE_ENABLE_COPILOT: ${{ matrix.suite == 'managed' && '1' || '0' }}
     strategy:
       fail-fast: false
       matrix:
@@ -81,7 +83,7 @@ jobs:
       - run: bun install --frozen-lockfile
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-chromium-${{ hashFiles('bun.lock') }}
@@ -104,7 +106,7 @@ jobs:
 
       - name: Upload browser diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-${{ matrix.suite }}-${{ github.sha }}
           path: test-results
@@ -119,7 +121,7 @@ jobs:
     # slow. The official Playwright image ships them with the matching browsers.
     # Its tag must equal @playwright/test (enforced by scripts/check-playwright-image.ts).
     container:
-      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      image: mcr.microsoft.com/playwright:v1.64.1-noble
       options: --user 1001 --ipc=host
     strategy:
       fail-fast: false
@@ -142,7 +144,7 @@ jobs:
 
       - name: Upload browser diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-${{ matrix.browser }}-${{ github.sha }}
           path: test-results
@@ -179,7 +181,7 @@ jobs:
         run: |
           bun run version:check
           bun -e 'if (process.arch !== process.env.EXPECTED_ARCH) throw new Error("Native architecture mismatch"); console.log(process.platform, process.arch, Bun.version)'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: dist-${{ github.sha }}
           path: dist
@@ -191,7 +193,7 @@ jobs:
         run: bun scripts/validate-standalone-runtime.ts ./bunqueue-dashboard-${{ matrix.platform }}${{ matrix.suffix }}
       - name: Upload tested executable
         if: inputs.release_artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-${{ matrix.platform }}-${{ github.sha }}
           path: bunqueue-dashboard-${{ matrix.platform }}${{ matrix.suffix }}

@@ -15,6 +15,44 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-26
+
+### Changed
+
+- Update the application and development dependency tree to current releases:
+  AI SDK 7.0.154 and its providers, msgpackr 2.1.2, MCP SDK 1.32.2,
+  Playwright 1.64.1, Vite 8.3.5, VitePress 2.0.0-alpha.21, Tailwind 4.3.3,
+  Oxlint 1.89, fonts, Zustand and their compatible transitive dependencies.
+- Keep the Playwright container aligned with the test runner and update the
+  security overrides within the major versions required by their consumers.
+- Enable Copilot in the managed CI fixture so provider transport, tool
+  continuation and cancellation checks execute on every validation run.
+- Update all outdated GitHub Actions, paired artifact/Pages producers and
+  consumers, and the isolated npm publisher to npm 12.2.1 on Node 24.
+- Preserve the implicit-`any` declaration policy through a local Oxlint plugin
+  running on Bun. Native `bun check` continues to check all four projects.
+- Report new React Compiler adoption diagnostics as warnings while keeping hook,
+  global-mutation and immutability errors blocking, with narrow documented
+  exceptions for test probes and mutable refs in event handlers.
+- Add frozen MessagePack 1.12.1 fixtures to verify that the new decoder retains
+  persisted workflow values, large integers, shared identities and cycle safety.
+
+### Fixed
+
+- Match the header search/settings accessible names to their visible labels,
+  retaining the complete WCAG A/AA browser checks with the newer axe-core.
+- Let the documentation frontmatter parser use its supported safe YAML major,
+  removing the obsolete global v3 override and rejecting executable YAML tags.
+- Preserve a manual queue/status choice when initial queue discovery finishes,
+  preventing stale default navigation from exporting another queue's jobs.
+
+### Removed
+
+- Remove the unused VitePress Twoslash integration and its dependency tree.
+  Normal syntax highlighting and Mermaid diagrams remain available.
+- Remove the standalone TypeScript compiler and its former lint-scanner script.
+- Remove the AI SDK patch, now included upstream, and the obsolete Docker copy.
+
 ## [1.0.3] - 2026-10-26
 
 ### Added
@@ -1585,7 +1623,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.0...v1.0.1

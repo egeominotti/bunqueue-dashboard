@@ -35,7 +35,7 @@ jobs:
         env:
           BQ_RECONNECT_CYCLES: '100'
         run: bun run test:e2e:browser --project=chromium --grep=resilience
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: resilience-${{ github.sha }}

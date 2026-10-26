@@ -57,7 +57,6 @@ export function Topbar({
           type="button"
           onClick={() => window.dispatchEvent(new Event('command-palette:open'))}
           title="Command palette (⌘K)"
-          aria-label="Open command palette"
           className="hidden items-center gap-2 rounded-lg border border-line px-2.5 py-1.5 text-xs text-muted hover:bg-surface-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 sm:flex"
         >
           <span>Search</span>
@@ -68,7 +67,7 @@ export function Topbar({
         <Link
           to="/settings"
           title="Settings"
-          aria-label="Open settings"
+          aria-label="bq settings"
           className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-fuchsia-600 text-xs font-bold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
         >
           bq

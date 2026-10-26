@@ -32,7 +32,7 @@ Install Bunqueue and its optional SDK in a dedicated directory:
 ```bash
 mkdir bunqueue-mcp-runtime
 cd bunqueue-mcp-runtime
-bun add --exact bunqueue@2.9.20 @modelcontextprotocol/sdk@1.32.1
+bun add --exact bunqueue@2.9.20 @modelcontextprotocol/sdk@1.32.2
 ```
 
 Replace `/absolute/path/bunqueue-mcp-runtime` below with that directory's absolute
