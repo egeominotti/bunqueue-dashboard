@@ -15,8 +15,25 @@ the GitHub Release body.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-26
+
+### Added
+
+- Worker inventory search covers names, IDs, queues, hosts and status across the
+  complete registry, with pagination instead of truncating after 100 workers.
+- Jobs can export all matching records across pages, with a 10,000-job scan
+  limit, cancellation when the target changes and explicit live-queue limits.
+  Page exports remain available for Jobs and DLQ.
+
 ### Changed
 
+- The public Bunqueue client and default managed-server command now use
+  Bunqueue 2.9.20. Setup instructions and demo data follow the same package pin;
+  saved commands and explicit environment overrides retain precedence.
+- MCP setup and discovery match all 79 tools in Bunqueue 2.9.20. PostgreSQL
+  fleet and upgrade validation now assert schema 21.
+- The mobile Jobs page offers a compact statistics summary with expandable
+  detail and keeps row actions visible during horizontal scrolling.
 - npm releases are published through npm trusted publishing (OIDC) with a
   signed provenance attestation, instead of a long-lived `NPM_TOKEN`. The
   package is packed with Bun in a job that holds no credential; a separate job
@@ -39,14 +56,29 @@ the GitHub Release body.
   cannot reuse it; neither job runs an authenticated Git command (the release
   tag is created through the GitHub API).
 
+### Fixed
+
+- Jobs follow queue and state changes in browser history. Selection and page
+  generations reset across queue, page and server changes, including a rapid
+  switch back to the original server, and obsolete callbacks cannot revive them.
+- DLQ CSV downloads contain the visible filtered rows in their displayed order
+  and identify the exported page in the filename.
+- Successful workflow reloads clear obsolete initialization errors.
+
 ### Security
 
 - `bun audit --audit-level=high` passes again after advisories published since
   1.0.2: the `overrides` move DOMPurify (used by Mermaid) to 3.4.17, which
   fixes a critical `SAFE_FOR_TEMPLATES` bypass and a high-severity `IN_PLACE`
   issue, and ip-address to 10.7.4; Hono, used by the MCP SDK in development,
-  moves to a patched release within its range. One low-severity KaTeX advisory
-  remains: its fix needs KaTeX 0.18, outside the range Mermaid 11 accepts.
+  moves to a patched release within its range. Mermaid 12.2 and its strict,
+  browser-only documentation renderer resolve the remaining KaTeX advisory;
+  happy-dom, body-parser and fast-uri also use patched versions. The full
+  dependency audit reports no vulnerabilities.
+- Workflow status GET requests no longer import modules or initialize workers.
+  Initialization uses an idempotent POST protected by the agent's authentication
+  policy. Configuration and status reads also require the configured agent
+  token because their snapshots can include environment secrets.
 
 ## [1.0.2] - 2026-10-22
 
@@ -1550,7 +1582,8 @@ documentation site.
 - **Custom brand:** a queue-badge logo and favicon, and hand-drawn monoline
   feature icons on the docs home.
 
-[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/egeominotti/bunqueue-dashboard/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/egeominotti/bunqueue-dashboard/compare/v0.0.47...v1.0.0
